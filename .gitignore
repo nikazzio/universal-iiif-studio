@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# Project specific
+temp_images/
+*.pdf
+*.log
+
+# OS
+.DS_Store
