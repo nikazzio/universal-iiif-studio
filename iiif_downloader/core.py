@@ -29,7 +29,7 @@ class IIIFDownloader:
         
         self.label = self.manifest.get("label", "unknown_manuscript")
         if isinstance(self.label, list): 
-             self.label = self.label[0] if self.label else "msg"
+             self.label = self.label[0] if self.label else "unknown_manuscript"
 
         # Determine Output Filename
         if not output_name:
