@@ -11,6 +11,7 @@ venv/
 
 # Project specific
 temp_images/
+downloads/
 *.pdf
 *.log
 

@@ -37,12 +37,12 @@ def download_page(canvas, index, folder, headers, max_retries=3):
         else:
             base_url = image_info['@id'].split('/full/')[0]
 
-        # Try high-quality native format first, then default
+        # Try high-quality but reasonable resolution (1740px) first, then max, then default
         urls_to_try = [
-            f"{base_url}/full/max/0/native.jpg", # Max resolution
-            f"{base_url}/full/max/0/default.jpg",
-            f"{base_url}/full/1740,/0/native.jpg", # Fallback resolution
-            f"{base_url}/full/1740,/0/default.jpg"
+            f"{base_url}/full/1740,/0/native.jpg", # Best for reading, reasonable size
+            f"{base_url}/full/1740,/0/default.jpg",
+            f"{base_url}/full/max/0/native.jpg", # Can be huge
+            f"{base_url}/full/max/0/default.jpg"
         ]
 
         filename = os.path.join(folder, f"pag_{index:04d}.jpg")
@@ -52,6 +52,9 @@ def download_page(canvas, index, folder, headers, max_retries=3):
                 try:
                     r = requests.get(url, headers=headers, timeout=30)
                     if r.status_code == 200 and "image" in r.headers.get('Content-Type', ''):
+                        if len(r.content) == 0:
+                            continue # Skip empty response
+
                         with open(filename, 'wb') as f:
                             f.write(r.content)
                         return filename
@@ -111,6 +114,25 @@ def main():
 
     # Parse ID
     ms_id = args.url.strip("/").split("/")[-1]
+    
+    # Determine output filename
+    output_filename = args.output
+    if output_filename == "manuscript.pdf":
+        output_filename = f"{ms_id}.pdf"
+
+    # Ensure output is in "downloads" folder if no path specified
+    if os.path.dirname(output_filename) == "":
+        out_dir = "downloads"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        output_filename = os.path.join(out_dir, output_filename)
+        print(f"Output folder set to: {out_dir}/")
+    else:
+        # If user specified a path (e.g. /tmp/foo.pdf), ensure dir exists
+        out_dir = os.path.dirname(output_filename)
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
     manifest_url = get_manifest_url(args.url)
     
     headers = DEFAULT_HEADERS.copy()
@@ -137,7 +159,7 @@ def main():
     
     # Save metadata
     import json
-    metadata_filename = f"{os.path.splitext(args.output)[0]}_metadata.json"
+    metadata_filename = f"{os.path.splitext(output_filename)[0]}_metadata.json"
     with open(metadata_filename, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4, ensure_ascii=False)
     print(f"Metadata saved to: {metadata_filename}")
@@ -184,7 +206,7 @@ def main():
     valid_files = [f for f in downloaded_files if f is not None]
     
     if valid_files:
-        create_pdf(valid_files, args.output)
+        create_pdf(valid_files, output_filename)
     else:
         print("No pages downloaded successfully.")
 

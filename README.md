@@ -37,6 +37,7 @@ Il comando base richiede solo l'URL del visualizzatore del manoscritto:
 ```bash
 python3 downloader.py https://digi.vatlib.it/view/MSS_Urb.lat.1779
 ```
+Il PDF e i metadati verranno salvati automaticamente nella cartella `downloads/` (es. `downloads/Urb.lat.1779.pdf`).
 
 ### Opzioni Avanzate
 
@@ -46,7 +47,7 @@ python3 downloader.py [URL] [OPZIONI]
 
 | Opzione | Descrizione | Default |
 |Ordinamento|---|---|
-| `-o`, `--output` | Nome del file PDF di output | `manuscript.pdf` |
+| `-o`, `--output` | Nome del file PDF di output | `downloads/{ID}.pdf` |
 | `-w`, `--workers` | Numero di download simultanei | `4` |
 | `-k`, `--keep-temp` | Mantiene la cartella delle immagini scaricate (in `temp_images/<ID>`) | `False` |
 | `--clean-cache` | Rimuove completamente la cartella `temp_images` e il suo contenuto | `False` |
