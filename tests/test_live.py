@@ -72,12 +72,16 @@ class TestProviders(unittest.TestCase):
         self.run_partial_download(manifest_url, "test_vatican")
 
     def test_02_gallica(self):
-        """Test Gallica: Resolver Only (Network blocked)."""
+        """Test Gallica: Resolver + Partial Download."""
         print("\n[Test] Gallica...")
         url = "https://gallica.bnf.fr/ark:/12148/bpt6k9604118j"
+        
+        # 1. Resolve
         manifest_url, _ = resolve_url(url)
         self.assertEqual(manifest_url, "https://gallica.bnf.fr/iiif/ark:/12148/bpt6k9604118j/manifest.json")
-        print("   (Resolver OK)")
+        
+        # 2. Download
+        self.run_partial_download(manifest_url, "test_gallica")
 
     def test_03_oxford(self):
         """Test Oxford: Resolver + Partial Download."""

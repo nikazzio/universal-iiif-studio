@@ -17,3 +17,4 @@ downloads/
 
 # OS
 .DS_Store
+tests/out/
