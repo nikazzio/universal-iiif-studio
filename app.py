@@ -74,7 +74,8 @@ if app_mode == "🛰️ Discovery":
     active_lib = lib_map.get(lib_choice, "Unknown")
 
     mode_options = ["Segnatura / URL"]
-    if lib_choice in ["Gallica (BnF)", "Bodleian (Oxford)"]:
+    # Only Gallica has a working search API
+    if lib_choice == "Gallica (BnF)":
         mode_options.append("Cerca nel Catalogo")
     disc_mode = st.sidebar.radio("Metodo", mode_options, horizontal=True)
 
@@ -116,8 +117,8 @@ if app_mode == "🛰️ Discovery":
         if st.sidebar.button("🔎 Cerca", use_container_width=True):
             if search_query:
                 with st.spinner("Ricerca in corso..."):
-                    if lib_choice == "Gallica (BnF)": st.session_state["search_results"] = search_gallica(search_query)
-                    elif lib_choice == "Bodleian (Oxford)": st.session_state["search_results"] = search_oxford(search_query)
+                    # Only Gallica search is currently supported
+                    st.session_state["search_results"] = search_gallica(search_query)
 
     # Main Area for Discovery
     if st.session_state["search_results"]:
