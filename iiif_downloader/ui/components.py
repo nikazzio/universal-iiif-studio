@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import base64
 from io import BytesIO
+from iiif_downloader.config import config
 
 def inject_premium_styles():
     """Inject basic CSS for the page."""
@@ -13,14 +14,24 @@ def inject_premium_styles():
     """, unsafe_allow_html=True)
 
 def interactive_viewer(image, zoom_percent: int):
-    """Render the premium interactive image viewer using an isolated iframe component."""
+    """
+    Render the premium interactive image viewer using an isolated iframe component.
+    
+    UPDATED: Now uses natural image resolution (no CSS width constraint) and JS 
+    to calculate the 'fit' scale initially. This ensures that zooming in reveals 
+    the true pixel detail instead of a blurry upscaled version of a shrunk element.
+    """
     if not image:
         return
     
-    # Get base64
+    # Get base64 and dimensions
+    quality = config.get("images", "viewer_quality", 95)
     buffered = BytesIO()
-    image.save(buffered, format="JPEG", quality=85)
+    image.save(buffered, format="JPEG", quality=quality)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
+    
+    # We pass natural w/h to JS to help with initial geometry if needed, 
+    # though img.naturalWidth is available in JS onload.
     
     # Isolated HTML Component
     html_code = f"""
@@ -31,7 +42,7 @@ def interactive_viewer(image, zoom_percent: int):
         <style>
             body, html {{ 
                 margin: 0; padding: 0; width: 100%; height: 100%; 
-                background: #1a1a1e; overflow: hidden; font-family: sans-serif;
+                background: #1a1a1e; overflow: hidden; font-family: 'Inter', sans-serif;
                 touch-action: none;
             }}
             .viewer-container {{
@@ -41,10 +52,12 @@ def interactive_viewer(image, zoom_percent: int):
             }}
             .viewer-container:active {{ cursor: grabbing; }}
             .viewer-image {{
-                max-width: none; position: absolute;
-                box-shadow: 0 10px 60px rgba(0,0,0,1);
+                position: absolute; top: 0; left: 0;
+                /* Crucial: Auto dims to preserve resolution */
+                width: auto; height: auto; max-width: none; max-height: none;
+                box-shadow: 0 10px 60px rgba(0,0,0,0.5);
                 transform-origin: 0 0; will-change: transform;
-                pointer-events: none; /* Let the container handle dragging */
+                pointer-events: none;
             }}
             .viewer-controls {{
                 position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -65,81 +78,114 @@ def interactive_viewer(image, zoom_percent: int):
     </head>
     <body>
         <div class="viewer-container" id="v-cnt">
-            <img src="data:image/jpeg;base64,{img_b64}" class="viewer-image" id="v-img" style="width: {zoom_percent}%;">
+            <img src="data:image/jpeg;base64,{img_b64}" class="viewer-image" id="v-img">
             <div class="viewer-controls">
+                <button class="v-btn" onclick="vReset()">⟲</button>
+                <button class="v-btn" onclick="vZoom(0.8)">-</button>
+                <button class="v-btn" onclick="vZoom(1.2)">+</button>
+                <span style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></span>
                 <button class="v-btn" onclick="vMove(0, 100)">↑</button>
                 <button class="v-btn" onclick="vMove(0, -100)">↓</button>
-                <button class="v-btn" onclick="vMove(100, 0)">←</button>
-                <button class="v-btn" onclick="vMove(-100, 0)">→</button>
-                <span style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></span>
-                <button class="v-btn" onclick="vZoom(1.2)">+</button>
-                <button class="v-btn" onclick="vZoom(0.8)">-</button>
-                <button class="v-btn" onclick="vReset()">⟲</button>
             </div>
         </div>
 
         <script>
             const cnt = document.getElementById('v-cnt');
             const img = document.getElementById('v-img');
-            let scale = 1, pointX = 0, pointY = 0, start = {{ x: 0, y: 0 }}, isPanning = false;
+            
+            // State
+            let state = {{ scale: 1, x: 0, y: 0 }};
+            let isPanning = false;
+            let start = {{ x: 0, y: 0 }};
 
-            function setTransform() {{
-                img.style.transform = `translate(${{pointX}}px, ${{pointY}}px) scale(${{scale}})`;
+            function updateTransform() {{
+                img.style.transform = `translate(${{state.x}}px, ${{state.y}}px) scale(${{state.scale}})`;
             }}
 
-            // Handle Pointer Down
+            window.vZoom = (factor) => {{
+                // Zoom towards center of screen ideally, simplifed to current pos
+                state.scale *= factor;
+                updateTransform();
+            }};
+
+            window.vMove = (dx, dy) => {{
+                state.x += dx; state.y += dy;
+                updateTransform();
+            }};
+
+            window.vReset = () => {{
+                // Refit to screen
+                const cntW = cnt.clientWidth;
+                const cntH = cnt.clientHeight;
+                const imgW = img.naturalWidth;
+                const imgH = img.naturalHeight;
+                
+                // Calculate scale to fit
+                const scaleW = cntW / imgW;
+                const scaleH = cntH / imgH;
+                const fitScale = Math.min(scaleW, scaleH) * 0.95; // 95% fit
+                
+                state.scale = fitScale;
+                
+                // Center
+                state.x = (cntW - imgW * fitScale) / 2;
+                state.y = (cntH - imgH * fitScale) / 2;
+                
+                updateTransform();
+            }};
+
+            // Panning Logic
             cnt.addEventListener('pointerdown', (e) => {{
                 if (e.target.tagName === 'BUTTON') return;
                 isPanning = true;
-                start = {{ x: e.clientX - pointX, y: e.clientY - pointY }};
+                start = {{ x: e.clientX - state.x, y: e.clientY - state.y }};
                 cnt.setPointerCapture(e.pointerId);
                 e.preventDefault();
             }});
 
-            // Handle Pointer Move
             window.addEventListener('pointermove', (e) => {{
                 if (!isPanning) return;
-                pointX = e.clientX - start.x;
-                pointY = e.clientY - start.y;
-                setTransform();
+                state.x = e.clientX - start.x;
+                state.y = e.clientY - start.y;
+                updateTransform();
             }});
 
-            // Handle Pointer Up (Global)
-            const stopPanning = (e) => {{
-                if (!isPanning) return;
-                isPanning = false;
-                if(cnt.releasePointerCapture && e) cnt.releasePointerCapture(e.pointerId);
-            }};
+            const stop = () => isPanning = false;
+            window.addEventListener('pointerup', stop);
+            window.addEventListener('pointercancel', stop);
 
-            window.addEventListener('pointerup', stopPanning);
-            window.addEventListener('pointercancel', stopPanning);
-            window.addEventListener('blur', stopPanning); // Emergency release if window loses focus
-
-            // Mouse Wheel Zoom
-            cnt.onwheel = (e) => {{
+            // Wheel Zoom
+            cnt.addEventListener('wheel', (e) => {{
                 e.preventDefault();
-                const xs = (e.clientX - pointX) / scale;
-                const ys = (e.clientY - pointY) / scale;
-                const delta = e.wheelDelta ? e.wheelDelta : -e.deltaY;
-                (delta > 0) ? (scale *= 1.1) : (scale /= 1.1);
-                pointX = e.clientX - xs * scale;
-                pointY = e.clientY - ys * scale;
-                setTransform();
-            }};
+                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+                
+                // Smart Zoom relative to pointer
+                const rect = cnt.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // (mouseX - state.x) is the offset within the image in screen pixels
+                // We want that point to stay under the mouse after zoom
+                
+                const beforeX = (mouseX - state.x) / state.scale;
+                const beforeY = (mouseY - state.y) / state.scale;
+                
+                state.scale *= zoomFactor;
+                
+                state.x = mouseX - beforeX * state.scale;
+                state.y = mouseY - beforeY * state.scale;
+                
+                updateTransform();
+            }}, {{ passive: false }});
 
-            window.vZoom = (f) => {{ scale *= f; setTransform(); }};
-            window.vMove = (dx, dy) => {{ pointX += dx; pointY += dy; setTransform(); }};
-            window.vReset = () => {{ scale = 1; pointX = 0; pointY = 0; setTransform(); }};
-
-            img.onload = () => {{ 
-                pointX = (cnt.clientWidth - img.clientWidth) / 2;
-                pointY = (cnt.clientHeight - img.clientHeight) / 2;
-                setTransform(); 
-            }};
-            if (img.complete) img.onload();
+            // Initial Fit
+            img.onload = () => window.vReset();
+            // If already loaded
+            if (img.complete && img.naturalWidth > 0) window.vReset();
+            
         </script>
     </body>
     </html>
     """
     
-    components.html(html_code, height=650)
+    components.html(html_code, height=700)

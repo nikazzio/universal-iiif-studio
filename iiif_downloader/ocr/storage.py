@@ -47,9 +47,16 @@ class OCRStorage:
             "root": doc_path,
             "pdf": doc_path / f"{doc_id}.pdf",
             "pages": doc_path / "pages",
+            "pages": doc_path / "pages",
             "metadata": doc_path / "metadata.json",
+            "stats": doc_path / "image_stats.json",
             "transcription": doc_path / "transcription.json"
         }
+
+    def load_image_stats(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
+        """Load image statistics."""
+        paths = self.get_document_paths(doc_id, library)
+        return load_json(paths["stats"])
 
     def load_metadata(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
         """Load metadata for a document."""

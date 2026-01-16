@@ -6,8 +6,9 @@ from tqdm import tqdm
 from PIL import Image
 import requests
 
-from .utils import clean_dir, ensure_dir, get_json, DEFAULT_HEADERS
+from .utils import clean_dir, ensure_dir, get_json, DEFAULT_HEADERS, save_json
 from .logger import get_logger, get_download_logger
+from .config import config
 
 # Download Configuration Constants
 MAX_DOWNLOAD_RETRIES = 5
@@ -90,6 +91,7 @@ class IIIFDownloader:
         # Paths within the doc directory
         self.output_path = os.path.join(self.doc_dir, f"{self.ms_id}.pdf")
         self.meta_path = os.path.join(self.doc_dir, "metadata.json")
+        self.stats_path = os.path.join(self.doc_dir, "image_stats.json")
         self.ocr_path = os.path.join(self.doc_dir, "transcription.json")
 
         # Permanent pages directory within doc_dir
@@ -218,16 +220,15 @@ class IIIFDownloader:
                 val = resource.get('@id') or resource.get('id') or ''
                 base_url = val.split('/full/')[0] if '/full/' in val else val
 
-            # 2. Prioritize Resolutions (Higher is better for OCR)
-            # 3000px is better for detailed manuscripts.
-            priorities = [
-                ("max", "native"),
-                ("max", "default"),
-                (3000, "native"),
-                (3000, "default"),
-                (1740, "native"),
-                (1740, "default"),
-            ]
+            # 2. Prioritize Resolutions (Dynamic from Config)
+            iiif_q = config.get("images", "iiif_quality", "default")
+            strategy = config.get("images", "download_strategy", ["max", "3000", "1740"])
+            
+            # Map strategy to IIIF URI components
+            priorities = []
+            for s in strategy:
+                priorities.append((s, iiif_q))
+                priorities.append((s, "default" if iiif_q != "default" else "native")) # Fallbacks
 
             urls_to_try = []
             if base_url:
@@ -260,7 +261,28 @@ class IIIFDownloader:
                         if r.status_code == 200 and r.content:
                             with open(filename, 'wb') as f:
                                 f.write(r.content)
-                            return filename
+                            
+                            # START: Metadata Tracking
+                            try:
+                                # We open it to check validity and get real dimensions
+                                with Image.open(filename) as img:
+                                    width, height = img.size
+                                    
+                                stats = {
+                                    "page_index": index,
+                                    "filename": os.path.basename(filename),
+                                    "original_url": url,
+                                    "size_bytes": len(r.content),
+                                    "width": width,
+                                    "height": height,
+                                    "resolution_category": "High" if width > 2500 else "Medium" if width > 1500 else "Low"
+                                }
+                                return filename, stats
+                            except Exception as e:
+                                print(f"⚠️ Warning: Downloaded file for page {index} seems corrupt or invalid: {e}")
+                                # continue retrying if corrupt? For now, we accept it but log it.
+                                return filename, {"error": str(e), "page_index": index}
+                            # END: Metadata Tracking
                             
                         if r.status_code == 429:
                             with self._lock:
@@ -371,7 +393,10 @@ class IIIFDownloader:
 
         ensure_dir(self.temp_dir)
 
+        ensure_dir(self.temp_dir)
+
         downloaded = [None] * len(canvases)
+        page_stats = []
 
         with ThreadPoolExecutor(max_workers=self.workers) as executor:
             future_to_index = {
@@ -390,10 +415,26 @@ class IIIFDownloader:
                 unit="pag",
             ):
                 idx = future_to_index[future]
-                downloaded[idx] = future.result()
+                result = future.result()
+                
+                if result:
+                    # Unpack filename and stats
+                    fname, stats = result
+                    downloaded[idx] = fname
+                    if stats:
+                        page_stats.append(stats)
+                else:
+                    downloaded[idx] = None
+                    
                 if self.progress_callback:
                     # Provide (current, total)
                     self.progress_callback(len([f for f in downloaded if f is not None]), len(canvases))
+                    
+        # Save Stats
+        if page_stats:
+            page_stats.sort(key=lambda x: x.get("page_index", 0))
+            save_json(self.stats_path, {"doc_id": self.ms_id, "pages": page_stats})
+            print(f"📊 Image stats saved to {self.stats_path}")
 
         valid = [f for f in downloaded if f]
         if valid:
