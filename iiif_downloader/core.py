@@ -63,7 +63,7 @@ class IIIFDownloader:
         sanitized_label = _sanitize_filename(str(self.label if hasattr(self, 'label') else 'temp'))
         self.ms_id = (output_name[:-4] if output_name and output_name.endswith(".pdf") else output_name) or sanitized_label
         
-        #Initialize download-specific logger
+        # Initialize download-specific logger
         self.logger = get_download_logger(self.ms_id)
 
         # Load Manifest
