@@ -80,7 +80,15 @@ if app_mode == "🛰️ Discovery":
     disc_mode = st.sidebar.radio("Metodo", mode_options, horizontal=True)
 
     if disc_mode == "Segnatura / URL":
-        shelf_input = st.sidebar.text_input("ID o URL", placeholder="es. Urb.lat.1779")
+        # Dynamic placeholder based on library
+        placeholders = {
+            "Vaticana": "es. Urb.lat.1779",
+            "Gallica": "es. btv1b10033406t o bpt6k9761787t",
+            "Bodleian": "es. 080f88f5-7586-4b8a-8064-63ab3495393c",
+            "Unknown": "Inserisci ID o URL"
+        }
+        placeholder = placeholders.get(active_lib, "Inserisci ID o URL")
+        shelf_input = st.sidebar.text_input("ID o URL", placeholder=placeholder)
         if st.sidebar.button("🔍 Analizza", use_container_width=True):
             if shelf_input:
                 with st.spinner("Analisi in corso..."):

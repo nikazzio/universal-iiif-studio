@@ -57,11 +57,19 @@ def get_json(url, headers=None, retries=3):
                         print(f"HTTP Status: {status_code}")
                     response_text = getattr(response, "text", None)
                     if response_text:
-                        print(f"Response Text: {response_text[:500]}")
+                        print(f"Response Text (first 200 chars): {response_text[:200]}")
                 raise
             
             wait_time = (2 ** attempt)
             time.sleep(wait_time)
+        except ValueError as e:
+            # This happens if resp.json() fails
+            print(f"Error parsing JSON from {url}: {e}")
+            try:
+                print(f"Response preview (first 200 chars): {resp.text[:200]}")
+            except:
+                pass
+            raise
 
 
 def save_json(path, data):

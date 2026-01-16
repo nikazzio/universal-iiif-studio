@@ -17,6 +17,11 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
             ms_id = s.strip("/").split("/")[-1]
             return f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json", ms_id
             
+        # SAFETY: Protect against Oxford UUIDs being pasted here
+        uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        if re.search(uuid_pattern, s.lower()):
+            return None, "L'ID sembra un UUID Oxford. Seleziona 'Bodleian (Oxford)' come biblioteca."
+
         # Standardize shelfmark: "Urb. Lat. 1779" -> "MSS_Urb.lat.1779"
         # 1. Remove all spaces
         clean_s = s.replace(" ", "")
@@ -27,19 +32,22 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
         return f"https://digi.vatlib.it/iiif/{clean_id}/manifest.json", clean_s
         
     elif library == "Gallica (BnF)":
-        # Handle cases where user pastes just the ID (e.g. btv1b10033406t)
+        # Cleanup input
+        s = s.strip().strip("/")
+        # Handle cases where user pastes just the ID
         if "ark:/" not in s:
-            if s.startswith("btv"): # Common Gallica prefix
+            if s and len(s) > 3 and s[0] in ('b', 'c'):
                 s = f"ark:/12148/{s}"
             else:
-                return None, "Gallica richiede un ID ARK o un btv... (es. btv1b10033406t)"
+                return None, "Gallica richiede un ID ARK o un identificatore Gallica (es. btv1b10033406t, bpt6k9761787t)"
         
         doc_id = s.split("/")[-1]
         return f"https://gallica.bnf.fr/iiif/{s}/manifest.json", doc_id
         
     elif library == "Bodleian (Oxford)":
         # UUID or full URL
-        ms_id = s.split("/")[-1].replace(".json", "")
+        # Robustness: strip trailing slashes to avoid empty ms_id
+        ms_id = s.strip("/").split("/")[-1].replace(".json", "")
         uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         if re.search(uuid_pattern, ms_id.lower()):
             return f"https://iiif.bodleian.ox.ac.uk/iiif/manifest/{ms_id.lower()}.json", ms_id
