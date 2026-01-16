@@ -2,3 +2,15 @@ requests>=2.31.0
 Pillow>=10.0.0
 tqdm>=4.66.0
 img2pdf>=0.5.1
+
+# Required by coremltools (pulled by kraken). Some cattrs builds can break
+# coremltools import; 23.2.3 is known-good here.
+cattrs==23.2.3
+
+kraken
+streamlit
+streamlit-pdf-viewer
+pdf2image
+python-dotenv
+openai
+anthropic

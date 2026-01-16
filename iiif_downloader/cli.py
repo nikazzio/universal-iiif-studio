@@ -28,8 +28,9 @@ def wizard_mode():
         sys.exit(1)
         
     out_name = input("Output filename (optional, press Enter for auto): ").strip()
+    ocr_model = input("OCR Model (optional, e.g. 'kraken', press Enter to skip): ").strip()
     
-    return url, out_name
+    return url, out_name, ocr_model
 
 def main():
     parser = argparse.ArgumentParser(description="Universal IIIF Downloader")
@@ -39,12 +40,13 @@ def main():
     parser.add_argument("--clean-cache", action="store_true", help="Clean cache")
     parser.add_argument("-k", "--keep-temp", action="store_true", help="Keep temp files")
     parser.add_argument("--prefer-images", action="store_true", help="Force image download even if official PDF exists")
+    parser.add_argument("--ocr", help="Kraken model filename to run OCR after download")
     
     args = parser.parse_args()
     
     # Wizard Mode if no URL
     if not args.url:
-        url, out_name = wizard_mode()
+        url, out_name, ocr_model = wizard_mode()
         workers = 4
         clean = False
         keep = False
@@ -56,6 +58,7 @@ def main():
         clean = args.clean_cache
         keep = args.keep_temp
         prefer_images = args.prefer_images
+        ocr_model = args.ocr
 
     # Resolve
     try:
@@ -74,7 +77,8 @@ def main():
             workers=workers,
             clean_cache=clean,
             keep_temp=keep,
-            prefer_images=prefer_images
+            prefer_images=prefer_images,
+            ocr_model=ocr_model
         )
         downloader.run()
 

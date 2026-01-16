@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<srw:searchRetrieveResponse xmlns:ns6="http://gallica.bnf.fr/namespaces/gallica/" xmlns:diag="http://www.loc.gov/zing/srw/diagnostic/" xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:srw="http://www.loc.gov/zing/srw/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <srw:version>1.2</srw:version>
+    <srw:echoedSearchRetrieveRequest>
+        <srw:query>(dc.title all "dante") and (dc.type all "manuscrit")</srw:query>
+        <srw:version>1.2</srw:version>
+    </srw:echoedSearchRetrieveRequest>
+    <srw:numberOfRecords>90</srw:numberOfRecords>
+    <srw:extraResponseData>&lt;numberOfRecordsDecollapser&gt;90&lt;/numberOfRecordsDecollapser&gt;</srw:extraResponseData>
+    <srw:records>
+        <srw:record>
+            <srw:recordSchema>http://www.openarchives.org/OAI/2.0/OAIdc.xsd</srw:recordSchema>
+            <srw:recordPacking>xml</srw:recordPacking>
+            <srw:recordData>
+                <oai_dc:dc>
+                    <dc:creator>Dante Alighieri (1265-1321). Auteur du texte</dc:creator>
+                    <dc:date>1401-1500</dc:date>
+                    <dc:description>Numérisation effectuée à partir d'un document de substitution</dc:description>
+                    <dc:format>Parchemin</dc:format>
+                    <dc:identifier>https://gallica.bnf.fr/ark:/12148/btv1b10033406t</dc:identifier>
+                    <dc:language>ita</dc:language>
+                    <dc:relation>Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc10108b</dc:relation>
+                    <dc:rights>domaine public</dc:rights>
+                    <dc:rights>public domain</dc:rights>
+                    <dc:source>Bibliothèque nationale de France. Département des Manuscrits. italien 1014</dc:source>
+                    <dc:title>Dante, Il Convito</dc:title>
+                    <dc:type>manuscript</dc:type>
+                    <dc:type>manuscrit</dc:type>
+                </oai_dc:dc>
+            </srw:recordData>
+            <srw:recordIdentifier>ark</srw:recordIdentifier>
+            <srw:recordPosition>0</srw:recordPosition>
+            <srw:extraRecordData>
+                <epubFile></epubFile>
+                <highres>https://gallica.bnf.fr/ark:/12148/btv1b10033406t.highres</highres>
+                <infoSupModifiable></infoSupModifiable>
+                <link>https://gallica.bnf.fr/ark:/12148/btv1b10033406t</link>
+                <lowres>https://gallica.bnf.fr/ark:/12148/btv1b10033406t.lowres</lowres>
+                <medres>https://gallica.bnf.fr/ark:/12148/btv1b10033406t.medres</medres>
+                <nqamoyen>0.0</nqamoyen>
+                <provenance>Gallica</provenance>
+                <thumbnail>https://gallica.bnf.fr/ark:/12148/btv1b10033406t.thumbnail</thumbnail>
+                <typedoc>manuscrits</typedoc>
+                <uri>btv1b10033406t</uri>
+            </srw:extraRecordData>
+        </srw:record>
+    </srw:records>
+    <srw:nextRecordPosition>2</srw:nextRecordPosition>
+</srw:searchRetrieveResponse>

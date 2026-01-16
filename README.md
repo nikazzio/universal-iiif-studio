@@ -1,82 +1,211 @@
-# Universal IIIF Downloader
+# 📜 Universal IIIF Downloader & Studio
 
-Uno strumento **universale** e modulare per scaricare manoscritti da qualsiasi biblioteca che supporti lo standard IIIF (Vaticana, Bodleian, Gallica, ecc.).
+Uno strumento **professionale** e modulare per scaricare e studiare manoscritti da qualsiasi biblioteca IIIF (Vaticana, Bodleian, Gallica, ecc.). Il sistema organizza automaticamente i download in una libreria strutturata e offre un'interfaccia di studio avanzata con OCR/HTR integrato.
 
-## 🚀 Funzionalità
+## 🚀 Funzionalità Principali
 
-- **Universalità**: Copia e incolla l'URL di un Manifest IIIF (o di un visualizzatore Vaticano) e lui scarica tutto.
-- **Wizard Interattivo**: Se lanci lo script senza argomenti, ti guida passo passo.
-- **Download Parallelo & Resume**: Veloce, robusto e capace di riprendere da dove si era interrotto.
-- **PDF Nativo (Novità!)**: Se il manoscritto ha già un PDF ufficiale, lo scarica direttamente (molto più veloce).
-- **PDF Ottimizzato**: Altrimenti usa `img2pdf` per creare PDF leggeri.
-- **Metadati**: Scarica automaticamente le info del manoscritto.
+- **Discovery & Search**: Cerca direttamente nei cataloghi di **Gallica** (BnF) o risolvi segnature **Vaticana** e **Oxford**
+- **Download Intelligente**: Supporto IIIF v2/v3 con retry automatico, rate limiting e stealth mode per BAV
+- **Storage Document-Centric**: Organizzazione automatica in `downloads/<Biblioteca>/<ID_Manoscritto>/`
+- **Interactive Viewer**: Zoom 400%, drag-to-pan, visualizzazione a schermo intero
+- **Multi-Engine OCR/HTR**: Integrazione con Kraken, Claude, GPT e Hugging Face
+- **Ricerca Globale**: Full-text search in tutti i manoscritti trascritti
+- **Logging Strutturato**: Log organizzati per data in `logs/YYYY-MM-DD/`
 
 ## 📋 Requisiti
 
-- Python 3.7+
-- Pip
+- **Python 3.10+**
+- **Poppler** (per estrazione immagini da PDF): 
+  - Ubuntu/Debian: `sudo apt-get install poppler-utils`
+  - macOS: `brew install poppler`
 
-## 🛠️ Installazione
+## 🔧 Installazione
 
-1. Clona il repository.
-2. Crea un virtual environment (consigliato).
-3. Installa le dipendenze:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Clona il Repository
+
+```bash
+git clone https://github.com/yourusername/universal-iiif-downloader.git
+cd universal-iiif-downloader
+```
+
+### 2. Crea un Virtual Environment (Consigliato)
+
+```bash
+# Crea l'ambiente virtuale
+python3 -m venv .venv
+
+# Attiva l'ambiente
+# Su Linux/macOS:
+source .venv/bin/activate
+# Su Windows:
+# .venv\Scripts\activate
+```
+
+### 3. Installa le Dipendenze
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. (Opzionale) Configura OCR
+
+Per usare l'OCR con Kraken, installa i modelli:
+
+```bash
+# OCR per manoscritti medievali latini
+python3 -m iiif_downloader.ocr.model_manager list
+python3 -m iiif_downloader.ocr.model_manager install htr-default
+```
+
+Per usare Claude/GPT, crea un file `.env` (copia da `.env.example`) e aggiungi le API keys.
 
 ## 💻 Utilizzo
 
-### Modalità "Magica" (Wizard)
-Lancia semplicemente:
+### Web UI (Streamlit) - Raccomandato
+
+L'interfaccia grafica per la ricerca, visualizzazione e trascrizione:
+
 ```bash
+streamlit run app.py
+```
+
+Poi apri il browser su `http://localhost:8501`
+
+**Funzioni dello Studio**:
+- **Scopri**: Cerca nei cataloghi o risolvi segnature
+- **Visualizza**: Viewer interattivo con zoom e pan
+- **Trascrivi**: OCR pagina per pagina con modelli AI
+- **Ricerca**: Full-text search nei manoscritti trascritti
+
+### CLI (Command Line)
+
+Per download batch o script automatizzati:
+
+```bash
+# Download semplice via URL
+python3 main.py https://digi.vatlib.it/view/MSS_Urb.lat.1779
+
+# Download via Segnatura Vaticana (normalizzazione automatica)
+python3 main.py "Urb. Lat. 1779"
+
+# Download con OCR batch
+python3 main.py <URL> --ocr "magistermilitum/tridis_v2_HTR_historical_manuscripts"
+
+# Modalità Wizard (interattiva)
 python3 main.py
 ```
-Ti chiederà di incollare l'URL e sceglierà il nome migliore per te.
 
-### Modalità Riga di Comando (CLI)
+#### Opzioni CLI Principali
 
-Per utenti esperti o script automatici:
-
-```bash
-python3 main.py [URL] [OPZIONI]
+```
+-o, --output       Nome output (auto-generato se omesso)
+-w, --workers      Thread paralleli (default: 4)
+--prefer-images    Forza download immagini anche con PDF nativo
+--ocr              Modello OCR da usare
+--skip-pdf         Scarica solo immagini senza generare PDF
 ```
 
-**Esempio Vaticano:**
-```bash
-python3 main.py https://digi.vatlib.it/view/MSS_Urb.lat.1779
+## 📁 Struttura della Libreria
+
+Ogni download crea una struttura organizzata:
+
+```text
+downloads/
+├── Vaticana/
+│   └── MSS_Urb.lat.1779/
+│       ├── MSS_Urb.lat.1779.pdf
+│       ├── metadata.json
+│       ├── transcription.json
+│       └── pages/
+│           ├── pag_0001.jpg
+│           ├── pag_0002.jpg
+│           └── ...
+├── Gallica/
+│   └── BnF_Dante_Il_Convito/
+│       └── ...
+└── Bodleian/
+    └── ...
 ```
 
-**Esempio Bodleian Library (Oxford):**
-```bash
-# Con URL del viewer (consigliato)
-python3 main.py https://digital.bodleian.ox.ac.uk/objects/080f88f5-7586-4b8a-8064-63ab3495393c/
+## 🔍 Biblioteche Supportate
 
-# Oppure con URL del manifest diretto
-python3 main.py https://iiif.bodleian.ox.ac.uk/iiif/manifest/080f88f5-7586-4b8a-8064-63ab3495393c.json
+| Biblioteca | Search API | Risoluzione ID | Note |
+|-----------|-----------|---------------|------|
+| **Vaticana (BAV)** | ❌ | ✅ | Supporta segnature (es. `Urb.lat.1779`) |
+| **Gallica (BnF)** | ✅ | ✅ | API SRU ufficiale, prefissi: `btv`, `bpt`, `cb`, `cc` |
+| **Bodleian (Oxford)** | ❌ | ✅ | Solo UUID (API search deprecata Jan 2026) |
+| **Altre IIIF** | ❌ | ✅ | Qualsiasi URL manifest IIIF v2/v3 |
+
+## 🐛 Debug e Logging
+
+Il sistema crea log strutturati in `logs/YYYY-MM-DD/`:
+
+```bash
+# Abilita logging DEBUG
+export IIIF_LOG_LEVEL=DEBUG
+streamlit run app.py
+
+# Visualizza log download specifico
+cat logs/2026-01-16/download_MSS_Urb_lat_1779_143015.log
 ```
 
-**Esempio Gallica (BnF - Francia):**
-```bash
-# Con ARK del viewer
-python3 main.py https://gallica.bnf.fr/ark:/12148/bpt6k9604118j
+## 🧪 Test
 
-# Oppure con URL del manifest diretto
-python3 main.py https://gallica.bnf.fr/iiif/ark:/12148/bpt6k9604118j/manifest.json
+Esegui i test di robustezza:
+
+```bash
+# Test resolver (Gallica, Oxford, Vaticana)
+python3 -m tests.test_resolvers_robustness
+
+# Test discovery funzionale
+python3 -m tests.test_discovery_resolvers
+
+# Test download live (2-3 pagine per biblioteca)
+python3 -m tests.test_live
 ```
 
-> **Nota per Gallica**: A volte Gallica blocca connessioni da server cloud. Se hai problemi, prova da un PC locale.
+## 📝 Esempi di Uso
 
-| Opzione | Descrizione |
-|---|---|
-| `-o`, `--output` | Nome specifico del PDF (default: automatico dal titolo) |
-| `-w`, `--workers` | Thread simultanei (default: 4) |
-| `--clean-cache` | Pulisce i file temporanei prima di iniziare |
-| `--prefer-images` | Forza il download delle immagini anche se esiste un PDF ufficiale |
+### Esempio 1: Scarica un Codice Vaticano
 
-## 🏗️ Struttura del Progetto per Sviluppatori
+```bash
+# Via CLI
+python3 main.py "Urb.lat.1779"
 
-Il progetto è modulare:
-- `iiif_downloader/core.py`: Motore di download universale.
-- `iiif_downloader/resolvers/`: Plugin per riconoscere diversi siti (Vaticano, Generic, ecc.).
-- `main.py`: Punto di ingresso.
+# Via Web UI
+# 1. Seleziona "Vaticana (BAV)"
+# 2. Inserisci "Urb.lat.1779" 
+# 3. Click "Analizza" -> "Scarica"
+```
+
+### Esempio 2: Cerca e Scarica da Gallica
+
+```bash
+# Via Web UI
+# 1. Seleziona "Gallica (BnF)"
+# 2. Metodo: "Cerca nel Catalogo"
+# 3. Cerca "Dante"
+# 4. Scegli risultato e scarica
+```
+
+### Esempio 3: OCR di un Manoscritto
+
+```bash
+# Via CLI con modello Kraken
+python3 main.py <URL> --ocr "htr-default"
+
+# Via Web UI: sezione "Trascrizione"
+# Carica pagine e seleziona modello OCR
+```
+
+## 🤝 Contribuire
+
+I contributi sono benvenuti! Per bug report o feature request, apri una issue su GitHub.
+
+## 📄 Licenza
+
+MIT License - vedi `LICENSE` per dettagli.
+
+---
+
+*Ottimizzato per Digital Humanities e Paleografia.*
