@@ -25,31 +25,33 @@ def main():
     load_custom_css()
     
     # 2. Sidebar Navigation
-    st.sidebar.title("🏛️ IIIF Studio")
-    st.sidebar.caption("v3.0.0 (Agentic)")
-    st.sidebar.markdown("---")
+    import streamlit_antd_components as sac
     
-    # Handle state-based navigation override (e.g. from Search -> Studio)
-    if "nav_override" in st.session_state and st.session_state["nav_override"]:
-        default_idx = ["🛰️ Discovery", "🏛️ Studio", "🔍 Ricerca Globale"].index(st.session_state["nav_override"])
-        st.session_state["nav_override"] = None # Reset
-    else:
-        default_idx = 0
+    with st.sidebar:
+        st.title("🏛️ IIIF Studio")
+        st.caption("v3.1.0 (Agentic)")
         
-    app_mode = st.sidebar.radio(
-        "Navigazione",
-        ["🛰️ Discovery", "🏛️ Studio", "🔍 Ricerca Globale"],
-        index=default_idx
-    )
-    
+        # Determine default index
+        default_idx = 0
+        if "nav_override" in st.session_state and st.session_state["nav_override"]:
+            mapping = {"Discovery": 0, "Studio": 1, "Ricerca Globale": 2}
+            default_idx = mapping.get(st.session_state["nav_override"], 0)
+            st.session_state["nav_override"] = None # Reset
+            
+        app_mode = sac.menu([
+            sac.MenuItem('Discovery', icon='compass', description='Cerca e Scarica'),
+            sac.MenuItem('Studio', icon='easel', description='Leggi e Correggi'),
+            sac.MenuItem('Ricerca Globale', icon='search', description='Cerca nei testi'),
+        ], index=default_idx, format_func='title', open_all=True)
+        
     st.sidebar.markdown("---")
 
     # 3. Routing
-    if app_mode == "🛰️ Discovery":
+    if app_mode == 'Discovery':
         render_discovery_page()
-    elif app_mode == "🏛️ Studio":
+    elif app_mode == 'Studio':
         render_studio_page()
-    elif app_mode == "🔍 Ricerca Globale":
+    elif app_mode == 'Ricerca Globale':
         render_search_page()
     
     # 4. Global Footer / Debug

@@ -48,3 +48,33 @@ def generate_pdf_from_images(image_paths, output_path):
     except Exception as e:
         logger.error(f"Error creating PDF: {e}")
         return False, str(e)
+
+def convert_pdf_to_images(pdf_path, output_dir, progress_callback=None):
+    """
+    Convert a PDF into a series of JPG images in output_dir.
+    """
+    try:
+        from pdf2image import convert_from_path, pdfinfo_from_path
+        import os
+        
+        # Get info first
+        info = pdfinfo_from_path(pdf_path)
+        total_pages = info["Pages"]
+        
+        # Process in chunks to avoid memory issues
+        chunk_size = 10
+        for i in range(1, total_pages + 1, chunk_size):
+            pages = convert_from_path(pdf_path, first_page=i, last_page=min(i + chunk_size - 1, total_pages))
+            
+            for j, page in enumerate(pages):
+                page_num = i + j
+                out_name = f"pag_{page_num-1:04d}.jpg"
+                page.save(os.path.join(output_dir, out_name), "JPEG", quality=90)
+            
+            if progress_callback:
+                progress_callback(min(i + chunk_size - 1, total_pages), total_pages)
+                
+        return True, f"Estratte {total_pages} pagine."
+    except Exception as e:
+        logger.error(f"Error converting PDF: {e}")
+        return False, str(e)

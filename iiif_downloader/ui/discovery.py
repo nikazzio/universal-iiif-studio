@@ -11,62 +11,91 @@ def render_discovery_page():
     st.title("🛰️ Discovery & Download")
     
     # --- Sidebar Controls ---
-    st.sidebar.subheader("Configurazione Ricerca")
+    st.sidebar.subheader("Modalità")
     
-    user_default_lib = config.get("defaults", "default_library", "Vaticana (BAV)")
-    lib_choice = st.sidebar.selectbox("Biblioteca", ["Vaticana (BAV)", "Gallica (BnF)", "Bodleian (Oxford)", "Altro"], index=0)
+    mode_options = ["Segnatura / URL", "Importa PDF"]
+    # Check if Gallica is relevant? Actually we can show it always or check logic
+    # The original logic depended on library choice.
+    # Now that library choice is inside "Segnatura / URL", we can potentially show "Catalogo" always or hide it.
+    # Let's keep it simple: "Ricerca Catalogo (Gallica)" as a mode?
+    mode_options.append("Cerca nel Catalogo (Gallica)")
     
-    lib_map = {"Vaticana (BAV)": "Vaticana", "Gallica (BnF)": "Gallica", "Bodleian (Oxford)": "Bodleian", "Altro": "Unknown"}
-    active_lib = lib_map.get(lib_choice, "Unknown")
-
-    mode_options = ["Segnatura / URL"]
-    if lib_choice == "Gallica (BnF)":
-        mode_options.append("Cerca nel Catalogo")
-    
-    disc_mode = st.sidebar.radio("Metodo", mode_options, horizontal=True)
+    # Try st.pills (Streamlit 1.40+)
+    try:
+        disc_mode = st.sidebar.pills("Metodo", mode_options, default="Segnatura / URL")
+    except AttributeError:
+        disc_mode = st.sidebar.radio("Metodo", mode_options)
+        
+    if not disc_mode: disc_mode = "Segnatura / URL"
 
     # --- ACTION AREA ---
+    # Spacer
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     if disc_mode == "Segnatura / URL":
-        render_url_input(active_lib, lib_choice)
-    else:
-        render_catalog_search(active_lib)
+        render_url_search_panel()
+    elif disc_mode == "Importa PDF":
+        render_pdf_import()
+    elif disc_mode == "Cerca nel Catalogo (Gallica)":
+        render_catalog_search_panel()
 
     # --- PREVIEW AREA ---
     preview = st.session_state.get("discovery_preview")
     if preview:
         render_preview(preview)
 
-def render_url_input(active_lib, lib_choice):
-    placeholders = {
-        "Vaticana": "es. Urb.lat.1779",
-        "Gallica": "es. btv1b10033406t o bpt6k9761787t",
-        "Bodleian": "es. 080f88f5-7586-4b8a-8064-63ab3495393c",
-        "Unknown": "Inserisci ID o URL"
-    }
+def render_url_search_panel():
+    st.markdown("### 🔎 Ricerca per Segnatura")
+    st.caption("Inserisci l'ID, la segnatura o l'URL del manifesto per analizzare il documento.")
     
-    shelf_input = st.sidebar.text_input("ID o URL", placeholder=placeholders.get(active_lib, "Inserisci ID o URL"))
+    # Library choices
+    lib_map = {"Vaticana (BAV)": "Vaticana", "Gallica (BnF)": "Gallica", "Bodleian (Oxford)": "Bodleian", "Altro / URL Diretto": "Unknown"}
     
-    if st.sidebar.button("🔍 Analizza", use_container_width=True):
-        if shelf_input:
-            with st.spinner("Analisi in corso..."):
-                manifest_url, doc_id_hint = resolve_shelfmark(lib_choice, shelf_input)
-                if manifest_url:
-                    analyze_manifest(manifest_url, doc_id_hint, active_lib)
-                else:
-                    st.toast(doc_id_hint or "ID non risolvibile", icon="⚠️")
+    # Use config default
+    user_default = config.get("defaults", "default_library", "Vaticana (BAV)")
+    # We can't easily sync this with config without session state, but let's default to index 0
+    
+    with st.container(border=True):
+        c1, c2 = st.columns([1, 2])
+        lib_choice = c1.selectbox("Biblioteca / Fonte", list(lib_map.keys()), index=0)
+        active_lib = lib_map[lib_choice]
+        
+        placeholders = {
+            "Vaticana": "es. Urb.lat.1779",
+            "Gallica": "es. btv1b10033406t",
+            "Bodleian": "es. 080f88f5-7586...",
+            "Unknown": "https://.../manifest.json"
+        }
+        
+        shelf_input = c2.text_input("ID o URL", placeholder=placeholders.get(active_lib, "Inserisci ID"))
+        
+        if st.button("🔍 Analizza Documento", use_container_width=True, type="primary"):
+            if shelf_input:
+                with st.spinner("Analisi in corso..."):
+                    manifest_url, doc_id_hint = resolve_shelfmark(lib_choice, shelf_input)
+                    if manifest_url:
+                        analyze_manifest(manifest_url, doc_id_hint, active_lib)
+                    else:
+                        st.toast(doc_id_hint or "ID non risolvibile", icon="⚠️")
 
-def render_catalog_search(active_lib):
-    query = st.sidebar.text_input("Parola chiave", placeholder="es. Dante")
-    if st.sidebar.button("🔎 Cerca", use_container_width=True) and query:
-        with st.spinner("Ricerca in corso..."):
-            st.session_state["search_results"] = search_gallica(query)
+def render_catalog_search_panel():
+    st.markdown("### 📚 Ricerca Catalogo (Gallica)")
+    st.caption("Cerca direttamente nel catalogo della Biblioteca Nazionale di Francia.")
+    
+    with st.container(border=True):
+        col1, col2 = st.columns([3, 1])
+        query = col1.text_input("Parola chiave", placeholder="es. Divina Commedia, Dante...", label_visibility="collapsed")
+        
+        if col2.button("🔎 Cerca", use_container_width=True, type="primary") and query:
+            with st.spinner("Ricerca in corso..."):
+                st.session_state["search_results"] = search_gallica(query)
 
     # Gallery View
     results = st.session_state.get("search_results", [])
     if results:
-        st.subheader(f"Risultati Ricerca ({len(results)})")
+        st.subheader(f"Risultati ({len(results)})")
+        st.markdown("---")
         
-        # Grid Layout
         cols = st.columns(4)
         for i, res in enumerate(results):
             with cols[i % 4]:
@@ -76,7 +105,7 @@ def render_catalog_search(active_lib):
                     image_url=res.get("preview_url")
                 )
                 if st.button("Seleziona", key=f"sel_{res['id']}"):
-                     analyze_manifest(res["manifest_url"], res["id"], active_lib)
+                     analyze_manifest(res["manifest_url"], res["id"], "Gallica")
 
 def analyze_manifest(manifest_url, doc_id, library):
     try:
@@ -157,6 +186,112 @@ def start_download_process(preview):
             time.sleep(1)
             # Optionally redirect to studio
             st.session_state["discovery_preview"] = None
+            # Redirect to Studio requires nav override
+            # st.session_state["nav_override"] = "Studio" 
+            # (Note: Original code just cleared preview, didn't force redirect, but keeping comments consistent)
             st.rerun()
         except Exception as e:
              st.error(f"Errore download: {e}")
+
+def render_pdf_import():
+    st.markdown("### 📥 Importa PDF Locale")
+    st.caption("Carica un documento PDF esistente per usarlo nello Studio.")
+    
+    uploaded_file = st.file_uploader("Seleziona File PDF", type=["pdf"])
+    
+    default_title = ""
+    if uploaded_file:
+        default_title = uploaded_file.name.replace(".pdf", "")
+
+    with st.expander("Metadati Documento", expanded=True):
+        c1, c2 = st.columns(2)
+        title = c1.text_input("Titolo", placeholder="Titolo del documento", value=default_title)
+        author = c2.text_input("Autore", placeholder="es. Dante Alighieri")
+        
+        c3, c4 = st.columns(2)
+        year = c3.text_input("Anno", placeholder="es. 1321")
+        provenance = c4.text_input("Provenienza / Luogo", placeholder="es. Biblioteca Privata")
+        
+    extract_images = st.checkbox("Estrai Immagini da PDF (Consigliato per performance)", value=True, help="Se attivo, converte le pagine in JPG per uno scorrimento più fluido.")
+
+    if uploaded_file is not None:
+        if st.button("📥 Importa Documento", type="primary", use_container_width=True):
+            # Prepare paths
+            safe_name = uploaded_file.name.replace(".pdf", "").strip()
+            if title:
+                safe_name = title.replace(" ", "_")
+            
+            # Clean generic chars
+            safe_id = "".join([c for c in safe_name if c.isalnum() or c in ("_", "-")])
+            
+            from iiif_downloader.utils import ensure_dir, save_json
+            from iiif_downloader.pdf_utils import convert_pdf_to_images
+            import shutil
+            
+            # Use Local library
+            base_dir = config.get_download_dir()
+            doc_dir = os.path.join(base_dir, "Local", safe_id)
+            
+            if os.path.exists(doc_dir):
+                st.error(f"Esiste già un documento con ID '{safe_id}'. Cambia titolo o rinomina.")
+                return
+
+            try:
+                ensure_dir(doc_dir)
+                
+                # Save PDF
+                pdf_path = os.path.join(doc_dir, f"{safe_id}.pdf")
+                with open(pdf_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                    
+                # Build Metadata list
+                meta_entries = []
+                if author: meta_entries.append({"label": "Autore", "value": author})
+                if year: meta_entries.append({"label": "Anno", "value": year})
+                if provenance: meta_entries.append({"label": "Provenienza", "value": provenance})
+                
+                # Save Metadata
+                meta = {
+                    "label": title or uploaded_file.name,
+                    "description": f"Importato da PDF locale: {uploaded_file.name}",
+                    "attribution": provenance or "Local Import",
+                    "license": "Copyright User",
+                    "id": safe_id,
+                    "manifest_url": "local",
+                    "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "metadata": meta_entries
+                }
+                save_json(os.path.join(doc_dir, "metadata.json"), meta)
+                
+                # Process Images?
+                if extract_images:
+                    pages_dir = os.path.join(doc_dir, "pages")
+                    ensure_dir(pages_dir)
+                    
+                    status_text = st.empty()
+                    prog_bar = st.progress(0)
+                    
+                    def prog(curr, total):
+                        prog_bar.progress(curr/total)
+                        status_text.caption(f"Estrazione: {curr}/{total}")
+                        
+                    success, msg = convert_pdf_to_images(pdf_path, pages_dir, progress_callback=prog)
+                    
+                    if success:
+                        st.toast("Immagini Estratte!", icon="🖼️")
+                        # Update metadata with page count
+                        files = [f for f in os.listdir(pages_dir) if f.endswith(".jpg")]
+                        meta["pages"] = len(files)
+                        save_json(os.path.join(doc_dir, "metadata.json"), meta)
+                    else:
+                        st.warning(f"Estrazione fallita (il PDF è comunque salvato): {msg}")
+
+                st.success(f"Documento '{safe_id}' importato con successo!")
+                time.sleep(1.5)
+                # Redirect?
+                st.session_state["nav_override"] = "Studio"
+                st.session_state["studio_doc_id"] = safe_id
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Errore durante importazione: {e}")
