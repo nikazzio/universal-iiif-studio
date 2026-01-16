@@ -244,7 +244,7 @@ elif app_mode == "🏛️ Studio":
             page_img_path = os.path.join(paths["root"], "pages", f"pag_{page-1:04d}.jpg")
             page_image, page_err = (PILImage.open(page_img_path), None) if os.path.exists(page_img_path) else load_pdf_page(paths["pdf"], page)
             if page_image:
-                interactive_viewer(page_image)
+                interactive_viewer(page_image, zoom_percent=100)
                 st.caption("Usa lo slider (se presente) o il mouse per navigare i dettagli.")
             else: st.error(page_err or "Impossibile caricare la pagina.")
         

@@ -5,6 +5,10 @@ import time
 import requests
 from requests import RequestException
 
+from .logger import get_logger
+
+logger = get_logger(__name__)
+
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -33,6 +37,8 @@ def get_json(url, headers=None, retries=3):
     if headers is None:
         headers = DEFAULT_HEADERS
 
+    logger.debug(f"Fetching JSON from {url}")
+    
     for attempt in range(retries):
         try:
             resp = requests.get(url, headers=headers, timeout=15)
@@ -40,6 +46,7 @@ def get_json(url, headers=None, retries=3):
             # If rate limited, wait longer
             if resp.status_code == 429:
                 wait_time = (2 ** attempt) * 2
+                logger.warning(f"Rate limited (429) on {url}, waiting {wait_time}s")
                 time.sleep(wait_time)
                 continue
                 
@@ -47,26 +54,29 @@ def get_json(url, headers=None, retries=3):
             return resp.json()
         except RequestException as e:
             if attempt == retries - 1:
-                # Logging remains the same...
-                print(f"Error fetching JSON from {url}: {e}")
+                logger.error(f"Failed to fetch JSON from {url}: {e}")
                 
                 response = getattr(e, "response", None)
                 if response is not None:
                     status_code = getattr(response, "status_code", None)
                     if status_code is not None:
-                        print(f"HTTP Status: {status_code}")
+                        logger.error(f"HTTP Status: {status_code}")
                     response_text = getattr(response, "text", None)
                     if response_text:
+                        logger.debug(f"Response preview: {response_text[:200]}")
                         print(f"Response Text (first 200 chars): {response_text[:200]}")
                 raise
             
+            logger.warning(f"Attempt {attempt + 1}/{retries} failed for {url}, retrying...")
             wait_time = (2 ** attempt)
             time.sleep(wait_time)
         except ValueError as e:
             # This happens if resp.json() fails
-            print(f"Error parsing JSON from {url}: {e}")
+            logger.error(f"JSON parsing error from {url}: {e}")
             try:
-                print(f"Response preview (first 200 chars): {resp.text[:200]}")
+                preview = resp.text[:200]
+                logger.debug(f"Response preview: {preview}")
+                print(f"Response preview (first 200 chars): {preview}")
             except:
                 pass
             raise

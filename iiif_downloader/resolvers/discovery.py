@@ -3,6 +3,9 @@ import requests
 import xml.etree.ElementTree as ET
 from typing import Optional, Tuple, List, Dict
 from iiif_downloader.utils import DEFAULT_HEADERS
+from iiif_downloader.logger import get_logger
+
+logger = get_logger(__name__)
 
 def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -10,6 +13,7 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
     Returns (manifest_url, doc_id).
     """
     s = shelfmark.strip()
+    logger.debug(f"Resolving shelfmark for {library}: '{s}'")
     
     if library == "Vaticana (BAV)":
         # Handle full URL if pasted accidentally
@@ -20,6 +24,7 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
         # SAFETY: Protect against Oxford UUIDs being pasted here
         uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         if re.search(uuid_pattern, s.lower()):
+            logger.warning(f"Oxford UUID '{s}' provided to Vaticana resolver")
             return None, "L'ID sembra un UUID Oxford. Seleziona 'Bodleian (Oxford)' come biblioteca."
 
         # Standardize shelfmark: "Urb. Lat. 1779" -> "MSS_Urb.lat.1779"
@@ -29,7 +34,7 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
         clean_s = clean_s.replace("Lat.", "lat.").replace("Gr.", "gr.").replace("Vat.", "vatic.").replace("Pal.", "pal.")
         
         clean_id = clean_s if clean_s.startswith("MSS_") else f"MSS_{clean_s}"
-        return f"https://digi.vatlib.it/iiif/{clean_id}/manifest.json", clean_s
+        return f"https://digi.vatlib.it/iiif/{clean_id}/manifest.json", clean_id
         
     elif library == "Gallica (BnF)":
         # Cleanup input
@@ -118,10 +123,13 @@ def search_gallica(query: str, max_records: int = 10) -> List[Dict]:
                     })
                     
     except requests.RequestException as e:
+        logger.error(f"Network error searching Gallica: {e}")
         print(f"⚠️ Errore nella ricerca Gallica: {e}")
     except ET.ParseError as e:
+        logger.error(f"XML parsing error from Gallica: {e}")
         print(f"⚠️ Errore nel parsing XML da Gallica: {e}")
     except Exception as e:
+        logger.error(f"Unexpected error searching Gallica: {e}")
         print(f"⚠️ Errore imprevisto nella ricerca Gallica: {e}")
         
     return results
@@ -144,6 +152,7 @@ def search_oxford(query: str) -> List[Dict]:
     Returns:
         Empty list (API no longer available)
     """
+    logger.info("Oxford search API not available, user directed to manual search")
     print("ℹ️ La ricerca automatica per Oxford/Bodleian non è disponibile.")
     print("   Cerca manualmente su https://digital.bodleian.ox.ac.uk/")
     print("   e copia l'UUID o l'URL del manifest nel campo 'ID o URL'.")

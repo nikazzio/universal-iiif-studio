@@ -20,3 +20,5 @@ models/
 # OS
 .DS_Store
 tests/out/
+logs/
+

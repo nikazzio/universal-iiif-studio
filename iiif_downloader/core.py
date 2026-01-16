@@ -7,6 +7,16 @@ from PIL import Image
 import requests
 
 from .utils import clean_dir, ensure_dir, get_json, DEFAULT_HEADERS
+from .logger import get_logger, get_download_logger
+
+# Download Configuration Constants
+MAX_DOWNLOAD_RETRIES = 5
+BASE_RETRY_DELAY = 1  # seconds
+VATICAN_MIN_DELAY = 1.5  # seconds
+VATICAN_MAX_DELAY = 4.0  # seconds
+NORMAL_MIN_DELAY = 0.4  # seconds
+NORMAL_MAX_DELAY = 1.2  # seconds
+THROTTLE_BASE_WAIT = 15  # seconds for 429 errors
 
 # Try to import img2pdf
 try:
@@ -14,6 +24,8 @@ try:
     HAS_IMG2PDF = True
 except ImportError:
     HAS_IMG2PDF = False
+
+logger = get_logger(__name__)
 
 
 def _sanitize_filename(label: str) -> str:
@@ -46,8 +58,16 @@ class IIIFDownloader:
         self.skip_pdf = skip_pdf
         self.library = library
         self.keep_temp = True # Always True now as we use permanent pages/
+        
+        # Determine MS ID for naming
+        sanitized_label = _sanitize_filename(str(self.label if hasattr(self, 'label') else 'temp'))
+        self.ms_id = (output_name[:-4] if output_name and output_name.endswith(".pdf") else output_name) or sanitized_label
+        
+        #Initialize download-specific logger
+        self.logger = get_download_logger(self.ms_id)
 
         # Load Manifest
+        self.logger.info(f"Fetching manifest from {manifest_url}")
         print(f"Fetching Manifest: {manifest_url}...")
         self.manifest = get_json(manifest_url)
 
@@ -146,6 +166,7 @@ class IIIFDownloader:
 
         with open(self.meta_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=4, ensure_ascii=False)
+        self.logger.info(f"Metadata saved to {self.meta_path}")
         print(f"Metadata saved: {self.meta_path}")
 
     def get_canvases(self):
@@ -173,9 +194,13 @@ class IIIFDownloader:
             if not images:
                 return None
 
-            # Support both Annotation (v2) and Page Body (v3)
+            # Support both Annotation (v2/v3) and direct resources
             img_obj = images[0]
-            if img_obj.get('type') == 'Annotation':
+            
+            # Check for annotation type (v2 uses '@type', v3 uses 'type')
+            annotation_type = img_obj.get('@type') or img_obj.get('type') or ''
+            
+            if 'Annotation' in annotation_type:  # Matches both 'oa:Annotation' (v2) and 'Annotation' (v3)
                 resource = img_obj.get('resource') or img_obj.get('body')
             else:
                 resource = img_obj  # Direct resource in some v3 manifests
@@ -211,7 +236,7 @@ class IIIFDownloader:
 
             # 3. Download & Retry with Exponential Backoff
             import random
-            for attempt in range(5): # Up to 4 retries
+            for attempt in range(MAX_DOWNLOAD_RETRIES):
                 # Global Throttle Check
                 now = time.time()
                 if now < self._backoff_until:
@@ -221,10 +246,10 @@ class IIIFDownloader:
 
                 # Human-like Jitter between requests
                 if "vatlib.it" in self.manifest_url.lower():
-                    # Reduced delay to balance speed and safety
-                    time.sleep(random.uniform(1.5, 4.0))
+                    delay = random.uniform(VATICAN_MIN_DELAY, VATICAN_MAX_DELAY)
                 else:
-                    time.sleep(random.uniform(0.4, 1.2))
+                    delay = random.uniform(NORMAL_MIN_DELAY, NORMAL_MAX_DELAY)
+                time.sleep(delay)
 
                 for url in urls_to_try:
                     try:
@@ -237,14 +262,16 @@ class IIIFDownloader:
                             
                         if r.status_code == 429:
                             with self._lock:
-                                wait = (2 ** attempt) * 15 # Start with 15s instead of 5s
+                                wait = (2 ** attempt) * THROTTLE_BASE_WAIT
                                 new_until = time.time() + wait
                                 if new_until > self._backoff_until:
                                     self._backoff_until = new_until
+                                    self.logger.warning(f"Rate limited (429) on page {index}, pausing {wait}s")
                                     print(f"⚠️ Global Throttling (429) on page {index}. Pausing for {wait}s...")
                             break # Retry after global pause
                             
                         if r.status_code == 403:
+                            self.logger.warning(f"403 Forbidden on page {index}")
                             print(f"🚫 403 Forbidden on page {index}. Cooling down.")
                             time.sleep(10)
 
@@ -253,10 +280,12 @@ class IIIFDownloader:
 
                 time.sleep(1 + attempt)
 
+            self.logger.error(f"Failed to download page {index} after {MAX_DOWNLOAD_RETRIES} retries")
             print(f"Failed to download page {index} after retries.")
             return None
 
         except (KeyError, TypeError, ValueError) as e:
+            self.logger.error(f"Error processing page {index}: {e}")
             print(f"Error on page {index}: {e}")
             return None
 
