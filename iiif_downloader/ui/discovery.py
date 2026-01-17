@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from iiif_downloader.resolvers.discovery import resolve_shelfmark, search_gallica, search_oxford
-from iiif_downloader.core import IIIFDownloader
+from iiif_downloader.logic import IIIFDownloader
 from iiif_downloader.utils import get_json
 from iiif_downloader.ui.state import init_session_state
 from iiif_downloader.ui.styling import render_gallery_card

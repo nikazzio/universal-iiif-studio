@@ -9,7 +9,7 @@ from iiif_downloader.logger import get_logger
 
 # Page Modules
 from iiif_downloader.ui.discovery import render_discovery_page
-from iiif_downloader.ui.studio import render_studio_page
+from iiif_downloader.ui.pages.studio_page import render_studio_page
 from iiif_downloader.ui.search import render_search_page
 
 def main():

@@ -16,10 +16,6 @@ def inject_premium_styles():
 def interactive_viewer(image, zoom_percent: int):
     """
     Render the premium interactive image viewer using an isolated iframe component.
-    
-    UPDATED: Now uses natural image resolution (no CSS width constraint) and JS 
-    to calculate the 'fit' scale initially. This ensures that zooming in reveals 
-    the true pixel detail instead of a blurry upscaled version of a shrunk element.
     """
     if not image:
         return
@@ -29,9 +25,6 @@ def interactive_viewer(image, zoom_percent: int):
     buffered = BytesIO()
     image.save(buffered, format="JPEG", quality=quality)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
-    
-    # We pass natural w/h to JS to help with initial geometry if needed, 
-    # though img.naturalWidth is available in JS onload.
     
     # Isolated HTML Component
     html_code = f"""
@@ -53,7 +46,6 @@ def interactive_viewer(image, zoom_percent: int):
             .viewer-container:active {{ cursor: grabbing; }}
             .viewer-image {{
                 position: absolute; top: 0; left: 0;
-                /* Crucial: Auto dims to preserve resolution */
                 width: auto; height: auto; max-width: none; max-height: none;
                 box-shadow: 0 10px 60px rgba(0,0,0,0.5);
                 transform-origin: 0 0; will-change: transform;
@@ -103,7 +95,6 @@ def interactive_viewer(image, zoom_percent: int):
             }}
 
             window.vZoom = (factor) => {{
-                // Zoom towards center of screen ideally, simplifed to current pos
                 state.scale *= factor;
                 updateTransform();
             }};
@@ -114,27 +105,19 @@ def interactive_viewer(image, zoom_percent: int):
             }};
 
             window.vReset = () => {{
-                // Refit to screen
                 const cntW = cnt.clientWidth;
                 const cntH = cnt.clientHeight;
                 const imgW = img.naturalWidth;
                 const imgH = img.naturalHeight;
-                
-                // Calculate scale to fit
                 const scaleW = cntW / imgW;
                 const scaleH = cntH / imgH;
-                const fitScale = Math.min(scaleW, scaleH) * 0.95; // 95% fit
-                
+                const fitScale = Math.min(scaleW, scaleH) * 0.95; 
                 state.scale = fitScale;
-                
-                // Center
                 state.x = (cntW - imgW * fitScale) / 2;
                 state.y = (cntH - imgH * fitScale) / 2;
-                
                 updateTransform();
             }};
 
-            // Panning Logic
             cnt.addEventListener('pointerdown', (e) => {{
                 if (e.target.tagName === 'BUTTON') return;
                 isPanning = true;
@@ -154,33 +137,21 @@ def interactive_viewer(image, zoom_percent: int):
             window.addEventListener('pointerup', stop);
             window.addEventListener('pointercancel', stop);
 
-            // Wheel Zoom
             cnt.addEventListener('wheel', (e) => {{
                 e.preventDefault();
                 const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-                
-                // Smart Zoom relative to pointer
                 const rect = cnt.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
-                
-                // (mouseX - state.x) is the offset within the image in screen pixels
-                // We want that point to stay under the mouse after zoom
-                
                 const beforeX = (mouseX - state.x) / state.scale;
                 const beforeY = (mouseY - state.y) / state.scale;
-                
                 state.scale *= zoomFactor;
-                
                 state.x = mouseX - beforeX * state.scale;
                 state.y = mouseY - beforeY * state.scale;
-                
                 updateTransform();
             }}, {{ passive: false }});
 
-            // Initial Fit
             img.onload = () => window.vReset();
-            // If already loaded
             if (img.complete && img.naturalWidth > 0) window.vReset();
             
         </script>
