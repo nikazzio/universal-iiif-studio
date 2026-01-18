@@ -168,7 +168,12 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
         if page_img_path.exists():
             img_obj = PILImage.open(str(page_img_path))
         elif Path(paths["pdf"]).exists():
-            img_obj = load_pdf_page(paths["pdf"], current_p)
+            from iiif_downloader.config_manager import get_config_manager
+
+            pdf_dpi = int(get_config_manager().get_setting("pdf.viewer_dpi", 150))
+            img_obj, pdf_err = load_pdf_page(paths["pdf"], current_p, dpi=pdf_dpi, return_error=True)
+            if pdf_err:
+                st.warning(pdf_err)
 
         # Calculate stats for the header
         stats_str = ""
@@ -235,7 +240,6 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
     initial_text = trans.get("full_text", "") if trans else ""
     current_status = trans.get("status", "draft") if trans else "draft"
     is_manual = trans.get("is_manual", False) if trans else False
-    # NOTE: original_ocr_text is currently not displayed/used in this UI.
 
     # INFO MESSAGE NEXT TO HEADER
     info_msg = ""

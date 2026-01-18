@@ -77,11 +77,24 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
     paths = storage.get_document_paths(doc_id, library)
     page_img_path = Path(paths["scans"]) / f"pag_{page_idx-1:04d}.jpg"
 
-    if not page_img_path.exists():
-        st.error("Immagine non trovata, impossibile eseguire OCR.")
-        return
+    img = None
+    if page_img_path.exists():
+        img = PILImage.open(str(page_img_path))
+    else:
+        # Fallback: render directly from PDF (useful if user skipped extraction).
+        pdf_path = Path(paths.get("pdf") or "")
+        if pdf_path.exists():
+            from iiif_downloader.pdf_utils import load_pdf_page
 
-    img = PILImage.open(str(page_img_path))
+            cm = get_config_manager()
+            ocr_dpi = int(cm.get_setting("pdf.ocr_dpi", 300))
+            img, pdf_err = load_pdf_page(str(pdf_path), page_idx, dpi=ocr_dpi, return_error=True)
+            if pdf_err:
+                st.error(pdf_err)
+                return
+        else:
+            st.error("Immagine non trovata, impossibile eseguire OCR.")
+            return
 
     with st.status(f"Elaborazione OCR ({engine})...", expanded=True) as status:
         def update_status(text):

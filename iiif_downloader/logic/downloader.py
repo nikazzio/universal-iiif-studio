@@ -68,8 +68,13 @@ class IIIFDownloader:
             self.label = self.label[0] if self.label else "unknown_manuscript"
 
         sanitized_label = _sanitize_filename(str(self.label))
-        self.ms_id = (output_name[:-4] if output_name and output_name.endswith(".pdf")
-                      else output_name) or sanitized_label
+
+        ms_id = None
+        if output_name:
+            ms_id = output_name[:-4] if output_name.endswith(".pdf") else output_name
+        else:
+            ms_id = sanitized_label
+        self.ms_id = ms_id
         self.logger = get_download_logger(self.ms_id)
 
         out_base = Path(output_dir).expanduser()
@@ -128,8 +133,14 @@ class IIIFDownloader:
         return None
 
     def extract_metadata(self):
-        metadata = {"id": self.ms_id, "title": self.label, "attribution": self.manifest.get("attribution"), "description": self.manifest.get(
-            "description"), "manifest_url": self.manifest_url, "download_date": time.strftime("%Y-%m-%d %H:%M:%S")}
+        metadata = {
+            "id": self.ms_id,
+            "title": self.label,
+            "attribution": self.manifest.get("attribution"),
+            "description": self.manifest.get("description"),
+            "manifest_url": self.manifest_url,
+            "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
         save_json(self.meta_path, metadata)
         save_json(self.manifest_path, self.manifest)
 

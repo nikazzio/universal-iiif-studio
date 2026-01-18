@@ -55,6 +55,10 @@ DEFAULT_CONFIG_JSON: Dict[str, Any] = {
             "ocr_quality": 95,
             "tile_stitch_max_ram_gb": 2,
         },
+        "pdf": {
+            "viewer_dpi": 150,
+            "ocr_dpi": 300,
+        },
         "housekeeping": {
             "temp_cleanup_days": 7,
         },
@@ -130,6 +134,19 @@ class ConfigManager:
                 )
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
+
+        # Back-compat: older configs may have a single `pdf.render_dpi`.
+        pdf_cfg = data.get("settings", {}).get("pdf")
+        if isinstance(pdf_cfg, dict):
+            legacy = pdf_cfg.get("render_dpi")
+            if legacy is not None:
+                pdf_cfg.setdefault("viewer_dpi", legacy)
+                pdf_cfg.setdefault("ocr_dpi", legacy)
+                # Keep the in-memory config clean; it will disappear on next save.
+                try:
+                    del pdf_cfg["render_dpi"]
+                except KeyError:
+                    pass
 
         return cls(path=cfg_path, _data=data)
 

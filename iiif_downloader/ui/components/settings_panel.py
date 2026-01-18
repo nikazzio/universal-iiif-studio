@@ -87,6 +87,9 @@ def render_settings_page(cm: Any) -> None:
         ram_gb = max(1.0, min(ram_gb, 64.0))
         cm.set_setting("images.tile_stitch_max_ram_gb", ram_gb)
 
+        cm.set_setting("pdf.viewer_dpi", _state_int("cfg_pdf_viewer_dpi", 150))
+        cm.set_setting("pdf.ocr_dpi", _state_int("cfg_pdf_ocr_dpi", 300))
+
         cleanup_days = _state_int("cfg_temp_cleanup_days", 7)
         cleanup_days = max(1, min(cleanup_days, 30))
         cm.set_setting("housekeeping.temp_cleanup_days", cleanup_days)
@@ -156,6 +159,10 @@ def render_settings_page(cm: Any) -> None:
     _init_state("cfg_ocr_quality", _read_int("images.ocr_quality", 95))
     _init_state("cfg_tile_stitch_max_ram_gb", _read_float("images.tile_stitch_max_ram_gb", 2.0))
 
+    legacy_pdf_dpi = _read_int("pdf.render_dpi", 300)
+    _init_state("cfg_pdf_viewer_dpi", _read_int("pdf.viewer_dpi", legacy_pdf_dpi))
+    _init_state("cfg_pdf_ocr_dpi", _read_int("pdf.ocr_dpi", legacy_pdf_dpi))
+
     _init_state("cfg_temp_cleanup_days", _read_int("housekeeping.temp_cleanup_days", 7))
     _init_state("cfg_log_level", str(cm.get_setting("logging.level", "INFO")).upper())
 
@@ -186,6 +193,8 @@ def render_settings_page(cm: Any) -> None:
         "cfg_viewer_quality",
         "cfg_ocr_quality",
         "cfg_tile_stitch_max_ram_gb",
+        "cfg_pdf_viewer_dpi",
+        "cfg_pdf_ocr_dpi",
         "cfg_temp_cleanup_days",
         "cfg_log_level",
         "cfg_openai",
@@ -218,6 +227,7 @@ def render_settings_page(cm: Any) -> None:
         "⚡ Sistema",
         "🎛️ UI",
         "🖼️ IIIF",
+        "📄 PDF",
         "🧹 Pulizia",
         "🪵 Logging",
         "🔑 API Keys",
@@ -393,6 +403,37 @@ def render_settings_page(cm: Any) -> None:
             )
 
     with tabs[4]:
+        st.caption(
+            "Queste opzioni controllano come il PDF viene renderizzato in immagine. "
+            "La visualizzazione può usare DPI più bassi per essere più veloce; "
+            "l'OCR/LLM usa DPI più alti per massimizzare la qualità."
+        )
+
+        p1, p2 = st.columns(2)
+        p1.slider(
+            "DPI PDF (Visualizzazione)",
+            min_value=72,
+            max_value=400,
+            step=1,
+            key="cfg_pdf_viewer_dpi",
+            help=(
+                "Usato per il rendering on-the-fly nello Studio quando mancano le immagini estratte. "
+                "Default 150."
+            ),
+        )
+        p2.slider(
+            "DPI PDF (Import + OCR/LLM)",
+            min_value=72,
+            max_value=600,
+            step=1,
+            key="cfg_pdf_ocr_dpi",
+            help=(
+                "Usato per convertire PDF→immagini durante l'import e (se serve) per generare l'immagine inviata all'OCR/LLM. "
+                "Default 300."
+            ),
+        )
+
+    with tabs[5]:
         d1, d2 = st.columns([2, 1])
         d1.caption(f"Cartella cache/temporanei: {cm.get_temp_dir()}")
         d2.slider(
@@ -404,7 +445,7 @@ def render_settings_page(cm: Any) -> None:
             help="All'avvio, elimina automaticamente i file temporanei più vecchi di N giorni.",
         )
 
-    with tabs[5]:
+    with tabs[6]:
         st.selectbox(
             "Log level",
             ["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -412,7 +453,7 @@ def render_settings_page(cm: Any) -> None:
             help="Livello di dettaglio dei log (DEBUG è molto verboso).",
         )
 
-    with tabs[6]:
+    with tabs[7]:
         st.caption(
             "Le chiavi API sono salvate localmente in config.json e vengono usate solo per chiamare i provider selezionati."
         )

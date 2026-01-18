@@ -19,9 +19,7 @@ Uno strumento **professionale** e modulare per scaricare, organizzare e studiare
 ## 📋 Requisiti
 
 - **Python 3.10+**
-- **Poppler** (per import PDF):
-  - Ubuntu/Debian: `sudo apt-get install poppler-utils`
-  - macOS: `brew install poppler`
+- Nessuna dipendenza di sistema per l'import PDF (usa **PyMuPDF**)
 
 ## 🔧 Installazione Rapida
 
@@ -101,7 +99,7 @@ downloads/
 ## 🛠️ Stack Tecnologico
 
 - **Frontend**: Streamlit + `streamlit-antd-components`.
-- **Backend IO**: `requests`, `pdf2image`, Pillow.
+- **Backend IO**: `requests`, **PyMuPDF (fitz)**, Pillow.
 - **OCR/AI**: `kraken` (locale), `openai`, `anthropic`, Google Vision, HuggingFace.
 
 ## 🤝 Contribuire

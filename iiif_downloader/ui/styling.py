@@ -106,7 +106,7 @@ def render_gallery_card(title, subtitle, image_url=None, footer=None, key=None):
     Approach B (Native): Container with styling + Button.
     """
     # These are reserved for future UI variants (overlay button / keyed widgets).
-    del footer, key
+    _ = footer, key
     with st.container():
         st.markdown(f"""
         <div class="card-container">

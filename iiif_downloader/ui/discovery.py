@@ -273,11 +273,7 @@ def start_download_process(preview):
             downloader.run()
             toast(f"Completato! {preview['id']} scaricato.", icon="🎉")
             time.sleep(1)
-            # Optionally redirect to studio
             st.session_state["discovery_preview"] = None
-            # Redirect to Studio requires nav override
-            # st.session_state["nav_override"] = "Studio"
-            # Original code just cleared preview (no redirect).
             st.rerun()
         except (RequestException, OSError, ValueError, RuntimeError) as e:
             st.error(f"Errore download: {e}")
@@ -404,6 +400,7 @@ def render_pdf_import():
                         str(pdf_path),
                         str(scans_dir),
                         progress_callback=prog,
+                        dpi=int(get_config_manager().get_setting("pdf.ocr_dpi", 300)),
                     )
 
                     if success:

@@ -26,7 +26,7 @@ Universal IIIF Downloader & Studio è una web-app Streamlit che permette di:
 
 - Python 3.10+
 - Dipendenze Python (vedi `requirements.txt`)
-- Per import PDF e conversione in immagini: `poppler` installato sul sistema (necessario a `pdf2image`).
+- Per import PDF e conversione in immagini: usa **PyMuPDF** (nessuna dipendenza di sistema esterna).
 
 ### 2.2 Avvio
 
@@ -388,7 +388,7 @@ Nota: la CLI usa i resolver “classici” (Vatican/Gallica/Oxford/Generic). La 
 ## 17) Limiti noti e note operative
 
 - Ricerca automatica Oxford: non disponibile (API pubblica rimossa). Occorre incollare UUID/manifest.
-- Import PDF: richiede poppler; la qualità/velocità dipendono dal PDF.
+- Import PDF: usa PyMuPDF; la qualità/velocità dipendono dal PDF.
 - OCR provider: richiedono API key (eccetto Kraken locale) e possono avere costi/limiti.
 - Tile stitching: più lento del download diretto `/full`, ma utile quando il server blocca immagini grandi.
 
