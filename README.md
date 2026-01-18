@@ -1,4 +1,4 @@
-# 📜 Universal IIIF Downloader & Studio (v0.3.1)
+# 📜 Universal IIIF Downloader & Studio (v0.4.0)
 
 Uno strumento **professionale** e modulare per scaricare, organizzare e studiare manoscritti digitali. Supporta biblioteche IIIF (Vaticana, Bodleian, Gallica), importazione di PDF locali e offre un ambiente di studio avanzato con **OCR/HTR integrato** e **workflow di correzione manuale**.
 
@@ -6,7 +6,7 @@ Uno strumento **professionale** e modulare per scaricare, organizzare e studiare
 
 - Guida/feature (bozza iniziale): [docs/DOCUMENTAZIONE.md](docs/DOCUMENTAZIONE.md)
 
-## 🚀 Nuove Funzionalità (v0.3.1)
+## 🚀 Nuove Funzionalità (v0.4.0)
 
 - **🖥️ UI Rimasterizzata**: Nuova navigazione moderna con sidebar "Pro", temi chiari/scuri e layout responsivo.
 - **📥 Import PDF Locale**: Carica i tuoi documenti PDF nello Studio, estrai automaticamente le immagini e trattali come manoscritti IIIF.
