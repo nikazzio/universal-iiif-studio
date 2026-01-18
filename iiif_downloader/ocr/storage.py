@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 from pathlib import Path
 from typing import List, Dict, Optional, Any
@@ -9,6 +8,8 @@ from iiif_downloader.logger import get_logger
 logger = get_logger(__name__)
 
 class OCRStorage:
+    STORAGE_VERSION = 2 # Incremented to force refresh after directory reorganization
+    
     def __init__(self, base_dir: str = "downloads"):
         self.base_dir = Path(base_dir)
         ensure_dir(self.base_dir)
@@ -20,8 +21,8 @@ class OCRStorage:
             if not library_dir.is_dir(): continue
             for doc_dir in library_dir.iterdir():
                 if doc_dir.is_dir():
-                    # Check for PDF or metadata (Image-first might not have PDF yet)
-                    if (doc_dir / "metadata.json").exists():
+                    # Clean look for metadata in new 'data' folder
+                    if (doc_dir / "data" / "metadata.json").exists():
                         docs.append({
                             "id": doc_dir.name,
                             "library": library_dir.name,
@@ -43,17 +44,19 @@ class OCRStorage:
                     break
         
         if not doc_path:
-             # Fallback to base (legacy) or Unknown
              doc_path = self.base_dir / library / doc_id
 
         return {
             "root": doc_path,
-            "pdf": doc_path / f"{doc_id}.pdf",
-            "pages": doc_path / "pages",
-            "pages": doc_path / "pages",
-            "metadata": doc_path / "metadata.json",
-            "stats": doc_path / "image_stats.json",
-            "transcription": doc_path / "transcription.json"
+            "scans": doc_path / "scans",
+            "pdf_dir": doc_path / "pdf",
+            "pdf": doc_path / "pdf" / f"{doc_id}.pdf",
+            "data": doc_path / "data",
+            "metadata": doc_path / "data" / "metadata.json",
+            "stats": doc_path / "data" / "image_stats.json",
+            "transcription": doc_path / "data" / "transcription.json",
+            "manifest": doc_path / "data" / "manifest.json",
+            "history": doc_path / "history"
         }
 
     def load_image_stats(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
@@ -73,19 +76,8 @@ class OCRStorage:
         data = load_json(paths["transcription"]) or {"pages": [], "doc_id": doc_id}
         
         pages = data.get("pages", [])
-        # Handle Manual Edit Logic
         is_manual = ocr_data.get("is_manual", False)
         
-        # Check if we need to backup original OCR
-        if is_manual:
-            existing_page = next((p for p in pages if p.get("page_index") == page_idx), None)
-            if existing_page and "original_ocr_text" not in existing_page:
-                # First manual edit: timestamp the backup
-                existing_page["original_ocr_text"] = existing_page.get("full_text", "")
-                existing_page["original_engine"] = existing_page.get("engine", "unknown")
-            
-            # If creating new page manually (rare but possible), no backup needed yet
-            
         new_entry = {
             "page_index": page_idx,
             "full_text": ocr_data.get("full_text", ""),
@@ -97,17 +89,13 @@ class OCRStorage:
             "average_confidence": ocr_data.get("average_confidence", 1.0 if is_manual else 0.0)
         }
 
-        # Preserve backup if exists (when updating an already manual page)
-        if is_manual:
-             existing_page = next((p for p in pages if p.get("page_index") == page_idx), None)
-             if existing_page and "original_ocr_text" in existing_page:
-                 new_entry["original_ocr_text"] = existing_page["original_ocr_text"]
-                 new_entry["original_engine"] = existing_page.get("original_engine", "unknown")
-
         # Update existing or add new
         updated = False
         for i, p in enumerate(pages):
             if p.get("page_index") == page_idx:
+                # Merge existing status if not provided in new data
+                if "status" not in ocr_data:
+                    new_entry["status"] = p.get("status", "draft")
                 pages[i] = new_entry
                 updated = True
                 break
@@ -118,7 +106,56 @@ class OCRStorage:
         
         data["pages"] = pages
         save_json(paths["transcription"], data)
+        
+        # Automatically log history
+        self.save_history(doc_id, page_idx, new_entry, library)
+        
         return True
+
+    def save_history(self, doc_id: str, page_idx: int, entry: Dict[str, Any], library: str = "Unknown"):
+        """Save a snapshot to the per-page history log."""
+        paths = self.get_document_paths(doc_id, library)
+        history_dir = paths["history"]
+        ensure_dir(history_dir)
+        
+        history_file = history_dir / f"p{page_idx:04d}_history.json"
+        history_data = load_json(history_file) or []
+        
+        # Deduplication: Don't save if the text is identical to the last version
+        if history_data:
+            last_entry = history_data[-1]
+            if last_entry.get("full_text") == entry.get("full_text") and last_entry.get("status") == entry.get("status"):
+                logger.debug(f"Skipping duplicate history snapshot for page {page_idx}")
+                return
+        
+        # Add entry with its own timestamp if not present
+        if "timestamp" not in entry:
+            entry["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+        history_data.append(entry)
+        
+        # Keep only last 50 versions to avoid massive files (still very safe)
+        if len(history_data) > 50:
+            history_data = history_data[-50:]
+            
+        save_json(history_file, history_data)
+        logger.debug(f"History snapshot saved for page {page_idx}")
+
+    def load_history(self, doc_id: str, page_idx: int, library: str = "Unknown") -> List[Dict[str, Any]]:
+        """Load the history log for a specific page."""
+        paths = self.get_document_paths(doc_id, library)
+        history_file = paths["history"] / f"p{page_idx:04d}_history.json"
+        return load_json(history_file) or []
+
+    def clear_history(self, doc_id: str, page_idx: int, library: str = "Unknown"):
+        """Delete the history log for a specific page."""
+        paths = self.get_document_paths(doc_id, library)
+        history_file = paths["history"] / f"p{page_idx:04d}_history.json"
+        if history_file.exists():
+            os.remove(history_file)
+            logger.info(f"History cleared for doc={doc_id}, page={page_idx}")
+            return True
+        return False
 
     def load_transcription(self, doc_id: str, page_idx: Optional[int] = None, library: str = "Unknown") -> Any:
         """Load transcription for a document or specific page."""
@@ -150,56 +187,3 @@ class OCRStorage:
                     "matches": doc_matches
                 })
         return results
-
-    def migrate_legacy(self):
-        """Migrate legacy structure to document-centric structure."""
-        # Old files: Urb.lat.1779.pdf, Urb.lat.1779_metadata.json
-        # Old folder: transcriptions/Urb.lat.1779_ocr.json
-        
-        migrated_count = 0
-        
-        # 1. Look for root PDFs or legacy doc folders
-        for item in self.base_dir.iterdir():
-            if not item.is_dir(): continue
-            if item.name in ["Vaticana", "Gallica", "Bodleian", "Unknown"]: continue
-            
-            # This is a legacy doc folder like downloads/Urb.lat.1779
-            doc_id = item.name
-            
-            # Guess library from metadata if exists
-            library = "Unknown"
-            meta_file = item / "metadata.json"
-            if meta_file.exists():
-                meta = load_json(meta_file)
-                manifest_url = meta.get("manifest_url", "").lower()
-                if "vatlib.it" in manifest_url: library = "Vaticana"
-                elif "gallica.bnf.fr" in manifest_url: library = "Gallica"
-                elif "bodleian.ox.ac.uk" in manifest_url: library = "Bodleian"
-            
-            target_lib_dir = self.base_dir / library
-            ensure_dir(target_lib_dir)
-            
-            target_doc_dir = target_lib_dir / doc_id
-            if not target_doc_dir.exists():
-                shutil.move(str(item), str(target_doc_dir))
-                migrated_count += 1
-            else:
-                # Merge or skip
-                print(f"Skipping migration for {doc_id}, already exists in {library}")
-
-        # Also migrate loose PDFs if any
-        for pdf_file in self.base_dir.glob("*.pdf"):
-            doc_id = pdf_file.stem
-            library = "Unknown" # Hard to guess without meta
-            
-            target_doc_dir = self.base_dir / library / doc_id
-            ensure_dir(target_doc_dir)
-            shutil.move(str(pdf_file), str(target_doc_dir / f"{doc_id}.pdf"))
-            migrated_count += 1
-            
-        # Clean up legacy folder if empty
-        legacy_trans_folder = self.base_dir / "transcriptions"
-        if legacy_trans_folder.exists() and not any(legacy_trans_folder.iterdir()):
-            legacy_trans_folder.rmdir()
-            
-        return migrated_count

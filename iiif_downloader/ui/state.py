@@ -8,7 +8,6 @@ def init_session_state():
     # Core Services
     if "ocr_storage" not in st.session_state:
         st.session_state["ocr_storage"] = OCRStorage()
-        st.session_state["ocr_storage"].migrate_legacy()
         
     if "model_manager" not in st.session_state:
         st.session_state["model_manager"] = ModelManager()
@@ -30,6 +29,19 @@ def init_session_state():
             st.session_state[key] = val
 
 def get_storage() -> OCRStorage:
+    # Handle stale instances in session state after code updates
+    refresh = False
+    if "ocr_storage" in st.session_state:
+        # Check if the instance has the required version
+        last_version = getattr(st.session_state["ocr_storage"], "STORAGE_VERSION", 0)
+        if last_version < OCRStorage.STORAGE_VERSION:
+            refresh = True
+    else:
+        refresh = True
+
+    if refresh:
+        st.session_state["ocr_storage"] = OCRStorage()
+        
     return st.session_state["ocr_storage"]
 
 def get_model_manager() -> ModelManager:

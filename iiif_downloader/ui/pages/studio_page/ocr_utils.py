@@ -63,7 +63,7 @@ def render_ocr_controls(doc_id, library):
 def run_ocr_sync(doc_id, library, page_idx, engine, model):
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
-    page_img_path = os.path.join(paths["root"], "pages", f"pag_{page_idx-1:04d}.jpg")
+    page_img_path = os.path.join(paths["scans"], f"pag_{page_idx-1:04d}.jpg")
     
     if not os.path.exists(page_img_path):
         st.error("Immagine non trovata, impossibile eseguire OCR.")
@@ -87,12 +87,10 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
             status.update(label="OCR Completato!", state="complete", expanded=False)
             storage.save_transcription(doc_id, page_idx, res, library)
             
-            # UI Sync Fix: Delete the session state for this widget's key.
-            # This forces Streamlit to reload the value from the JSON (the 'value' parameter
-            # in st.text_area) during the next rerun, avoiding the StreamlitAPIException.
+            # UI Sync Fix: Use a pending update to ensure the text_area reflects the new text
+            # immediately during the next rerun, avoiding the StreamlitAPIException.
             edit_key = f"trans_editor_{doc_id}_{page_idx}"
-            if edit_key in st.session_state:
-                del st.session_state[edit_key]
+            st.session_state[f"pending_update_{edit_key}"] = res.get("full_text", "")
             
             st.toast("OCR Completato!", icon="✅")
             time.sleep(0.5)
@@ -104,9 +102,9 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
 def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
-    pages_dir = os.path.join(paths["root"], "pages")
+    scans_dir = paths["scans"]
     
-    files = sorted([f for f in os.listdir(pages_dir) if f.endswith(".jpg")])
+    files = sorted([f for f in os.listdir(scans_dir) if f.endswith(".jpg")])
     total = len(files)
     
     proc = OCRProcessor(
@@ -121,7 +119,7 @@ def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
         except:
             continue
             
-        img_path = os.path.join(pages_dir, f)
+        img_path = os.path.join(scans_dir, f)
         img = PILImage.open(img_path)
         
         res = proc.process_page(img, engine=engine, model=model)

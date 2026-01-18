@@ -50,9 +50,9 @@ def render_sidebar_export(doc_id, paths):
     st.sidebar.subheader("Esportazione")
     if st.sidebar.button("📄 Crea PDF Completo", use_container_width=True):
          with st.spinner("Generazione PDF in corso..."):
-             pages_dir = paths["pages"]
-             if os.path.exists(pages_dir):
-                 imgs = sorted([os.path.join(pages_dir, f) for f in os.listdir(pages_dir) if f.endswith(".jpg")])
+             scans_dir = paths["scans"]
+             if os.path.exists(scans_dir):
+                 imgs = sorted([os.path.join(scans_dir, f) for f in os.listdir(scans_dir) if f.endswith(".jpg")])
                  if imgs:
                      pdf_out = os.path.join(paths["root"], f"{doc_id}.pdf")
                      success, msg = generate_pdf_from_images(imgs, pdf_out)

@@ -238,9 +238,15 @@ def render_pdf_import():
 
             try:
                 ensure_dir(doc_dir)
+                data_dir = os.path.join(doc_dir, "data")
+                pdf_dir = os.path.join(doc_dir, "pdf")
+                scans_dir = os.path.join(doc_dir, "scans")
+                ensure_dir(data_dir)
+                ensure_dir(pdf_dir)
+                ensure_dir(scans_dir)
                 
                 # Save PDF
-                pdf_path = os.path.join(doc_dir, f"{safe_id}.pdf")
+                pdf_path = os.path.join(pdf_dir, f"{safe_id}.pdf")
                 with open(pdf_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
                     
@@ -261,12 +267,11 @@ def render_pdf_import():
                     "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "metadata": meta_entries
                 }
-                save_json(os.path.join(doc_dir, "metadata.json"), meta)
+                save_json(os.path.join(data_dir, "metadata.json"), meta)
                 
                 # Process Images?
                 if extract_images:
-                    pages_dir = os.path.join(doc_dir, "pages")
-                    ensure_dir(pages_dir)
+                    # scans_dir already created above
                     
                     status_text = st.empty()
                     prog_bar = st.progress(0)
@@ -275,14 +280,14 @@ def render_pdf_import():
                         prog_bar.progress(curr/total)
                         status_text.caption(f"Estrazione: {curr}/{total}")
                         
-                    success, msg = convert_pdf_to_images(pdf_path, pages_dir, progress_callback=prog)
+                    success, msg = convert_pdf_to_images(pdf_path, scans_dir, progress_callback=prog)
                     
                     if success:
                         st.toast("Immagini Estratte!", icon="🖼️")
                         # Update metadata with page count
-                        files = [f for f in os.listdir(pages_dir) if f.endswith(".jpg")]
+                        files = [f for f in os.listdir(scans_dir) if f.endswith(".jpg")]
                         meta["pages"] = len(files)
-                        save_json(os.path.join(doc_dir, "metadata.json"), meta)
+                        save_json(os.path.join(data_dir, "metadata.json"), meta)
                     else:
                         st.warning(f"Estrazione fallita (il PDF è comunque salvato): {msg}")
 

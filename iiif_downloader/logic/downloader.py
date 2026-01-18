@@ -52,13 +52,22 @@ class IIIFDownloader:
         self.doc_dir = os.path.join(lib_dir, self.ms_id)
         ensure_dir(self.doc_dir)
 
-        self.output_path = os.path.join(self.doc_dir, f"{self.ms_id}.pdf")
-        self.meta_path = os.path.join(self.doc_dir, "metadata.json")
-        self.stats_path = os.path.join(self.doc_dir, "image_stats.json")
-        self.ocr_path = os.path.join(self.doc_dir, "transcription.json")
-        self.pages_dir = os.path.join(self.doc_dir, "pages")
-        ensure_dir(self.pages_dir)
-        self.temp_dir = self.pages_dir 
+        # New structure
+        self.scans_dir = os.path.join(self.doc_dir, "scans")
+        self.pdf_dir = os.path.join(self.doc_dir, "pdf")
+        self.data_dir = os.path.join(self.doc_dir, "data")
+        
+        ensure_dir(self.scans_dir)
+        ensure_dir(self.pdf_dir)
+        ensure_dir(self.data_dir)
+
+        self.output_path = os.path.join(self.pdf_dir, f"{self.ms_id}.pdf")
+        self.meta_path = os.path.join(self.data_dir, "metadata.json")
+        self.stats_path = os.path.join(self.data_dir, "image_stats.json")
+        self.ocr_path = os.path.join(self.data_dir, "transcription.json")
+        self.manifest_path = os.path.join(self.data_dir, "manifest.json")
+        
+        self.temp_dir = self.scans_dir
         
         import threading
         self._lock = threading.Lock()
@@ -86,8 +95,7 @@ class IIIFDownloader:
     def extract_metadata(self):
         metadata = {"id": self.ms_id, "title": self.label, "attribution": self.manifest.get("attribution"), "description": self.manifest.get("description"), "manifest_url": self.manifest_url, "download_date": time.strftime("%Y-%m-%d %H:%M:%S")}
         save_json(self.meta_path, metadata)
-        manifest_path = os.path.join(self.doc_dir, "manifest.json")
-        save_json(manifest_path, self.manifest)
+        save_json(self.manifest_path, self.manifest)
 
     def get_canvases(self):
         sequences = self.manifest.get('sequences', [])
@@ -148,7 +156,7 @@ class IIIFDownloader:
         except Exception: return None
 
     def create_pdf(self, files=None):
-        if files is None: files = sorted([os.path.join(self.pages_dir, f) for f in os.listdir(self.pages_dir) if f.startswith("pag_") and f.endswith(".jpg")])
+        if files is None: files = sorted([os.path.join(self.scans_dir, f) for f in os.listdir(self.scans_dir) if f.startswith("pag_") and f.endswith(".jpg")])
         if not files: return
         if HAS_IMG2PDF:
             try:

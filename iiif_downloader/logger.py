@@ -1,34 +1,15 @@
-"""
-Centralized logging configuration for IIIF Downloader.
-
-Provides structured logging with:
-- File organization by date (logs/YYYY-MM-DD/)
-- Session-based log files
-- Configurable log levels via environment variable
-- Console + file output
-"""
 import logging
 import os
 import sys
 from pathlib import Path
-from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
-
 
 # Log level from environment (default: INFO)
 LOG_LEVEL = os.getenv("IIIF_LOG_LEVEL", "INFO").upper()
 
 # Base log directory
 LOG_BASE_DIR = Path("logs")
-
-# Create logs directory structure
-def _get_log_dir():
-    """Get today's log directory, creating it if needed."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    log_dir = LOG_BASE_DIR / today
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
-
+LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Shared formatters
 CONSOLE_FORMAT = logging.Formatter(
@@ -40,63 +21,61 @@ FILE_FORMAT = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
+# Global flag to ensure setup only happens once
+_LOGGING_CONFIGURED = False
 
-def get_logger(name: str, log_file: str = None):
-    """
-    Get or create a configured logger.
+# The primary application logger
+app_logger = logging.getLogger("iiif_downloader")
+
+def setup_logging():
+    """Sets up the localized 'iiif_downloader' logger with daily rotation."""
+    global _LOGGING_CONFIGURED
     
-    Args:
-        name: Logger name (usually __name__)
-        log_file: Optional specific log file name (without path)
-                 If None, uses 'session_HHMMSS.log'
+    # If already handles exist, we might just want to return. 
+    # But clean and re-add allows changing LOG_LEVEL without restarting the process.
+    if app_logger.handlers:
+        app_logger.handlers.clear()
+        
+    # Set level from environment
+    effective_level = getattr(logging, LOG_LEVEL, logging.INFO)
+    app_logger.setLevel(effective_level)
     
-    Returns:
-        Configured logger instance
-    """
-    logger = logging.getLogger(name)
-    
-    # Avoid duplicate handlers
-    if logger.handlers:
-        return logger
-    
-    logger.setLevel(LOG_LEVEL)
-    
-    # Console handler (INFO and above)
+    # Prevent logs from bubbling up to the root logger (keeps app.log isolated)
+    app_logger.propagate = False
+
+    # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(effective_level)
     console_handler.setFormatter(CONSOLE_FORMAT)
-    logger.addHandler(console_handler)
-    
-    # File handler (DEBUG and above)
-    log_dir = _get_log_dir()
-    
-    if log_file is None:
-        timestamp = datetime.now().strftime("%H%M%S")
-        log_file = f"session_{timestamp}.log"
-    
-    file_path = log_dir / log_file
-    file_handler = logging.FileHandler(file_path, encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(FILE_FORMAT)
-    logger.addHandler(file_handler)
-    
-    logger.debug(f"Logger initialized: {name}")
-    return logger
+    app_logger.addHandler(console_handler)
 
+    # 2. Daily Rotating File Handler
+    log_file = LOG_BASE_DIR / "app.log"
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when="midnight",
+        interval=1,
+        backupCount=30,
+        encoding="utf-8"
+    )
+    file_handler.suffix = "%Y-%m-%d"
+    file_handler.setLevel(effective_level)
+    file_handler.setFormatter(FILE_FORMAT)
+    app_logger.addHandler(file_handler)
+
+    _LOGGING_CONFIGURED = True
+    app_logger.info(f"Localized logging system initialized (Level: {LOG_LEVEL})")
+
+def get_logger(name: str):
+    """Get a configured logger within the 'iiif_downloader' namespace."""
+    setup_logging()
+    # Ensure name is relative to iiif_downloader if it's not already fully qualified
+    if not name.startswith("iiif_downloader"):
+        name = f"iiif_downloader.{name}"
+    return logging.getLogger(name)
 
 def get_download_logger(doc_id: str):
-    """
-    Get a logger for a specific document download.
-    
-    Args:
-        doc_id: Document identifier
-        
-    Returns:
-        Configured logger with dedicated file
-    """
-    timestamp = datetime.now().strftime("%H%M%S")
-    # Sanitize doc_id for filename
+    """Get a logger instance for a specific download."""
+    # Sanitize doc_id
     safe_id = "".join(c for c in doc_id if c.isalnum() or c in ('-', '_'))[:50]
-    log_file = f"download_{safe_id}_{timestamp}.log"
-    
-    return get_logger(f"iiif_downloader.download.{safe_id}", log_file)
+    return get_logger(f"download.{safe_id}")
