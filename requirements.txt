@@ -9,10 +9,7 @@ cattrs==23.2.3
 
 kraken
 streamlit
-streamlit-pdf-viewer
-pdf2image
-python-dotenv
+PyMuPDF
 streamlit-antd-components
 openai
 anthropic
-PyYAML

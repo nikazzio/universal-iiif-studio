@@ -1,15 +1,37 @@
 import logging
-import os
 import sys
-from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
-# Log level from environment (default: INFO)
-LOG_LEVEL = os.getenv("IIIF_LOG_LEVEL", "INFO").upper()
+
+def _get_configured_log_level() -> str:
+    try:
+        from iiif_downloader.config_manager import get_config_manager
+
+        cm = get_config_manager()
+        level = cm.get_setting("logging.level", "INFO")
+        return str(level or "INFO").upper()
+    except (ImportError, OSError, ValueError, RuntimeError):
+        return "INFO"
+
+
+def _get_logs_dir() -> Path:
+    try:
+        from iiif_downloader.config_manager import get_config_manager
+
+        return get_config_manager().get_logs_dir()
+    except (ImportError, OSError, ValueError, RuntimeError):
+        return Path("logs")
+
 
 # Base log directory
-LOG_BASE_DIR = Path("logs")
-LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_BASE_DIR = _get_logs_dir()
+try:
+    LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # Fall back to CWD logs if configured path isn't writable
+    LOG_BASE_DIR = Path("logs")
+    LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Shared formatters
 CONSOLE_FORMAT = logging.Formatter(
@@ -18,53 +40,63 @@ CONSOLE_FORMAT = logging.Formatter(
 
 FILE_FORMAT = logging.Formatter(
     "%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-# Global flag to ensure setup only happens once
-_LOGGING_CONFIGURED = False
 
 # The primary application logger
 app_logger = logging.getLogger("iiif_downloader")
 
+# Internal state to avoid re-initializing handlers on every get_logger() call.
+_STATE: dict[str, object] = {"initialized": False, "last_level": None}
+
+
 def setup_logging():
     """Sets up the localized 'iiif_downloader' logger with daily rotation."""
-    global _LOGGING_CONFIGURED
-    
-    # If already handles exist, we might just want to return. 
-    # But clean and re-add allows changing LOG_LEVEL without restarting the process.
-    if app_logger.handlers:
-        app_logger.handlers.clear()
-        
-    # Set level from environment
-    effective_level = getattr(logging, LOG_LEVEL, logging.INFO)
+    log_level = _get_configured_log_level()
+    effective_level = getattr(logging, log_level, logging.INFO)
+
+    # If already configured and the level didn't change, do nothing.
+    if bool(_STATE["initialized"]) and _STATE["last_level"] == log_level:
+        return
+
+    # If already configured, just update levels.
+    if bool(_STATE["initialized"]) and app_logger.handlers:
+        app_logger.setLevel(effective_level)
+        for h in app_logger.handlers:
+            try:
+                h.setLevel(effective_level)
+            except (TypeError, ValueError, AttributeError):
+                pass
+        _STATE["last_level"] = log_level
+        app_logger.info("Logging level updated (Level: %s)", log_level)
+        return
+
+    # First-time configuration.
     app_logger.setLevel(effective_level)
-    
-    # Prevent logs from bubbling up to the root logger (keeps app.log isolated)
     app_logger.propagate = False
 
-    # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(effective_level)
     console_handler.setFormatter(CONSOLE_FORMAT)
     app_logger.addHandler(console_handler)
 
-    # 2. Daily Rotating File Handler
     log_file = LOG_BASE_DIR / "app.log"
     file_handler = TimedRotatingFileHandler(
         log_file,
         when="midnight",
         interval=1,
         backupCount=30,
-        encoding="utf-8"
+        encoding="utf-8",
     )
     file_handler.suffix = "%Y-%m-%d"
     file_handler.setLevel(effective_level)
     file_handler.setFormatter(FILE_FORMAT)
     app_logger.addHandler(file_handler)
 
-    _LOGGING_CONFIGURED = True
-    app_logger.info(f"Localized logging system initialized (Level: {LOG_LEVEL})")
+    _STATE["initialized"] = True
+    _STATE["last_level"] = log_level
+    app_logger.info("Localized logging system initialized (Level: %s)", log_level)
+
 
 def get_logger(name: str):
     """Get a configured logger within the 'iiif_downloader' namespace."""
@@ -73,6 +105,7 @@ def get_logger(name: str):
     if not name.startswith("iiif_downloader"):
         name = f"iiif_downloader.{name}"
     return logging.getLogger(name)
+
 
 def get_download_logger(doc_id: str):
     """Get a logger instance for a specific download."""

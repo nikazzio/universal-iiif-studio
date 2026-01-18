@@ -1,10 +1,14 @@
+import logging
 import threading
 import time
 import uuid
-from typing import Dict, Any, Optional, Callable
-import logging
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# This module intentionally shields the UI from unexpected job exceptions.
+# pylint: disable=broad-exception-caught
+
 
 class JobManager:
     _instance = None
@@ -25,7 +29,7 @@ class JobManager:
             kwargs = {}
 
         job_id = str(uuid.uuid4())[:8]
-        
+
         with self._lock:
             self._jobs[job_id] = {
                 "id": job_id,
@@ -59,9 +63,9 @@ class JobManager:
                     self._jobs[job_id]["progress"] = 1.0
                     self._jobs[job_id]["message"] = "Done"
                     self._jobs[job_id]["result"] = result
-            
+
             except Exception as e:
-                logger.exception(f"Job {job_id} failed")
+                logger.exception("Job %s failed", job_id)
                 with self._lock:
                     self._jobs[job_id]["status"] = "failed"
                     self._jobs[job_id]["error"] = str(e)
@@ -69,7 +73,7 @@ class JobManager:
 
         thread = threading.Thread(target=worker_wrapper, daemon=True)
         thread.start()
-        
+
         return job_id
 
     def get_job(self, job_id: str) -> Optional[Dict]:
@@ -79,15 +83,19 @@ class JobManager:
     def update_job(self, job_id: str, status=None, progress=None, message=None):
         with self._lock:
             if job_id in self._jobs:
-                if status: self._jobs[job_id]["status"] = status
-                if progress is not None: self._jobs[job_id]["progress"] = progress
-                if message: self._jobs[job_id]["message"] = message
+                if status:
+                    self._jobs[job_id]["status"] = status
+                if progress is not None:
+                    self._jobs[job_id]["progress"] = progress
+                if message:
+                    self._jobs[job_id]["message"] = message
 
     def list_jobs(self, active_only=False):
         with self._lock:
             if active_only:
                 return {k: v for k, v in self._jobs.items() if v["status"] in ["pending", "running"]}
             return self._jobs.copy()
+
 
 # Global Instance
 job_manager = JobManager()

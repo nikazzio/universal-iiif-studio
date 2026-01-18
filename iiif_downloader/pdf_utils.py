@@ -1,31 +1,85 @@
-from pathlib import Path
-from pdf2image import convert_from_path, convert_from_bytes
 import logging
 from pathlib import Path
-from pdf2image import convert_from_path, convert_from_bytes
+
+import pymupdf as fitz  # PyMuPDF
 from PIL import Image as PILImage
-import logging
 
 logger = logging.getLogger(__name__)
 
-def load_pdf_page(pdf_source, page_idx, dpi=300):
-    """
-    Load a single page from a PDF source (Path or bytes) and convert to a PIL Image.
-    Returns (Image, error_message).
-    """
+# PDF parsing/rendering can fail in many ways depending on the environment.
+# pylint: disable=broad-exception-caught
+
+
+class PdfPasswordProtectedError(RuntimeError):
+    pass
+
+
+def _open_pdf_document(pdf_source, password: str | None = None) -> fitz.Document:
     try:
         if isinstance(pdf_source, (str, Path)):
-            pages = convert_from_path(pdf_source, first_page=page_idx, last_page=page_idx, dpi=dpi)
+            doc = fitz.open(str(pdf_source))
         else:
-            pages = convert_from_bytes(pdf_source, first_page=page_idx, last_page=page_idx, dpi=dpi)
-        
-        if not pages:
-            return None, f"Pagina {page_idx} non trovata nel PDF."
-        
-        return pages[0], None
-    except Exception as e:
-        logger.error(f"Error loading PDF page: {e}")
-        return None, str(e)
+            doc = fitz.open(stream=pdf_source, filetype="pdf")
+    except Exception as exc:
+        raise RuntimeError(f"Impossibile aprire il PDF: {exc}") from exc
+
+    # Encrypted docs need explicit authentication.
+    if getattr(doc, "needs_pass", False):
+        if not password:
+            doc.close()
+            raise PdfPasswordProtectedError(
+                "PDF protetto da password. Rimuovi la password o fornisci una versione non protetta."
+            )
+        if not doc.authenticate(password):
+            doc.close()
+            raise PdfPasswordProtectedError("Password PDF non valida.")
+
+    return doc
+
+
+def _render_page_to_pil(page: fitz.Page, dpi: int = 300) -> PILImage.Image:
+    dpi = int(dpi or 300)
+    dpi = max(50, min(dpi, 1200))
+    zoom = dpi / 72.0
+    matrix = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=matrix, colorspace=fitz.csRGB, alpha=False)
+    return PILImage.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
+
+def load_pdf_page(
+    pdf_source,
+    page_idx,
+    dpi=300,
+    password: str | None = None,
+    return_error: bool = False,
+):
+    """Load a single PDF page and return it as a PIL.Image.
+
+    `page_idx` is 1-based (page 1 == first page) to match the rest of the app.
+
+    By default returns the image (or None). If `return_error=True`, returns
+    `(image, error_message)` where error_message is None on success.
+    """
+
+    try:
+        doc = _open_pdf_document(pdf_source, password=password)
+        try:
+            page_number = int(page_idx) - 1
+            if page_number < 0 or page_number >= doc.page_count:
+                msg = f"Pagina {page_idx} non trovata nel PDF."
+                return (None, msg) if return_error else None
+            page = doc.load_page(page_number)
+            img = _render_page_to_pil(page, dpi=dpi)
+            return (img, None) if return_error else img
+        finally:
+            doc.close()
+    except PdfPasswordProtectedError as exc:
+        logger.warning("Password-protected PDF blocked: %s", exc)
+        return (None, str(exc)) if return_error else None
+    except Exception as exc:
+        logger.error("Error loading PDF page: %s", exc)
+        return (None, str(exc)) if return_error else None
+
 
 def generate_pdf_from_images(image_paths, output_path):
     """
@@ -39,42 +93,59 @@ def generate_pdf_from_images(image_paths, output_path):
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 images.append(img)
-        
+
         if images:
             images[0].save(output_path, save_all=True, append_images=images[1:])
             return True, f"PDF creato con successo: {output_path}"
-        else:
-            return False, "Nessuna immagine valida trovata."
+
+        return False, "Nessuna immagine valida trovata."
     except Exception as e:
-        logger.error(f"Error creating PDF: {e}")
+        logger.error("Error creating PDF: %s", e)
         return False, str(e)
 
-def convert_pdf_to_images(pdf_path, output_dir, progress_callback=None):
+
+def convert_pdf_to_images(
+    pdf_path,
+    output_dir,
+    progress_callback=None,
+    dpi: int = 300,
+    jpeg_quality: int = 90,
+    password: str | None = None,
+):
+    """Convert a PDF into a series of JPG images in `output_dir`.
+
+    - DPI is configurable (default 300, good for OCR).
+    - Detects password-protected PDFs and returns a user-friendly message.
     """
-    Convert a PDF into a series of JPG images in output_dir.
-    """
+
     try:
-        from pdf2image import convert_from_path, pdfinfo_from_path
-        import os
-        
-        # Get info first
-        info = pdfinfo_from_path(pdf_path)
-        total_pages = info["Pages"]
-        
-        # Process in chunks to avoid memory issues
-        chunk_size = 10
-        for i in range(1, total_pages + 1, chunk_size):
-            pages = convert_from_path(pdf_path, first_page=i, last_page=min(i + chunk_size - 1, total_pages))
-            
-            for j, page in enumerate(pages):
-                page_num = i + j
-                out_name = f"pag_{page_num-1:04d}.jpg"
-                page.save(os.path.join(output_dir, out_name), "JPEG", quality=90)
-            
-            if progress_callback:
-                progress_callback(min(i + chunk_size - 1, total_pages), total_pages)
-                
-        return True, f"Estratte {total_pages} pagine."
-    except Exception as e:
-        logger.error(f"Error converting PDF: {e}")
-        return False, str(e)
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        doc = _open_pdf_document(pdf_path, password=password)
+        try:
+            total_pages = int(doc.page_count)
+            if total_pages <= 0:
+                return False, "PDF vuoto o non valido."
+
+            jpeg_quality = int(jpeg_quality or 90)
+            jpeg_quality = max(30, min(jpeg_quality, 95))
+
+            for page_number in range(total_pages):
+                page = doc.load_page(page_number)
+                img = _render_page_to_pil(page, dpi=dpi)
+                out_name = f"pag_{page_number:04d}.jpg"
+                img.save(str(out_dir / out_name), "JPEG", quality=jpeg_quality)
+
+                if progress_callback:
+                    progress_callback(page_number + 1, total_pages)
+
+            return True, f"Estratte {total_pages} pagine."
+        finally:
+            doc.close()
+    except PdfPasswordProtectedError as exc:
+        logger.warning("Password-protected PDF blocked: %s", exc)
+        return False, str(exc)
+    except Exception as exc:
+        logger.error("Error converting PDF: %s", exc)
+        return False, str(exc)

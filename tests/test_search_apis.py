@@ -4,10 +4,21 @@ Test script for library search APIs (Gallica SRU and Oxford).
 Note: Oxford API is deprecated as of Jan 2026 and will return errors.
 Run from project root: python -m tests.test_search_apis
 """
+import pytest
 import requests
-from typing import Dict, List
+from requests import RequestException
 
-def test_gallica(query: str):
+from iiif_downloader.config_manager import get_config_manager
+
+
+pytestmark = pytest.mark.skipif(
+    not bool(get_config_manager().get_setting("testing.run_live_tests", False)),
+    reason="Live tests require network access; set settings.testing.run_live_tests=true in config.json to enable.",
+)
+
+
+def test_gallica():
+    query = "dante"
     print(f"Testing Gallica with query: {query}")
     url = "https://gallica.bnf.fr/SRU"
     params = {
@@ -15,7 +26,7 @@ def test_gallica(query: str):
         "version": "1.2",
         "query": f'dc.title all "{query}" and dc.type all "manuscrit"',
         "maximumRecords": "5",
-        "responseFormat": "json" # Testing if this works
+        "responseFormat": "json",  # Testing if this works
     }
     try:
         r = requests.get(url, params=params, timeout=10)
@@ -26,11 +37,12 @@ def test_gallica(query: str):
             print(r.json().get("searchRetrieveResponse", {}).get("records", [])[:1])
         else:
             print("Returned XML instead of JSON.")
-            # print(r.text[:500])
-    except Exception as e:
+    except (RequestException, ValueError) as e:
         print(f"Error: {e}")
 
-def test_oxford(query: str):
+
+def test_oxford():
+    query = "dante"
     print(f"\nTesting Oxford with query: {query}")
     url = "https://digital.bodleian.ox.ac.uk/api/search/"
     params = {
@@ -47,9 +59,10 @@ def test_oxford(query: str):
             print(f"Found {len(docs)} documents.")
             for doc in docs:
                 print(f"- {doc.get('title_ssm', [doc.get('title')])[0]} (UUID: {doc.get('uuid')})")
-    except Exception as e:
+    except (RequestException, ValueError) as e:
         print(f"Error: {e}")
 
+
 if __name__ == "__main__":
-    test_gallica("dante")
-    test_oxford("dante")
+    test_gallica()
+    test_oxford()

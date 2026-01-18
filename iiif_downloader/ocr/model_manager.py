@@ -1,4 +1,3 @@
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,11 +16,7 @@ class AvailableModel:
 
 
 def _default_cache_dir() -> Path:
-    xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
-    if xdg_cache_home:
-        base = Path(xdg_cache_home)
-    else:
-        base = Path.home() / ".cache"
+    base = Path.home() / ".cache"
     return base / "universal-iiif-downloader" / "kraken-models"
 
 
@@ -34,25 +29,26 @@ def _safe_filename(name: str) -> str:
 class ModelManager:
     """Manages Kraken models without committing them into the repo.
 
-    Models are stored in a user cache directory by default.
-    Override with env var `UIIIF_MODELS_DIR` if needed.
+    Models are stored in a user-configurable directory via `config.json`.
     """
 
     def __init__(self, models_dir: Optional[Path] = None):
-        env_dir = os.environ.get("UIIIF_MODELS_DIR")
-        local_models = Path("models")
-        
-        if env_dir:
-            self.models_dir = Path(env_dir)
-        elif models_dir:
+        if models_dir is not None:
             self.models_dir = Path(models_dir)
-        elif local_models.exists() and local_models.is_dir():
-            # Prioritize local project folder if it exists
-            self.models_dir = local_models.absolute()
         else:
+            try:
+                from iiif_downloader.config_manager import get_config_manager
+
+                self.models_dir = get_config_manager().get_models_dir()
+            except (ImportError, OSError, ValueError, RuntimeError):
+                self.models_dir = Path("models")
+
+        try:
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Last-resort fallback for non-writable install locations
             self.models_dir = _default_cache_dir()
-            
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+            self.models_dir.mkdir(parents=True, exist_ok=True)
 
     def list_installed_models(self) -> List[str]:
         """Returns a list of installed `.mlmodel` file names."""
@@ -150,7 +146,7 @@ class ModelManager:
                 meta = h.get("metadata", {})
                 title = meta.get("title", "Unknown Title")
                 desc = meta.get("description", "")
-                
+
                 # Check if it likely contains an mlmodel
                 # we don't fetch file list for all hits to stay fast,
                 # but we can check if 'mlmodel' is in title or description.
@@ -162,7 +158,7 @@ class ModelManager:
                         "links": h.get("links", {})
                     })
             return results
-        except Exception as e:
+        except (RequestException, ValueError, OSError) as e:
             print(f"Zenodo search failed: {e}")
             return []
 

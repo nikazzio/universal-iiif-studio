@@ -1,10 +1,13 @@
 import streamlit as st
-from iiif_downloader.config import config
+
+from iiif_downloader.config_manager import get_config_manager
+
 
 def load_custom_css():
     """Injects premium CSS styles."""
-    theme_color = config.get("ui", "theme_color", "#FF4B4B")
-    
+    cm = get_config_manager()
+    theme_color = cm.get_setting("ui.theme_color", "#FF4B4B")
+
     css = f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -34,7 +37,7 @@ def load_custom_css():
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }}
-        
+
         /* Secondary/Outline Button */
         div.stButton > button:first-child:active {{
             transform: scale(0.98);
@@ -66,41 +69,44 @@ def load_custom_css():
         h1, h2, h3 {{
             letter-spacing: -0.5px;
         }}
-        
+
         /* Expander */
         .streamlit-expanderHeader {{
             background-color: #262730;
             border-radius: 8px;
         }}
-        
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar {{
             width: 8px;
         }}
         ::-webkit-scrollbar-track {{
-            background: #1a1a1e; 
+            background: #1a1a1e;
         }}
         ::-webkit-scrollbar-thumb {{
-            background: #444; 
+            background: #444;
             border-radius: 4px;
         }}
         ::-webkit-scrollbar-thumb:hover {{
-            background: #555; 
+            background: #555;
         }}
 
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
 
+
 def render_gallery_card(title, subtitle, image_url=None, footer=None, key=None):
     """
-    Renders a clickable card. 
+    Renders a clickable card.
     NOTE: Streamlit doesn't support clickable custom HTML divs that trigger python events easily.
-    We use a workaround: The Card is visual, and a transparent button covers it, 
+    We use a workaround: The Card is visual, and a transparent button covers it,
     OR we design the container to look like a card and put a "Select" button inside.
-    
+
     Approach B (Native): Container with styling + Button.
     """
+    # These are reserved for future UI variants (overlay button / keyed widgets).
+    _ = footer, key
     with st.container():
         st.markdown(f"""
         <div class="card-container">

@@ -1,0 +1,23 @@
+[tool.ruff]
+target-version = "py310"
+
+# Never lint caches, venvs, or large data folders.
+exclude = [
+  ".git",
+  ".ruff_cache",
+  ".venv",
+  "venv",
+  "__pycache__",
+  "downloads",
+  "logs",
+  "models",
+  "temp_images",
+]
+
+[tool.ruff.lint]
+# Keep the default rule set (E/F) and import sorting.
+extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests often use sys.path hacks; keep lint noise low while we migrate to packaging.
+"tests/**/*.py" = ["E402"]
