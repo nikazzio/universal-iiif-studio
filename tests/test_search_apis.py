@@ -4,16 +4,16 @@ Test script for library search APIs (Gallica SRU and Oxford).
 Note: Oxford API is deprecated as of Jan 2026 and will return errors.
 Run from project root: python -m tests.test_search_apis
 """
-import os
-
 import pytest
 import requests
 from requests import RequestException
 
+from iiif_downloader.config_manager import get_config_manager
+
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_LIVE_TESTS") != "1",
-    reason="Live tests require network access; set RUN_LIVE_TESTS=1 to enable.",
+    not bool(get_config_manager().get_setting("testing.run_live_tests", False)),
+    reason="Live tests require network access; set settings.testing.run_live_tests=true in config.json to enable.",
 )
 
 

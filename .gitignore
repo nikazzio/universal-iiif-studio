@@ -16,6 +16,8 @@ downloads/
 *.log
 models/
 .streamlit/
+config.json
+config.yaml
 
 # OS
 .DS_Store

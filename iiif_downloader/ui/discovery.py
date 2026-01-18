@@ -1,16 +1,16 @@
-import os
 import time
 
 import streamlit as st
 from requests import RequestException
 
-from iiif_downloader.config import config
+from iiif_downloader.config_manager import get_config_manager
 from iiif_downloader.logic import IIIFDownloader
 from iiif_downloader.resolvers.discovery import (
     resolve_shelfmark,
     search_gallica,
 )
 from iiif_downloader.ui.styling import render_gallery_card
+from iiif_downloader.ui.notifications import toast
 from iiif_downloader.utils import get_json
 
 
@@ -104,7 +104,7 @@ def render_url_search_panel():
                     if manifest_url:
                         analyze_manifest(manifest_url, doc_id_hint, active_lib)
                     else:
-                        st.toast(
+                        toast(
                             doc_id_hint or "ID non risolvibile",
                             icon="⚠️",
                         )
@@ -135,11 +135,32 @@ def render_catalog_search_panel():
     # Gallery View
     results = st.session_state.get("search_results", [])
     if results:
-        st.subheader(f"Risultati ({len(results)})")
+        cm = get_config_manager()
+        per_page = int(cm.get_setting("ui.items_per_page", 12) or 12)
+        per_page = max(4, min(per_page, 200))
+
+        total = len(results)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = int(st.session_state.get("gallica_page", 1) or 1)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        end = min(start + per_page, total)
+
+        st.subheader(f"Risultati ({total})")
+        if total_pages > 1:
+            p1, p2, p3 = st.columns([1, 2, 1])
+            if p1.button("◀ Prev", use_container_width=True, disabled=page <= 1, key="gallica_prev"):
+                st.session_state["gallica_page"] = page - 1
+                st.rerun()
+            p2.caption(f"Pagina {page}/{total_pages}")
+            if p3.button("Next ▶", use_container_width=True, disabled=page >= total_pages, key="gallica_next"):
+                st.session_state["gallica_page"] = page + 1
+                st.rerun()
+
         st.markdown("---")
 
         cols = st.columns(4)
-        for i, res in enumerate(results):
+        for i, res in enumerate(results[start:end]):
             with cols[i % 4]:
                 render_gallery_card(
                     title=res["title"],
@@ -176,7 +197,7 @@ def analyze_manifest(manifest_url, doc_id, library):
             "pages": len(canvases),
             "viewer_url": get_viewer_url(library, doc_id, manifest_url),
         }
-        st.toast("Manifest analizzato con successo!", icon="✅")
+        toast("Manifest analizzato con successo!", icon="✅")
     except (
         RequestException,
         ValueError,
@@ -203,6 +224,7 @@ def render_preview(preview):
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown(f"### 📖 {preview['label']}")
+
         st.caption(
             f"ID: {preview['id']} | "
             f"Library: {preview['library']} | "
@@ -243,13 +265,13 @@ def start_download_process(preview):
         output_name=preview["id"],
         library=preview["library"],
         progress_callback=hook,
-        workers=config.get("system", "download_workers", 4),
+        workers=int(get_config_manager().get_setting("system.download_workers", 4)),
     )
 
     with st.spinner("Connessione e Download..."):
         try:
             downloader.run()
-            st.toast(f"Completato! {preview['id']} scaricato.", icon="🎉")
+            toast(f"Completato! {preview['id']} scaricato.", icon="🎉")
             time.sleep(1)
             # Optionally redirect to studio
             st.session_state["discovery_preview"] = None
@@ -316,10 +338,10 @@ def render_pdf_import():
             from iiif_downloader.utils import ensure_dir, save_json
 
             # Use Local library
-            base_dir = config.get_download_dir()
-            doc_dir = os.path.join(base_dir, "Local", safe_id)
+            base_dir = get_config_manager().get_downloads_dir()
+            doc_dir = base_dir / "Local" / safe_id
 
-            if os.path.exists(doc_dir):
+            if doc_dir.exists():
                 st.error(
                     f"Esiste già un documento con ID '{safe_id}'. "
                     "Cambia titolo o rinomina."
@@ -328,16 +350,16 @@ def render_pdf_import():
 
             try:
                 ensure_dir(doc_dir)
-                data_dir = os.path.join(doc_dir, "data")
-                pdf_dir = os.path.join(doc_dir, "pdf")
-                scans_dir = os.path.join(doc_dir, "scans")
+                data_dir = doc_dir / "data"
+                pdf_dir = doc_dir / "pdf"
+                scans_dir = doc_dir / "scans"
                 ensure_dir(data_dir)
                 ensure_dir(pdf_dir)
                 ensure_dir(scans_dir)
 
                 # Save PDF
-                pdf_path = os.path.join(pdf_dir, f"{safe_id}.pdf")
-                with open(pdf_path, "wb") as f:
+                pdf_path = pdf_dir / f"{safe_id}.pdf"
+                with pdf_path.open("wb") as f:
                     f.write(uploaded_file.getbuffer())
 
                 # Build Metadata list
@@ -365,7 +387,7 @@ def render_pdf_import():
                     "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "metadata": meta_entries,
                 }
-                save_json(os.path.join(data_dir, "metadata.json"), meta)
+                save_json(data_dir / "metadata.json", meta)
 
                 # Process Images?
                 if extract_images:
@@ -379,22 +401,18 @@ def render_pdf_import():
                         status_text.caption(f"Estrazione: {curr}/{total}")
 
                     success, msg = convert_pdf_to_images(
-                        pdf_path,
-                        scans_dir,
+                        str(pdf_path),
+                        str(scans_dir),
                         progress_callback=prog,
                     )
 
                     if success:
-                        st.toast("Immagini Estratte!", icon="🖼️")
+                        toast("Immagini Estratte!", icon="🖼️")
                         # Update metadata with page count
-                        files = [
-                            f
-                            for f in os.listdir(scans_dir)
-                            if f.endswith(".jpg")
-                        ]
+                        files = [p for p in scans_dir.iterdir() if p.suffix.lower() == ".jpg"]
                         meta["pages"] = len(files)
                         save_json(
-                            os.path.join(data_dir, "metadata.json"),
+                            data_dir / "metadata.json",
                             meta,
                         )
                     else:

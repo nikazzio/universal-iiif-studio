@@ -1,8 +1,8 @@
-import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from iiif_downloader.config_manager import get_config_manager
 from iiif_downloader.logger import get_logger
 from iiif_downloader.utils import ensure_dir, load_json, save_json
 
@@ -13,7 +13,13 @@ class OCRStorage:
     STORAGE_VERSION = 2  # Incremented to force refresh after directory reorganization
 
     def __init__(self, base_dir: str = "downloads"):
-        self.base_dir = Path(base_dir)
+        # Always use config.json as single source of truth
+        base_dir = str(get_config_manager().get_downloads_dir())
+
+        p = Path(base_dir).expanduser()
+        if not p.is_absolute():
+            p = (Path.cwd() / p).resolve()
+        self.base_dir = p
         ensure_dir(self.base_dir)
 
     def list_documents(self) -> List[Dict[str, str]]:
@@ -163,7 +169,7 @@ class OCRStorage:
         paths = self.get_document_paths(doc_id, library)
         history_file = paths["history"] / f"p{page_idx:04d}_history.json"
         if history_file.exists():
-            os.remove(history_file)
+            history_file.unlink()
             logger.info(
                 "History cleared for doc=%s, page=%s",
                 doc_id,

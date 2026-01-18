@@ -1,13 +1,14 @@
-import os
 import time
+from pathlib import Path
 
 import streamlit as st
 from PIL import Image as PILImage
 
-from iiif_downloader.config import config
+from iiif_downloader.config_manager import get_config_manager
 from iiif_downloader.jobs import job_manager
 from iiif_downloader.logger import get_logger
 from iiif_downloader.ocr.processor import OCRProcessor
+from iiif_downloader.ui.notifications import toast
 from iiif_downloader.ui.state import get_model_manager, get_storage
 
 logger = get_logger(__name__)
@@ -18,10 +19,12 @@ def render_ocr_controls(doc_id, library):
 
     storage = get_storage()
     manager = get_model_manager()
-    default_engine = config.get("defaults", "preferred_ocr_engine", "openai")
+    cm = get_config_manager()
+    default_engine = cm.get_setting("defaults.preferred_ocr_engine", "openai")
 
-    ocr_engine = st.sidebar.selectbox("Motore", ["openai", "kraken", "anthropic", "google", "huggingface"], index=[
-                                      "openai", "kraken", "anthropic", "google", "huggingface"].index(default_engine) if default_engine in ["openai", "kraken", "anthropic", "google", "huggingface"] else 0)
+    engines = ["openai", "kraken", "anthropic", "google", "huggingface"]
+    engine_index = engines.index(default_engine) if default_engine in engines else 0
+    ocr_engine = st.sidebar.selectbox("Motore", engines, index=engine_index)
 
     current_model = None
     if ocr_engine == "kraken":
@@ -31,7 +34,11 @@ def render_ocr_controls(doc_id, library):
         else:
             current_model = st.sidebar.selectbox("Modello HTR", installed)
     elif ocr_engine == "openai":
-        current_model = st.sidebar.selectbox("Modello", ["gpt-5", "gpt-5.2", "o3", "o4-mini", "gpt-5,-mini"], index=0)
+        current_model = st.sidebar.selectbox(
+            "Modello",
+            ["gpt-5.2", "gpt-5", "o4-mini", "o3"],
+            index=0,
+        )
 
     if st.sidebar.button("📚 OCR Intero Manoscritto (Background)", use_container_width=True):
         full_data = storage.load_transcription(doc_id, None, library)
@@ -45,7 +52,7 @@ def render_ocr_controls(doc_id, library):
                 kwargs={"doc_id": doc_id, "library": library, "engine": ocr_engine, "model": current_model},
                 job_type="ocr_batch"
             )
-            st.toast(f"Job avviato! ID: {job_id}", icon="⚙️")
+            toast(f"Job avviato! ID: {job_id}", icon="⚙️")
 
     if st.session_state.get("confirm_ocr_batch"):
         st.sidebar.warning("⚠️ Ci sono trascrizioni esistenti! Sovrascrivere TUTTO?", icon="🔥")
@@ -56,7 +63,7 @@ def render_ocr_controls(doc_id, library):
                 kwargs={"doc_id": doc_id, "library": library, "engine": ocr_engine, "model": current_model},
                 job_type="ocr_batch"
             )
-            st.toast(f"Job avviato! ID: {job_id}", icon="⚙️")
+            toast(f"Job avviato! ID: {job_id}", icon="⚙️")
             st.session_state["confirm_ocr_batch"] = False
         if c2.button("Annulla", use_container_width=True):
             st.session_state["confirm_ocr_batch"] = False
@@ -68,23 +75,26 @@ def render_ocr_controls(doc_id, library):
 def run_ocr_sync(doc_id, library, page_idx, engine, model):
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
-    page_img_path = os.path.join(paths["scans"], f"pag_{page_idx-1:04d}.jpg")
+    page_img_path = Path(paths["scans"]) / f"pag_{page_idx-1:04d}.jpg"
 
-    if not os.path.exists(page_img_path):
+    if not page_img_path.exists():
         st.error("Immagine non trovata, impossibile eseguire OCR.")
         return
 
-    img = PILImage.open(page_img_path)
+    img = PILImage.open(str(page_img_path))
 
     with st.status(f"Elaborazione OCR ({engine})...", expanded=True) as status:
         def update_status(text):
             status.update(label=text)
             logger.debug("UI Status Update: %s", text)
 
+        cm = get_config_manager()
         proc = OCRProcessor(
             model_path=get_model_manager().get_model_path(model) if engine == "kraken" else None,
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+            openai_api_key=cm.get_api_key("openai", ""),
+            anthropic_api_key=cm.get_api_key("anthropic", ""),
+            google_api_key=cm.get_api_key("google_vision", ""),
+            hf_token=cm.get_api_key("huggingface", ""),
         )
         res = proc.process_page(img, engine=engine, model=model, status_callback=update_status)
 
@@ -97,7 +107,7 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
             edit_key = f"trans_editor_{doc_id}_{page_idx}"
             st.session_state[f"pending_update_{edit_key}"] = res.get("full_text", "")
 
-            st.toast("OCR Completato!", icon="✅")
+            toast("OCR Completato!", icon="✅")
             time.sleep(0.5)
             st.rerun()
         else:
@@ -110,13 +120,17 @@ def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = paths["scans"]
 
-    files = sorted([f for f in os.listdir(scans_dir) if f.endswith(".jpg")])
+    scans_dir_p = Path(scans_dir)
+    files = sorted([p.name for p in scans_dir_p.iterdir() if p.suffix.lower() == ".jpg"])
     total = len(files)
 
+    cm = get_config_manager()
     proc = OCRProcessor(
         model_path=get_model_manager().get_model_path(model) if engine == "kraken" else None,
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
-        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+        openai_api_key=cm.get_api_key("openai", ""),
+        anthropic_api_key=cm.get_api_key("anthropic", ""),
+        google_api_key=cm.get_api_key("google_vision", ""),
+        hf_token=cm.get_api_key("huggingface", ""),
     )
 
     for i, f in enumerate(files):
@@ -125,8 +139,8 @@ def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
         except (IndexError, ValueError):
             continue
 
-        img_path = os.path.join(scans_dir, f)
-        img = PILImage.open(img_path)
+        img_path = scans_dir_p / f
+        img = PILImage.open(str(img_path))
 
         res = proc.process_page(img, engine=engine, model=model)
 

@@ -4,6 +4,7 @@ import time
 import unittest
 
 from iiif_downloader.cli import resolve_url
+from iiif_downloader.config_manager import get_config_manager
 from iiif_downloader.logic import IIIFDownloader
 
 # Add parent directory to path to import modules
@@ -11,8 +12,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 @unittest.skipUnless(
-    os.getenv("RUN_LIVE_TESTS") == "1",
-    "Live tests require network access; set RUN_LIVE_TESTS=1 to enable.",
+    bool(get_config_manager().get_setting("testing.run_live_tests", False)),
+    "Live tests require network access; set settings.testing.run_live_tests=true in config.json to enable.",
 )
 class TestProviders(unittest.TestCase):
     """

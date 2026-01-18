@@ -1,11 +1,12 @@
 import streamlit as st
 
-from iiif_downloader.config import config
+from iiif_downloader.config_manager import get_config_manager
 
 
 def load_custom_css():
     """Injects premium CSS styles."""
-    theme_color = config.get("ui", "theme_color", "#FF4B4B")
+    cm = get_config_manager()
+    theme_color = cm.get_setting("ui.theme_color", "#FF4B4B")
 
     css = f"""
     <style>

@@ -3,6 +3,8 @@
 import os
 import shutil
 import time
+from pathlib import Path
+from typing import Union
 
 import requests
 from requests import RequestException
@@ -101,31 +103,68 @@ def get_json(url, headers=None, retries=3):
 def save_json(path, data):
     """Saves data to a local JSON file."""
     import json
-    ensure_dir(os.path.dirname(path))
-    with open(path, "w", encoding="utf-8") as f:
+    p = Path(path)
+    ensure_dir(p.parent)
+    with p.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def load_json(path):
     """Loads a JSON file, returns None if not found."""
     import json
-    if not os.path.exists(path):
+    p = Path(path)
+    if not p.exists():
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with p.open("r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return None
 
 
-def ensure_dir(path):
+def ensure_dir(path: Union[str, os.PathLike, None]):
     """Ensures a directory exists."""
     if not path:
         return
-    os.makedirs(path, exist_ok=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def clean_dir(path):
+def clean_dir(path: Union[str, os.PathLike]):
     """Safely removes a directory."""
-    if os.path.exists(path):
-        shutil.rmtree(path)
+    p = Path(path)
+    if p.exists():
+        shutil.rmtree(p)
+
+
+def cleanup_old_files(path: Union[str, os.PathLike], *, older_than_days: int = 7) -> dict:
+    """Delete files/dirs under `path` older than `older_than_days`.
+
+    Returns stats like {"deleted": X, "errors": Y, "skipped": Z}.
+    """
+
+    stats = {"deleted": 0, "errors": 0, "skipped": 0}
+    base_dir = Path(path)
+
+    try:
+        if not base_dir.exists() or not base_dir.is_dir():
+            return stats
+    except Exception:  # pylint: disable=broad-exception-caught
+        return stats
+
+    cutoff = time.time() - (older_than_days * 24 * 60 * 60)
+
+    for entry in base_dir.iterdir():
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                stats["skipped"] += 1
+                continue
+
+            if entry.is_dir():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink(missing_ok=True)
+            stats["deleted"] += 1
+        except Exception:  # pylint: disable=broad-exception-caught
+            stats["errors"] += 1
+
+    return stats

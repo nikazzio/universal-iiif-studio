@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 
 from pdf2image import convert_from_bytes, convert_from_path, pdfinfo_from_path
@@ -68,10 +67,13 @@ def convert_pdf_to_images(pdf_path, output_dir, progress_callback=None):
         for i in range(1, total_pages + 1, chunk_size):
             pages = convert_from_path(pdf_path, first_page=i, last_page=min(i + chunk_size - 1, total_pages))
 
+            out_dir = Path(output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+
             for j, page in enumerate(pages):
                 page_num = i + j
                 out_name = f"pag_{page_num-1:04d}.jpg"
-                page.save(os.path.join(output_dir, out_name), "JPEG", quality=90)
+                page.save(str(out_dir / out_name), "JPEG", quality=90)
 
             if progress_callback:
                 progress_callback(min(i + chunk_size - 1, total_pages), total_pages)

@@ -4,7 +4,7 @@ from io import BytesIO
 import streamlit as st
 import streamlit.components.v1 as components
 
-from iiif_downloader.config import config
+from iiif_downloader.config_manager import get_config_manager
 
 
 def inject_premium_styles():
@@ -25,7 +25,7 @@ def interactive_viewer(image, zoom_percent: int):
         return
 
     # Get base64 and dimensions
-    quality = config.get("images", "viewer_quality", 95)
+    quality = get_config_manager().get_setting("images.viewer_quality", 95)
     buffered = BytesIO()
     image.save(buffered, format="JPEG", quality=quality)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()

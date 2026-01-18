@@ -9,6 +9,7 @@ from iiif_downloader.logger import get_logger
 from iiif_downloader.pdf_utils import load_pdf_page
 from iiif_downloader.ui.components.viewer import interactive_viewer
 from iiif_downloader.ui.state import get_storage
+from iiif_downloader.ui.notifications import toast
 
 from .ocr_utils import run_ocr_sync
 
@@ -113,8 +114,10 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
 
         # 2. Manifest Fallback (Local then Live)
         if len(thumb_source) < total_pages:
-            local_manifest_path = os.path.join(paths["root"], "manifest.json")
-            if os.path.exists(local_manifest_path):
+            from pathlib import Path
+
+            local_manifest_path = Path(paths["root"]) / "manifest.json"
+            if local_manifest_path.exists():
                 try:
                     from iiif_downloader.utils import load_json
 
@@ -158,11 +161,13 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
     # Use current_p defined above
 
     with col_img:
-        page_img_path = os.path.join(paths["scans"], f"pag_{current_p-1:04d}.jpg")
+        from pathlib import Path
+
+        page_img_path = Path(paths["scans"]) / f"pag_{current_p-1:04d}.jpg"
         img_obj = None
-        if os.path.exists(page_img_path):
-            img_obj = PILImage.open(page_img_path)
-        elif os.path.exists(paths["pdf"]):
+        if page_img_path.exists():
+            img_obj = PILImage.open(str(page_img_path))
+        elif Path(paths["pdf"]).exists():
             img_obj = load_pdf_page(paths["pdf"], current_p)
 
         # Calculate stats for the header
@@ -174,7 +179,7 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
 
             if not p_stat:
                 w, h = img_obj.size
-                file_size = os.path.getsize(page_img_path) if os.path.exists(page_img_path) else 0
+                file_size = page_img_path.stat().st_size if page_img_path.exists() else 0
                 p_stat = {"width": w, "height": h, "size_bytes": file_size}
 
             mb_size = p_stat['size_bytes'] / (1024*1024)
@@ -298,7 +303,7 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
                 storage.save_transcription(doc_id, current_p, new_data, library)
 
                 st.session_state[f"pending_update_{edit_key}"] = text_val
-                st.toast("✅ Modifiche salvate!", icon="💾")
+                toast("✅ Modifiche salvate!", icon="💾")
                 time.sleep(0.5)
                 st.rerun()
 
@@ -415,7 +420,7 @@ def render_history_sidebar(doc_id, library, current_p, current_data=None, curren
 
                     storage.save_transcription(doc_id, current_p, entry, library)
                     st.session_state[f"pending_update_{edit_key}"] = entry.get("full_text", "")
-                    st.toast("Versione ripristinata!")
+                    toast("Versione ripristinata!")
                     st.rerun()
 
             if i < len(history) - 1:

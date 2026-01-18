@@ -1,9 +1,10 @@
-import os
+from pathlib import Path
 
 import streamlit as st
 
 from iiif_downloader.jobs import job_manager
 from iiif_downloader.pdf_utils import generate_pdf_from_images
+from iiif_downloader.ui.notifications import toast
 
 
 def render_sidebar_metadata(meta, stats):
@@ -60,13 +61,14 @@ def render_sidebar_export(doc_id, paths):
     if st.sidebar.button("📄 Crea PDF Completo", use_container_width=True):
         with st.spinner("Generazione PDF in corso..."):
             scans_dir = paths["scans"]
-            if os.path.exists(scans_dir):
-                imgs = sorted([os.path.join(scans_dir, f) for f in os.listdir(scans_dir) if f.endswith(".jpg")])
+            scans_dir = Path(scans_dir)
+            if scans_dir.exists():
+                imgs = sorted([str(p) for p in scans_dir.iterdir() if p.suffix.lower() == ".jpg"])
                 if imgs:
-                    pdf_out = os.path.join(paths["root"], f"{doc_id}.pdf")
+                    pdf_out = str(Path(paths["root"]) / f"{doc_id}.pdf")
                     success, msg = generate_pdf_from_images(imgs, pdf_out)
                     if success:
-                        st.toast("PDF Creato!", icon="✅")
+                        toast("PDF Creato!", icon="✅")
                         st.sidebar.success(f"PDF salvato in: {pdf_out}")
                     else:
                         st.sidebar.error(msg)
