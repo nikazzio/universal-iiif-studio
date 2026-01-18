@@ -1,8 +1,11 @@
-import streamlit as st
-import streamlit.components.v1 as components
 import base64
 from io import BytesIO
+
+import streamlit as st
+import streamlit.components.v1 as components
+
 from iiif_downloader.config import config
+
 
 def inject_premium_styles():
     """Inject basic CSS for the page."""
@@ -13,19 +16,22 @@ def inject_premium_styles():
     </style>
     """, unsafe_allow_html=True)
 
+
 def interactive_viewer(image, zoom_percent: int):
     """
     Render the premium interactive image viewer using an isolated iframe component.
     """
     if not image:
         return
-    
+
     # Get base64 and dimensions
     quality = config.get("images", "viewer_quality", 95)
     buffered = BytesIO()
     image.save(buffered, format="JPEG", quality=quality)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
-    
+
+    initial_scale = max(0.1, float(zoom_percent) / 100.0)
+
     # Isolated HTML Component
     html_code = f"""
     <!DOCTYPE html>
@@ -33,8 +39,8 @@ def interactive_viewer(image, zoom_percent: int):
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body, html {{ 
-                margin: 0; padding: 0; width: 100%; height: 100%; 
+            body, html {{
+                margin: 0; padding: 0; width: 100%; height: 100%;
                 background: #1a1a1e; overflow: hidden; font-family: 'Inter', sans-serif;
                 touch-action: none;
             }}
@@ -54,7 +60,7 @@ def interactive_viewer(image, zoom_percent: int):
             .viewer-controls {{
                 position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
                 display: flex; gap: 8px; background: rgba(30, 30, 35, 0.9);
-                backdrop-filter: blur(10px); padding: 8px 16px; 
+                backdrop-filter: blur(10px); padding: 8px 16px;
                 border-radius: 40px; border: 1px solid rgba(255, 255, 255, 0.2);
                 z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
                 pointer-events: auto;
@@ -84,9 +90,11 @@ def interactive_viewer(image, zoom_percent: int):
         <script>
             const cnt = document.getElementById('v-cnt');
             const img = document.getElementById('v-img');
-            
+
+            const initialScale = {initial_scale};
+
             // State
-            let state = {{ scale: 1, x: 0, y: 0 }};
+            let state = {{ scale: initialScale, x: 0, y: 0 }};
             let isPanning = false;
             let start = {{ x: 0, y: 0 }};
 
@@ -111,7 +119,7 @@ def interactive_viewer(image, zoom_percent: int):
                 const imgH = img.naturalHeight;
                 const scaleW = cntW / imgW;
                 const scaleH = cntH / imgH;
-                const fitScale = Math.min(scaleW, scaleH) * 0.95; 
+                const fitScale = Math.min(scaleW, scaleH) * 0.95;
                 state.scale = fitScale;
                 state.x = (cntW - imgW * fitScale) / 2;
                 state.y = (cntH - imgH * fitScale) / 2;
@@ -153,10 +161,10 @@ def interactive_viewer(image, zoom_percent: int):
 
             img.onload = () => window.vReset();
             if (img.complete && img.naturalWidth > 0) window.vReset();
-            
+
         </script>
     </body>
     </html>
     """
-    
+
     components.html(html_code, height=700)

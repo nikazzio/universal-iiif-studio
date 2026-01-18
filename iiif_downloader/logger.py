@@ -1,8 +1,8 @@
 import logging
 import os
 import sys
-from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
 # Log level from environment (default: INFO)
 LOG_LEVEL = os.getenv("IIIF_LOG_LEVEL", "INFO").upper()
@@ -18,28 +18,25 @@ CONSOLE_FORMAT = logging.Formatter(
 
 FILE_FORMAT = logging.Formatter(
     "%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-# Global flag to ensure setup only happens once
-_LOGGING_CONFIGURED = False
 
 # The primary application logger
 app_logger = logging.getLogger("iiif_downloader")
 
+
 def setup_logging():
     """Sets up the localized 'iiif_downloader' logger with daily rotation."""
-    global _LOGGING_CONFIGURED
-    
-    # If already handles exist, we might just want to return. 
+
+    # If already handlers exist, we might just want to return.
     # But clean and re-add allows changing LOG_LEVEL without restarting the process.
     if app_logger.handlers:
         app_logger.handlers.clear()
-        
+
     # Set level from environment
     effective_level = getattr(logging, LOG_LEVEL, logging.INFO)
     app_logger.setLevel(effective_level)
-    
+
     # Prevent logs from bubbling up to the root logger (keeps app.log isolated)
     app_logger.propagate = False
 
@@ -56,15 +53,15 @@ def setup_logging():
         when="midnight",
         interval=1,
         backupCount=30,
-        encoding="utf-8"
+        encoding="utf-8",
     )
     file_handler.suffix = "%Y-%m-%d"
     file_handler.setLevel(effective_level)
     file_handler.setFormatter(FILE_FORMAT)
     app_logger.addHandler(file_handler)
 
-    _LOGGING_CONFIGURED = True
-    app_logger.info(f"Localized logging system initialized (Level: {LOG_LEVEL})")
+    app_logger.info("Localized logging system initialized (Level: %s)", LOG_LEVEL)
+
 
 def get_logger(name: str):
     """Get a configured logger within the 'iiif_downloader' namespace."""
@@ -73,6 +70,7 @@ def get_logger(name: str):
     if not name.startswith("iiif_downloader"):
         name = f"iiif_downloader.{name}"
     return logging.getLogger(name)
+
 
 def get_download_logger(doc_id: str):
     """Get a logger instance for a specific download."""

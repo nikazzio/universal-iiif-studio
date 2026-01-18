@@ -1,6 +1,8 @@
 import streamlit as st
+
 from iiif_downloader.ocr.model_manager import ModelManager
 from iiif_downloader.ocr.storage import OCRStorage
+
 
 def init_session_state():
     """Initializes all session state variables."""

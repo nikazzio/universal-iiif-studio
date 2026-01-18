@@ -1,5 +1,7 @@
 import streamlit as st
+
 from iiif_downloader.ui.state import get_storage
+
 
 def render_search_page():
     st.title("🔍 Ricerca Globale")

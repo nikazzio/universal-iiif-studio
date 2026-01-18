@@ -1,5 +1,7 @@
 import os
+
 import yaml
+
 from iiif_downloader.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +32,7 @@ DEFAULT_CONFIG = {
     }
 }
 
+
 class ConfigLoader:
     _instance = None
     _config = None
@@ -45,30 +48,38 @@ class ConfigLoader:
             return
 
         self._config = DEFAULT_CONFIG.copy()
-        
+
         if os.path.exists(CONFIG_PATH):
             try:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     user_config = yaml.safe_load(f) or {}
-                    # Deep merge would be better, but simple update is fine for now
+                    # Deep merge would be better; simple update is OK.
                     # We stick to 1-level merge for simplicity
                     for section, values in user_config.items():
-                        if section in self._config and isinstance(values, dict):
+                        if section in self._config and isinstance(
+                            values,
+                            dict,
+                        ):
                             self._config[section].update(values)
                         else:
                             self._config[section] = values
-                logger.info(f"Loaded config from {CONFIG_PATH}")
-            except Exception as e:
-                logger.error(f"Failed to load config.yaml: {e}")
+                logger.info("Loaded config from %s", CONFIG_PATH)
+            except (OSError, yaml.YAMLError) as e:
+                logger.error("Failed to load config.yaml: %s", e)
         else:
             logger.info("No config.yaml found, using defaults")
 
     def get(self, section, key, default=None):
         return self._config.get(section, {}).get(key, default)
 
+    def get_download_dir(self):
+        downloads_dir = self.get("system", "downloads_dir", "downloads")
+        return os.path.join(os.getcwd(), downloads_dir)
+
     @property
     def config(self):
         return self._config
+
 
 # Global instance accessor
 config = ConfigLoader()

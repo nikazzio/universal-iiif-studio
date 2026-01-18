@@ -1,6 +1,6 @@
 class BaseResolver:
     """Base class for resolving user input into a IIIF Manifest URL."""
-    
+
     def __init__(self):
         pass
 

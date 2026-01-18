@@ -1,5 +1,6 @@
 from .base import BaseResolver
 
+
 class VaticanResolver(BaseResolver):
     def can_resolve(self, url_or_id):
         return "digi.vatlib.it" in url_or_id

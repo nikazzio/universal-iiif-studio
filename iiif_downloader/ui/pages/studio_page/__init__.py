@@ -1,8 +1,11 @@
 import streamlit as st
+
 from iiif_downloader.ui.state import get_storage
-from .sidebar import render_sidebar_metadata, render_sidebar_jobs, render_sidebar_export
-from .ocr_utils import render_ocr_controls
+
 from .canvas import render_main_canvas
+from .ocr_utils import render_ocr_controls
+from .sidebar import render_sidebar_export, render_sidebar_jobs, render_sidebar_metadata
+
 
 def render_studio_page():
     storage = get_storage()

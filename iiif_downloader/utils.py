@@ -1,3 +1,5 @@
+"""Common utility helpers (HTTP, JSON, filesystem)."""
+
 import os
 import shutil
 import time
@@ -37,49 +39,63 @@ def get_json(url, headers=None, retries=3):
     if headers is None:
         headers = DEFAULT_HEADERS
 
-    logger.debug(f"Fetching JSON from {url}")
-    
+    logger.debug("Fetching JSON from %s", url)
+
     for attempt in range(retries):
         try:
             resp = requests.get(url, headers=headers, timeout=15)
-            
+
             # If rate limited, wait longer
             if resp.status_code == 429:
                 wait_time = (2 ** attempt) * 2
-                logger.warning(f"Rate limited (429) on {url}, waiting {wait_time}s")
+                logger.warning(
+                    "Rate limited (429) on %s, waiting %ss",
+                    url,
+                    wait_time,
+                )
                 time.sleep(wait_time)
                 continue
-                
+
             resp.raise_for_status()
             return resp.json()
         except RequestException as e:
             if attempt == retries - 1:
-                logger.error(f"Failed to fetch JSON from {url}: {e}")
-                
+                logger.error("Failed to fetch JSON from %s: %s", url, e)
+
                 response = getattr(e, "response", None)
                 if response is not None:
                     status_code = getattr(response, "status_code", None)
                     if status_code is not None:
-                        logger.error(f"HTTP Status: {status_code}")
+                        logger.error("HTTP Status: %s", status_code)
                     response_text = getattr(response, "text", None)
                     if response_text:
-                        logger.debug(f"Response preview: {response_text[:200]}")
+                        logger.debug(
+                            "Response preview: %s",
+                            response_text[:200],
+                        )
                         print(f"Response Text (first 200 chars): {response_text[:200]}")
                 raise
-            
-            logger.warning(f"Attempt {attempt + 1}/{retries} failed for {url}, retrying...")
-            wait_time = (2 ** attempt)
+
+            logger.warning(
+                "Attempt %s/%s failed for %s, retrying...",
+                attempt + 1,
+                retries,
+                url,
+            )
+            wait_time = 2 ** attempt
             time.sleep(wait_time)
         except ValueError as e:
             # This happens if resp.json() fails
-            logger.error(f"JSON parsing error from {url}: {e}")
+            logger.error("JSON parsing error from %s: %s", url, e)
             try:
                 preview = resp.text[:200]
-                logger.debug(f"Response preview: {preview}")
+                logger.debug("Response preview: %s", preview)
                 print(f"Response preview (first 200 chars): {preview}")
-            except:
-                pass
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug("Failed to read response preview", exc_info=True)
             raise
+
+    return None
 
 
 def save_json(path, data):
@@ -98,7 +114,7 @@ def load_json(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (OSError, ValueError):
         return None
 
 
