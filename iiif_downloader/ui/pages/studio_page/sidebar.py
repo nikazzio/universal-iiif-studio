@@ -58,7 +58,7 @@ def render_sidebar_jobs():
 def render_sidebar_export(doc_id, paths):
     st.sidebar.markdown("---")
     st.sidebar.subheader("Esportazione")
-    if st.sidebar.button("📄 Crea PDF Completo", use_container_width=True):
+    if st.sidebar.button("📄 Crea PDF Completo", width="stretch"):
         with st.spinner("Generazione PDF in corso..."):
             scans_dir = paths["scans"]
             scans_dir = Path(scans_dir)

@@ -2,7 +2,6 @@ import argparse
 import sys
 
 # pylint: disable=broad-exception-caught
-
 from .logic import IIIFDownloader
 from .resolvers.gallica import GallicaResolver
 from .resolvers.generic import GenericResolver

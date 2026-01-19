@@ -17,7 +17,7 @@ def render_search_page():
         col1, col2 = st.columns([4, 1])
         query = col1.text_input("Parola da cercare", placeholder="es. incarnatio, dante...",
                                 label_visibility="collapsed")
-        search_btn = col2.button("🔎 Cerca", use_container_width=True, type="primary")
+        search_btn = col2.button("🔎 Cerca", width="stretch", type="primary")
 
     if query and (search_btn or query):
         with st.spinner(f"Ricerca di '{query}' in corso..."):
@@ -41,11 +41,11 @@ def render_search_page():
             st.subheader(f"Risultati ({total_docs} documenti)")
             if total_pages > 1:
                 p1, p2, p3 = st.columns([1, 2, 1])
-                if p1.button("◀ Prev", use_container_width=True, disabled=page <= 1):
+                if p1.button("◀ Prev", width="stretch", disabled=page <= 1):
                     st.session_state["search_page"] = page - 1
                     st.rerun()
                 p2.caption(f"Pagina {page}/{total_pages}")
-                if p3.button("Next ▶", use_container_width=True, disabled=page >= total_pages):
+                if p3.button("Next ▶", width="stretch", disabled=page >= total_pages):
                     st.session_state["search_page"] = page + 1
                     st.rerun()
 

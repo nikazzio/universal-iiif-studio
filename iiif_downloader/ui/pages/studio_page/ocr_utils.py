@@ -40,7 +40,7 @@ def render_ocr_controls(doc_id, library):
             index=0,
         )
 
-    if st.sidebar.button("📚 OCR Intero Manoscritto (Background)", use_container_width=True):
+    if st.sidebar.button("📚 OCR Intero Manoscritto (Background)", width="stretch"):
         full_data = storage.load_transcription(doc_id, None, library)
         has_data = full_data and len(full_data.get("pages", [])) > 0
 
@@ -57,7 +57,7 @@ def render_ocr_controls(doc_id, library):
     if st.session_state.get("confirm_ocr_batch"):
         st.sidebar.warning("⚠️ Ci sono trascrizioni esistenti! Sovrascrivere TUTTO?", icon="🔥")
         c1, c2 = st.sidebar.columns(2)
-        if c1.button("Sì, Esegui", use_container_width=True, type="primary"):
+        if c1.button("Sì, Esegui", width="stretch", type="primary"):
             job_id = job_manager.submit_job(
                 task_func=run_ocr_batch_task,
                 kwargs={"doc_id": doc_id, "library": library, "engine": ocr_engine, "model": current_model},
@@ -65,7 +65,7 @@ def render_ocr_controls(doc_id, library):
             )
             toast(f"Job avviato! ID: {job_id}", icon="⚙️")
             st.session_state["confirm_ocr_batch"] = False
-        if c2.button("Annulla", use_container_width=True):
+        if c2.button("Annulla", width="stretch"):
             st.session_state["confirm_ocr_batch"] = False
             st.rerun()
 

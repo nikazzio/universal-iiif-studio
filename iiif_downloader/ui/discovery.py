@@ -9,8 +9,8 @@ from iiif_downloader.resolvers.discovery import (
     resolve_shelfmark,
     search_gallica,
 )
-from iiif_downloader.ui.styling import render_gallery_card
 from iiif_downloader.ui.notifications import toast
+from iiif_downloader.ui.styling import render_gallery_card
 from iiif_downloader.utils import get_json
 
 
@@ -56,10 +56,7 @@ def render_discovery_page():
 
 def render_url_search_panel():
     st.markdown("### 🔎 Ricerca per Segnatura")
-    st.caption(
-        "Inserisci l'ID, la segnatura o l'URL del manifesto per analizzare "
-        "il documento."
-    )
+    st.caption("Inserisci l'ID, la segnatura o l'URL del manifesto per analizzare il documento.")
 
     # Library choices
     lib_map = {
@@ -92,7 +89,7 @@ def render_url_search_panel():
 
         if st.button(
             "🔍 Analizza Documento",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         ):
             if shelf_input:
@@ -112,10 +109,7 @@ def render_url_search_panel():
 
 def render_catalog_search_panel():
     st.markdown("### 📚 Ricerca Catalogo (Gallica)")
-    st.caption(
-        "Cerca direttamente nel catalogo della Biblioteca Nazionale "
-        "di Francia."
-    )
+    st.caption("Cerca direttamente nel catalogo della Biblioteca Nazionale di Francia.")
 
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
@@ -125,10 +119,7 @@ def render_catalog_search_panel():
             label_visibility="collapsed",
         )
 
-        if (
-            col2.button("🔎 Cerca", use_container_width=True, type="primary")
-            and query
-        ):
+        if col2.button("🔎 Cerca", width="stretch", type="primary") and query:
             with st.spinner("Ricerca in corso..."):
                 st.session_state["search_results"] = search_gallica(query)
 
@@ -149,11 +140,16 @@ def render_catalog_search_panel():
         st.subheader(f"Risultati ({total})")
         if total_pages > 1:
             p1, p2, p3 = st.columns([1, 2, 1])
-            if p1.button("◀ Prev", use_container_width=True, disabled=page <= 1, key="gallica_prev"):
+            if p1.button("◀ Prev", width="stretch", disabled=page <= 1, key="gallica_prev"):
                 st.session_state["gallica_page"] = page - 1
                 st.rerun()
             p2.caption(f"Pagina {page}/{total_pages}")
-            if p3.button("Next ▶", use_container_width=True, disabled=page >= total_pages, key="gallica_next"):
+            if p3.button(
+                "Next ▶",
+                width="stretch",
+                disabled=page >= total_pages,
+                key="gallica_next",
+            ):
                 st.session_state["gallica_page"] = page + 1
                 st.rerun()
 
@@ -225,14 +221,10 @@ def render_preview(preview):
     with c1:
         st.markdown(f"### 📖 {preview['label']}")
 
-        st.caption(
-            f"ID: {preview['id']} | "
-            f"Library: {preview['library']} | "
-            f"Pages: {preview['pages']}"
-        )
+        st.caption(f"ID: {preview['id']} | Library: {preview['library']} | Pages: {preview['pages']}")
         if preview.get("description"):
             st.info(preview["description"])
-        if preview.get('viewer_url'):
+        if preview.get("viewer_url"):
             st.link_button(
                 "🌐 Apri Viewer Ufficiale",
                 preview["viewer_url"],
@@ -243,11 +235,11 @@ def render_preview(preview):
         if st.button(
             "🚀 Avvia Download",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             start_download_process(preview)
 
-        if st.button("🗑️ Reset", use_container_width=True):
+        if st.button("🗑️ Reset", width="stretch"):
             st.session_state["discovery_preview"] = None
             st.rerun()
 
@@ -308,17 +300,14 @@ def render_pdf_import():
     extract_images = st.checkbox(
         "Estrai Immagini da PDF (Consigliato per performance)",
         value=True,
-        help=(
-            "Se attivo, converte le pagine in JPG per uno scorrimento più "
-            "fluido."
-        ),
+        help=("Se attivo, converte le pagine in JPG per uno scorrimento più fluido."),
     )
 
     if uploaded_file is not None:
         if st.button(
             "📥 Importa Documento",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             # Prepare paths
             safe_name = uploaded_file.name.replace(".pdf", "").strip()
@@ -326,9 +315,7 @@ def render_pdf_import():
                 safe_name = title.replace(" ", "_")
 
             # Clean generic chars
-            safe_id = "".join(
-                c for c in safe_name if c.isalnum() or c in ("_", "-")
-            )
+            safe_id = "".join(c for c in safe_name if c.isalnum() or c in ("_", "-"))
 
             from iiif_downloader.pdf_utils import convert_pdf_to_images
             from iiif_downloader.utils import ensure_dir, save_json
@@ -338,10 +325,7 @@ def render_pdf_import():
             doc_dir = base_dir / "Local" / safe_id
 
             if doc_dir.exists():
-                st.error(
-                    f"Esiste già un documento con ID '{safe_id}'. "
-                    "Cambia titolo o rinomina."
-                )
+                st.error(f"Esiste già un documento con ID '{safe_id}'. Cambia titolo o rinomina.")
                 return
 
             try:
@@ -365,17 +349,12 @@ def render_pdf_import():
                 if year:
                     meta_entries.append({"label": "Anno", "value": year})
                 if provenance:
-                    meta_entries.append(
-                        {"label": "Provenienza", "value": provenance}
-                    )
+                    meta_entries.append({"label": "Provenienza", "value": provenance})
 
                 # Save Metadata
                 meta = {
                     "label": title or uploaded_file.name,
-                    "description": (
-                        "Importato da PDF locale: "
-                        f"{uploaded_file.name}"
-                    ),
+                    "description": (f"Importato da PDF locale: {uploaded_file.name}"),
                     "attribution": provenance or "Local Import",
                     "license": "Copyright User",
                     "id": safe_id,
@@ -413,10 +392,7 @@ def render_pdf_import():
                             meta,
                         )
                     else:
-                        st.warning(
-                            "Estrazione fallita (il PDF è comunque salvato): "
-                            f"{msg}"
-                        )
+                        st.warning(f"Estrazione fallita (il PDF è comunque salvato): {msg}")
 
                 st.success(f"Documento '{safe_id}' importato con successo!")
                 time.sleep(1.5)

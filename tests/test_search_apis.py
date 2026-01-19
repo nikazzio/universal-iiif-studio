@@ -10,7 +10,6 @@ from requests import RequestException
 
 from iiif_downloader.config_manager import get_config_manager
 
-
 pytestmark = pytest.mark.skipif(
     not bool(get_config_manager().get_setting("testing.run_live_tests", False)),
     reason="Live tests require network access; set settings.testing.run_live_tests=true in config.json to enable.",

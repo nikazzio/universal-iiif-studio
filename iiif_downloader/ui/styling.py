@@ -76,6 +76,42 @@ def load_custom_css():
             border-radius: 8px;
         }}
 
+        /* --- Select / Multiselect dropdown readability (BaseWeb) --- */
+        /* Control */
+        div[data-baseweb="select"] > div {{
+            background-color: var(--st-color-surface, #ffffff) !important;
+            color: var(--st-color-text, #111111) !important;
+            border: 1px solid var(--st-color-border, rgba(0, 0, 0, 0.2)) !important;
+            border-radius: 10px !important;
+        }}
+
+        /* Focus ring */
+        div[data-baseweb="select"] > div:focus-within {{
+            box-shadow: 0 0 0 3px rgba(255, 75, 75, 0.18) !important;
+            border-color: {theme_color} !important;
+        }}
+
+        /* Dropdown menu container */
+        div[role="listbox"] {{
+            background-color: var(--st-color-surface, #ffffff) !important;
+            color: var(--st-color-text, #111111) !important;
+            border: 1px solid var(--st-color-border, rgba(0, 0, 0, 0.2)) !important;
+            box-shadow: 0 10px 26px rgba(0,0,0,0.25) !important;
+            border-radius: 10px !important;
+            overflow: hidden !important;
+        }}
+
+        /* Options */
+        div[role="option"] {{
+            color: var(--st-color-text, #111111) !important;
+        }}
+        div[role="option"]:hover {{
+            background-color: rgba(255, 75, 75, 0.12) !important;
+        }}
+        div[role="option"][aria-selected="true"] {{
+            background-color: rgba(255, 75, 75, 0.18) !important;
+        }}
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar {{
             width: 8px;
@@ -108,7 +144,8 @@ def render_gallery_card(title, subtitle, image_url=None, footer=None, key=None):
     # These are reserved for future UI variants (overlay button / keyed widgets).
     _ = footer, key
     with st.container():
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="card-container">
             <div style="height: 140px; background-color: #333; border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                 {f'<img src="{image_url}" style="width: 100%; height: 100%; object-fit: cover;">' if image_url else '<span style="font-size: 3rem;">📜</span>'}
@@ -116,6 +153,8 @@ def render_gallery_card(title, subtitle, image_url=None, footer=None, key=None):
             <h4 style="margin: 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{title}</h4>
             <p style="color: #aaa; font-size: 0.8rem; margin: 4px 0 12px 0;">{subtitle}</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
         # The actual interaction must be a button below or overlay
         # We'll expect the caller to place a button here

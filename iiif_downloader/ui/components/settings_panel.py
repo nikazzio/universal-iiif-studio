@@ -90,6 +90,18 @@ def render_settings_page(cm: Any) -> None:
         cm.set_setting("pdf.viewer_dpi", _state_int("cfg_pdf_viewer_dpi", 150))
         cm.set_setting("pdf.ocr_dpi", _state_int("cfg_pdf_ocr_dpi", 300))
 
+        cm.set_setting("thumbnails.max_long_edge_px", _state_int("cfg_thumb_max_edge", 320))
+        cm.set_setting("thumbnails.jpeg_quality", _state_int("cfg_thumb_jpeg_quality", 70))
+        cm.set_setting("thumbnails.columns", _state_int("cfg_thumb_columns", 6))
+        cm.set_setting("thumbnails.paginate_enabled", bool(st.session_state.get("cfg_thumb_paginate", True)))
+        page_size = _state_int("cfg_thumb_page_size", 48)
+        page_size = max(12, min(page_size, 500))
+        cm.set_setting("thumbnails.page_size", page_size)
+        cm.set_setting(
+            "thumbnails.default_select_all",
+            bool(st.session_state.get("cfg_thumb_default_select_all", True)),
+        )
+
         cleanup_days = _state_int("cfg_temp_cleanup_days", 7)
         cleanup_days = max(1, min(cleanup_days, 30))
         cm.set_setting("housekeeping.temp_cleanup_days", cleanup_days)
@@ -163,6 +175,13 @@ def render_settings_page(cm: Any) -> None:
     _init_state("cfg_pdf_viewer_dpi", _read_int("pdf.viewer_dpi", legacy_pdf_dpi))
     _init_state("cfg_pdf_ocr_dpi", _read_int("pdf.ocr_dpi", legacy_pdf_dpi))
 
+    _init_state("cfg_thumb_max_edge", _read_int("thumbnails.max_long_edge_px", 320))
+    _init_state("cfg_thumb_jpeg_quality", _read_int("thumbnails.jpeg_quality", 70))
+    _init_state("cfg_thumb_columns", _read_int("thumbnails.columns", 6))
+    _init_state("cfg_thumb_paginate", bool(cm.get_setting("thumbnails.paginate_enabled", True)))
+    _init_state("cfg_thumb_page_size", _read_int("thumbnails.page_size", 48))
+    _init_state("cfg_thumb_default_select_all", bool(cm.get_setting("thumbnails.default_select_all", True)))
+
     _init_state("cfg_temp_cleanup_days", _read_int("housekeeping.temp_cleanup_days", 7))
     _init_state("cfg_log_level", str(cm.get_setting("logging.level", "INFO")).upper())
 
@@ -195,6 +214,13 @@ def render_settings_page(cm: Any) -> None:
         "cfg_tile_stitch_max_ram_gb",
         "cfg_pdf_viewer_dpi",
         "cfg_pdf_ocr_dpi",
+        "cfg_thumb_max_edge",
+        "cfg_thumb_jpeg_quality",
+        "cfg_thumb_columns",
+        "cfg_thumb_paginate",
+        "cfg_thumb_page_size",
+        "cfg_thumb_default_select_all",
+        "cfg_thumb_apply_to_all_default",
         "cfg_temp_cleanup_days",
         "cfg_log_level",
         "cfg_openai",
@@ -207,9 +233,9 @@ def render_settings_page(cm: Any) -> None:
         st.session_state["cfg_snapshot"] = {k: st.session_state.get(k) for k in tracked_keys}
 
     a1, a2, a3 = st.columns([1, 1, 3])
-    if a1.button("💾 Salva", use_container_width=True, type="primary"):
+    if a1.button("💾 Salva", width="stretch", type="primary"):
         _apply_and_save()
-    if a2.button("🔄 Ricarica", use_container_width=True):
+    if a2.button("🔄 Ricarica", width="stretch"):
         # Drop keys so we re-init from disk on next rerun
         for k in list(st.session_state.keys()):
             if k.startswith("cfg_"):
@@ -227,6 +253,7 @@ def render_settings_page(cm: Any) -> None:
         "⚡ Sistema",
         "🎛️ UI",
         "🖼️ IIIF",
+        "🖼️ Thumbnails",
         "📄 PDF",
         "🧹 Pulizia",
         "🪵 Logging",
@@ -263,7 +290,7 @@ def render_settings_page(cm: Any) -> None:
             {"Nome": "models", "Percorso reale": str(cm.get_models_dir())},
             {"Nome": "logs", "Percorso reale": str(cm.get_logs_dir())},
         ]
-        st.dataframe(resolved_rows, use_container_width=True, hide_index=True)
+        st.dataframe(resolved_rows, width="stretch", hide_index=True)
 
     with tabs[1]:
         c1, c2, c3 = st.columns(3)
@@ -403,6 +430,72 @@ def render_settings_page(cm: Any) -> None:
             )
 
     with tabs[4]:
+        st.subheader("🖼️ Thumbnails")
+        st.caption("Impostazioni per anteprime pagina (Export Studio).")
+
+        c1, c2, c3 = st.columns(3)
+        c1.slider(
+            "Dimensione (max lato lungo, px)",
+            min_value=160,
+            max_value=1024,
+            step=16,
+            key="cfg_thumb_max_edge",
+            help="Thumbnails più piccole = UI più veloce e cache più leggera.",
+        )
+        c2.slider(
+            "Qualità JPEG (0-100)",
+            min_value=30,
+            max_value=95,
+            step=1,
+            key="cfg_thumb_jpeg_quality",
+            help="Qualità più alta = thumbnails più pesanti.",
+        )
+        c3.slider(
+            "Colonne griglia",
+            min_value=3,
+            max_value=10,
+            step=1,
+            key="cfg_thumb_columns",
+        )
+
+        st.checkbox(
+            "Paginazione thumbnails (consigliato per manoscritti lunghi)",
+            key="cfg_thumb_paginate",
+        )
+        st.slider(
+            "Numero pagine per schermata",
+            min_value=12,
+            max_value=200,
+            step=4,
+            key="cfg_thumb_page_size",
+            help="Usato come default della finestra visibile quando la paginazione è attiva.",
+        )
+        st.checkbox(
+            "Default: esporta tutto il PDF",
+            key="cfg_thumb_default_select_all",
+        )
+
+        st.markdown("---")
+        st.subheader("Cache thumbnails")
+        st.caption("Le thumbnails sono salvate sotto `downloads/<lib>/<doc>/data/thumbnails/`.")
+
+        confirm = st.checkbox("Confermo: voglio cancellare tutte le thumbnails cached", value=False)
+        if st.button("🧽 Svuota cache thumbnails (globale)", disabled=not confirm):
+            removed = 0
+            base = cm.get_downloads_dir()
+            with st.spinner("Cancellazione thumbnails..."):
+                try:
+                    for thumb in base.glob("**/data/thumbnails/*.jpg"):
+                        try:
+                            thumb.unlink()
+                            removed += 1
+                        except OSError:
+                            continue
+                except OSError:
+                    pass
+            st.success(f"Rimossi {removed} file thumbnails.")
+
+    with tabs[5]:
         st.caption(
             "Queste opzioni controllano come il PDF viene renderizzato in immagine. "
             "La visualizzazione può usare DPI più bassi per essere più veloce; "
@@ -433,7 +526,7 @@ def render_settings_page(cm: Any) -> None:
             ),
         )
 
-    with tabs[5]:
+    with tabs[6]:
         d1, d2 = st.columns([2, 1])
         d1.caption(f"Cartella cache/temporanei: {cm.get_temp_dir()}")
         d2.slider(
@@ -445,7 +538,7 @@ def render_settings_page(cm: Any) -> None:
             help="All'avvio, elimina automaticamente i file temporanei più vecchi di N giorni.",
         )
 
-    with tabs[6]:
+    with tabs[7]:
         st.selectbox(
             "Log level",
             ["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -453,7 +546,7 @@ def render_settings_page(cm: Any) -> None:
             help="Livello di dettaglio dei log (DEBUG è molto verboso).",
         )
 
-    with tabs[7]:
+    with tabs[8]:
         st.caption(
             "Le chiavi API sono salvate localmente in config.json e vengono usate solo per chiamare i provider selezionati."
         )

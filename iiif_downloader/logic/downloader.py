@@ -1,16 +1,16 @@
 import random
 import time
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import requests
-from requests import RequestException
 from PIL import Image
+from requests import RequestException
 from tqdm import tqdm
 
 from iiif_downloader.config_manager import get_config_manager
-from iiif_downloader.logger import get_download_logger
 from iiif_downloader.iiif_tiles import stitch_iiif_tiles_to_jpeg
+from iiif_downloader.logger import get_download_logger
 from iiif_downloader.utils import (
     DEFAULT_HEADERS,
     clean_dir,
