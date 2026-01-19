@@ -38,15 +38,15 @@ def render_thumbnail_grid(
     st.caption("Seleziona le pagine (click sull'immagine).")
 
     c1, c2, c3 = st.columns([1, 1, 1])
-    if c1.button("✅ Tutte", disabled=disabled, use_container_width=True):
+    if c1.button("✅ Tutte", disabled=disabled, width="stretch"):
         for p in action_pages:
             st.session_state[f"export_page_{doc_key}_{p}"] = True
         st.rerun()
-    if c2.button("⬜ Nessuna", disabled=disabled, use_container_width=True):
+    if c2.button("⬜ Nessuna", disabled=disabled, width="stretch"):
         for p in action_pages:
             st.session_state[f"export_page_{doc_key}_{p}"] = False
         st.rerun()
-    if c3.button("🔄 Inverti", disabled=disabled, use_container_width=True):
+    if c3.button("🔄 Inverti", disabled=disabled, width="stretch"):
         for p in action_pages:
             k = _selection_key(doc_key, p)
             st.session_state[k] = not bool(st.session_state.get(k, False))
@@ -214,7 +214,7 @@ def render_thumbnail_grid(
                 "Select",  # Text hidden by color: transparent
                 key=f"btn_{doc_key}_{p}",
                 on_click=_on_toggle,
-                use_container_width=True,
+                width="stretch",
             )
 
             # Badge / Label below

@@ -218,7 +218,6 @@ def render_settings_page(cm: Any) -> None:
         "cfg_thumb_paginate",
         "cfg_thumb_page_size",
         "cfg_thumb_default_select_all",
-        "cfg_thumb_apply_to_all_default",
         "cfg_temp_cleanup_days",
         "cfg_log_level",
         "cfg_openai",

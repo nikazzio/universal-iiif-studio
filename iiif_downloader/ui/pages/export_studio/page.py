@@ -180,7 +180,7 @@ def render_export_studio_page() -> None:
     if st.button(
         "📦 Genera PDF",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=not bool(selected_pages),
     ):
         with st.spinner("Generazione PDF in corso..."):
