@@ -22,3 +22,12 @@ extend-select = ["I"]
 [tool.ruff.lint.per-file-ignores]
 # Tests often use sys.path hacks; keep lint noise low while we migrate to packaging.
 "tests/**/*.py" = ["E402"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+python_files = "test_*.py"
+
