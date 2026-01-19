@@ -1,16 +1,16 @@
 import random
 import time
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import requests
-from requests import RequestException
 from PIL import Image
+from requests import RequestException
 from tqdm import tqdm
 
 from iiif_downloader.config_manager import get_config_manager
-from iiif_downloader.logger import get_download_logger
 from iiif_downloader.iiif_tiles import stitch_iiif_tiles_to_jpeg
+from iiif_downloader.logger import get_download_logger
 from iiif_downloader.utils import (
     DEFAULT_HEADERS,
     clean_dir,
@@ -29,6 +29,7 @@ NORMAL_MAX_DELAY = 1.2
 
 try:
     import img2pdf
+
     HAS_IMG2PDF = True
 except ImportError:
     HAS_IMG2PDF = False
@@ -104,6 +105,7 @@ class IIIFDownloader:
         self.temp_dir = self.scans_dir
 
         import threading
+
         self._lock = threading.Lock()
         self._tile_stitch_sem = threading.Semaphore(1)
         self._backoff_until = 0
@@ -115,7 +117,8 @@ class IIIFDownloader:
             try:
                 self.session.get(viewer_url, timeout=20)
                 self.session.headers.update(
-                    {"Referer": viewer_url, "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
+                    {"Referer": viewer_url, "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"}
+                )
             except Exception:
                 self.logger.debug("Unable to pre-warm Vatican viewer session", exc_info=True)
 
@@ -145,35 +148,35 @@ class IIIFDownloader:
         save_json(self.manifest_path, self.manifest)
 
     def get_canvases(self):
-        sequences = self.manifest.get('sequences', [])
+        sequences = self.manifest.get("sequences", [])
         if sequences:
-            return sequences[0].get('canvases', [])
-        items = self.manifest.get('items', [])
+            return sequences[0].get("canvases", [])
+        items = self.manifest.get("items", [])
         if items:
             return items
         return []
 
     def download_page(self, canvas, index, folder):
         try:
-            images = canvas.get('images') or canvas.get('items') or []
+            images = canvas.get("images") or canvas.get("items") or []
             if not images:
                 return None
             img_obj = images[0]
-            annotation_type = img_obj.get('@type') or img_obj.get('type') or ''
-            if 'Annotation' in annotation_type:
-                resource = img_obj.get('resource') or img_obj.get('body')
+            annotation_type = img_obj.get("@type") or img_obj.get("type") or ""
+            if "Annotation" in annotation_type:
+                resource = img_obj.get("resource") or img_obj.get("body")
             else:
                 resource = img_obj
             if not resource:
                 return None
 
-            service = resource.get('service')
+            service = resource.get("service")
             if isinstance(service, list):
                 service = service[0]
-            base_url = (service or {}).get('@id') or (service or {}).get('id')
+            base_url = (service or {}).get("@id") or (service or {}).get("id")
             if not base_url:
-                val = resource.get('@id') or resource.get('id') or ''
-                base_url = val.split('/full/')[0] if '/full/' in val else val
+                val = resource.get("@id") or resource.get("id") or ""
+                base_url = val.split("/full/")[0] if "/full/" in val else val
 
             cm = get_config_manager()
             iiif_q = cm.get_setting("images.iiif_quality", "default")
@@ -187,15 +190,18 @@ class IIIFDownloader:
                 now = time.time()
                 if now < self._backoff_until:
                     time.sleep(self._backoff_until - now + random.uniform(0.1, 0.5))
-                delay = random.uniform(VATICAN_MIN_DELAY, VATICAN_MAX_DELAY) if "vatlib.it" in self.manifest_url.lower(
-                ) else random.uniform(NORMAL_MIN_DELAY, NORMAL_MAX_DELAY)
+                delay = (
+                    random.uniform(VATICAN_MIN_DELAY, VATICAN_MAX_DELAY)
+                    if "vatlib.it" in self.manifest_url.lower()
+                    else random.uniform(NORMAL_MIN_DELAY, NORMAL_MAX_DELAY)
+                )
                 time.sleep(delay)
 
                 for url in urls_to_try:
                     try:
                         r = self.session.get(url, timeout=30)
                         if r.status_code == 200 and r.content:
-                            with filename.open('wb') as f:
+                            with filename.open("wb") as f:
                                 f.write(r.content)
                             with Image.open(str(filename)) as img:
                                 width, height = img.size
@@ -204,14 +210,25 @@ class IIIFDownloader:
                             if thumbnail:
                                 if isinstance(thumbnail, list):
                                     thumbnail = thumbnail[0]
-                                thumb_url = thumbnail.get(
-                                    "@id") or thumbnail.get("id") if isinstance(thumbnail, dict) else thumbnail
-                            stats = {"page_index": index, "filename": filename.name, "original_url": url, "thumbnail_url": thumb_url, "size_bytes": len(
-                                r.content), "width": width, "height": height, "resolution_category": "High" if width > 2500 else "Medium"}
+                                thumb_url = (
+                                    thumbnail.get("@id") or thumbnail.get("id")
+                                    if isinstance(thumbnail, dict)
+                                    else thumbnail
+                                )
+                            stats = {
+                                "page_index": index,
+                                "filename": filename.name,
+                                "original_url": url,
+                                "thumbnail_url": thumb_url,
+                                "size_bytes": len(r.content),
+                                "width": width,
+                                "height": height,
+                                "resolution_category": "High" if width > 2500 else "Medium",
+                            }
                             return str(filename), stats
                         if r.status_code == 429:
                             with self._lock:
-                                wait = (2 ** attempt) * THROTTLE_BASE_WAIT
+                                wait = (2**attempt) * THROTTLE_BASE_WAIT
                                 self._backoff_until = time.time() + wait
                             break
                     except Exception:
@@ -225,7 +242,7 @@ class IIIFDownloader:
                     except (TypeError, ValueError):
                         max_ram_gb = 2.0
                     max_ram_gb = max(1.0, min(max_ram_gb, 64.0))
-                    max_ram_bytes = int(max_ram_gb * (1024 ** 3))
+                    max_ram_bytes = int(max_ram_gb * (1024**3))
 
                     dims = stitch_iiif_tiles_to_jpeg(
                         self.session,
@@ -266,11 +283,7 @@ class IIIFDownloader:
         """
         if files is None:
             files = sorted(
-                [
-                    str(p)
-                    for p in self.scans_dir.iterdir()
-                    if p.name.startswith("pag_") and p.suffix.lower() == ".jpg"
-                ]
+                [str(p) for p in self.scans_dir.iterdir() if p.name.startswith("pag_") and p.suffix.lower() == ".jpg"]
             )
         if not files:
             return
@@ -287,7 +300,7 @@ class IIIFDownloader:
                 return
             except Exception:
                 self.logger.debug("img2pdf failed; falling back to PIL PDF", exc_info=True)
-        images = [Image.open(f).convert('RGB') for f in files]
+        images = [Image.open(f).convert("RGB") for f in files]
         images[0].save(str(output_path), save_all=True, append_images=images[1:])
 
     def download_native_pdf(self, pdf_url: str) -> bool:
@@ -355,13 +368,20 @@ class IIIFDownloader:
     def run_batch_ocr(self, image_files):
         from iiif_downloader.ocr.processor import KRAKEN_AVAILABLE, OCRProcessor
         from iiif_downloader.ui.state import get_model_manager
+
         if not KRAKEN_AVAILABLE:
             return
         manager = get_model_manager()
         model_path = manager.get_model_path(self.ocr_model)
         proc = OCRProcessor(model_path)
-        aggregated = {"metadata": {"manuscript_id": self.ms_id, "model": self.ocr_model,
-                                   "processed_at": time.strftime("%Y-%m-%d %H:%M:%S")}, "pages": []}
+        aggregated = {
+            "metadata": {
+                "manuscript_id": self.ms_id,
+                "model": self.ocr_model,
+                "processed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            "pages": [],
+        }
         for i, img_path in enumerate(image_files):
             try:
                 res = proc.process_image(img_path)

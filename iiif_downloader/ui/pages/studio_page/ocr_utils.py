@@ -40,7 +40,7 @@ def render_ocr_controls(doc_id, library):
             index=0,
         )
 
-    if st.sidebar.button("📚 OCR Intero Manoscritto (Background)", use_container_width=True):
+    if st.sidebar.button("📚 OCR Intero Manoscritto (Background)", width="stretch"):
         full_data = storage.load_transcription(doc_id, None, library)
         has_data = full_data and len(full_data.get("pages", [])) > 0
 
@@ -50,22 +50,22 @@ def render_ocr_controls(doc_id, library):
             job_id = job_manager.submit_job(
                 task_func=run_ocr_batch_task,
                 kwargs={"doc_id": doc_id, "library": library, "engine": ocr_engine, "model": current_model},
-                job_type="ocr_batch"
+                job_type="ocr_batch",
             )
             toast(f"Job avviato! ID: {job_id}", icon="⚙️")
 
     if st.session_state.get("confirm_ocr_batch"):
         st.sidebar.warning("⚠️ Ci sono trascrizioni esistenti! Sovrascrivere TUTTO?", icon="🔥")
         c1, c2 = st.sidebar.columns(2)
-        if c1.button("Sì, Esegui", use_container_width=True, type="primary"):
+        if c1.button("Sì, Esegui", width="stretch", type="primary"):
             job_id = job_manager.submit_job(
                 task_func=run_ocr_batch_task,
                 kwargs={"doc_id": doc_id, "library": library, "engine": ocr_engine, "model": current_model},
-                job_type="ocr_batch"
+                job_type="ocr_batch",
             )
             toast(f"Job avviato! ID: {job_id}", icon="⚙️")
             st.session_state["confirm_ocr_batch"] = False
-        if c2.button("Annulla", use_container_width=True):
+        if c2.button("Annulla", width="stretch"):
             st.session_state["confirm_ocr_batch"] = False
             st.rerun()
 
@@ -75,7 +75,7 @@ def render_ocr_controls(doc_id, library):
 def run_ocr_sync(doc_id, library, page_idx, engine, model):
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
-    page_img_path = Path(paths["scans"]) / f"pag_{page_idx-1:04d}.jpg"
+    page_img_path = Path(paths["scans"]) / f"pag_{page_idx - 1:04d}.jpg"
 
     img = None
     if page_img_path.exists():
@@ -97,6 +97,7 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
             return
 
     with st.status(f"Elaborazione OCR ({engine})...", expanded=True) as status:
+
         def update_status(text):
             status.update(label=text)
             logger.debug("UI Status Update: %s", text)
@@ -161,6 +162,6 @@ def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
             storage.save_transcription(doc_id, p_idx, res, library)
 
         if progress_callback:
-            progress_callback(i+1, total)
+            progress_callback(i + 1, total)
 
     return f"Processed {total} pages."

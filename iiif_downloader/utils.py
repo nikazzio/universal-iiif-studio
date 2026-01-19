@@ -19,11 +19,7 @@ DEFAULT_HEADERS = {
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept": (
-        "application/json,"
-        "text/html,"
-        "application/xhtml+xml,"
-        "application/xml;q=0.9,"
-        "image/webp,image/apng,*/*;q=0.8"
+        "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
     ),
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
@@ -49,7 +45,7 @@ def get_json(url, headers=None, retries=3):
 
             # If rate limited, wait longer
             if resp.status_code == 429:
-                wait_time = (2 ** attempt) * 2
+                wait_time = (2**attempt) * 2
                 logger.warning(
                     "Rate limited (429) on %s, waiting %ss",
                     url,
@@ -84,7 +80,7 @@ def get_json(url, headers=None, retries=3):
                 retries,
                 url,
             )
-            wait_time = 2 ** attempt
+            wait_time = 2**attempt
             time.sleep(wait_time)
         except ValueError as e:
             # This happens if resp.json() fails
@@ -103,6 +99,7 @@ def get_json(url, headers=None, retries=3):
 def save_json(path, data):
     """Saves data to a local JSON file."""
     import json
+
     p = Path(path)
     ensure_dir(p.parent)
     with p.open("w", encoding="utf-8") as f:
@@ -112,6 +109,7 @@ def save_json(path, data):
 def load_json(path):
     """Loads a JSON file, returns None if not found."""
     import json
+
     p = Path(path)
     if not p.exists():
         return None

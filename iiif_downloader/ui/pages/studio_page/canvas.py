@@ -8,8 +8,8 @@ from requests import RequestException
 from iiif_downloader.logger import get_logger
 from iiif_downloader.pdf_utils import load_pdf_page
 from iiif_downloader.ui.components.viewer import interactive_viewer
-from iiif_downloader.ui.state import get_storage
 from iiif_downloader.ui.notifications import toast
+from iiif_downloader.ui.state import get_storage
 
 from .ocr_utils import run_ocr_sync
 
@@ -21,6 +21,7 @@ def get_manifest_thumbnails(manifest_url):
     """Fetch manifest and map canvas index to thumbnail URL."""
     try:
         from iiif_downloader.utils import get_json
+
         manifest = get_json(manifest_url)
 
         canvases = []
@@ -163,7 +164,7 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
     with col_img:
         from pathlib import Path
 
-        page_img_path = Path(paths["scans"]) / f"pag_{current_p-1:04d}.jpg"
+        page_img_path = Path(paths["scans"]) / f"pag_{current_p - 1:04d}.jpg"
         img_obj = None
         if page_img_path.exists():
             img_obj = PILImage.open(str(page_img_path))
@@ -180,14 +181,14 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
         if img_obj:
             p_stat = None
             if stats:
-                p_stat = next((p for p in stats.get("pages", []) if p.get("page_index") == current_p-1), None)
+                p_stat = next((p for p in stats.get("pages", []) if p.get("page_index") == current_p - 1), None)
 
             if not p_stat:
                 w, h = img_obj.size
                 file_size = page_img_path.stat().st_size if page_img_path.exists() else 0
                 p_stat = {"width": w, "height": h, "size_bytes": file_size}
 
-            mb_size = p_stat['size_bytes'] / (1024*1024)
+            mb_size = p_stat["size_bytes"] / (1024 * 1024)
             stats_str = f"<span style='color: #888; font-size: 0.9rem; margin-left: 15px;'>📏 {p_stat['width']}×{p_stat['height']} px | 💾 {mb_size:.2f} MB</span>"
 
         st.markdown(f"### Scansione ({current_p}/{total_pages}) {stats_str}", unsafe_allow_html=True)
@@ -200,18 +201,21 @@ def render_main_canvas(doc_id, library, paths, stats=None, ocr_engine="openai", 
         # --- NAVIGATION BUTTONS (Experiment: below image) ---
         c_nav1, c_nav2, c_nav3 = st.columns([1, 2, 1])
         with c_nav1:
-            if st.button("PREV ◀", use_container_width=True, key="btn_prev_sub"):
+            if st.button("PREV ◀", width="stretch", key="btn_prev_sub"):
                 st.session_state[page_key] = max(1, current_p - 1)
                 st.session_state["current_page"] = st.session_state[page_key]
                 st.rerun()
         with c_nav2:
-            st.markdown(f"""
+            st.markdown(
+                f"""
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
                     <span style="font-size: 1.4rem; font-weight: 800; color: #FF4B4B; line-height: 1;">{current_p} <span style="color: #444; font-weight: 300;">/ {total_pages}</span></span>
                 </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
         with c_nav3:
-            if st.button("▶ NEXT", use_container_width=True, key="btn_next_sub"):
+            if st.button("▶ NEXT", width="stretch", key="btn_next_sub"):
                 st.session_state[page_key] = min(total_pages, current_p + 1)
                 st.session_state["current_page"] = st.session_state[page_key]
                 st.rerun()
@@ -272,11 +276,11 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
     if st.session_state.get("confirm_ocr_sync") == current_p:
         st.warning("⚠️ Testo esistente! Sovrascrivere?", icon="⚠️")
         c1, c2 = st.columns(2)
-        if c1.button("Sì, Sovrascrivi", use_container_width=True, type="primary"):
+        if c1.button("Sì, Sovrascrivi", width="stretch", type="primary"):
             st.session_state["trigger_ocr_sync"] = current_p
             st.session_state["confirm_ocr_sync"] = None
             st.rerun()
-        if c2.button("No, Annulla", use_container_width=True):
+        if c2.button("No, Annulla", width="stretch"):
             st.session_state["confirm_ocr_sync"] = None
             st.rerun()
 
@@ -301,9 +305,14 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
         is_dirty = text_val != initial_text
 
         with f_c1:
-            if st.form_submit_button("💾 Salva", use_container_width=True, type="primary" if is_dirty else "secondary"):
-                new_data = {"full_text": text_val, "engine": trans.get(
-                    "engine", "manual") if trans else "manual", "is_manual": True, "status": current_status, "average_confidence": 1.0}
+            if st.form_submit_button("💾 Salva", width="stretch", type="primary" if is_dirty else "secondary"):
+                new_data = {
+                    "full_text": text_val,
+                    "engine": trans.get("engine", "manual") if trans else "manual",
+                    "is_manual": True,
+                    "status": current_status,
+                    "average_confidence": 1.0,
+                }
                 storage.save_transcription(doc_id, current_p, new_data, library)
 
                 st.session_state[f"pending_update_{edit_key}"] = text_val
@@ -321,7 +330,7 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
     with t_c1:
         is_verified = current_status == "verified"
         btn_label = "⚪ Segna come da Verificare" if is_verified else "✅ Segna come Verificato"
-        if st.button(btn_label, use_container_width=True, key=f"btn_verify_{current_p}"):
+        if st.button(btn_label, width="stretch", key=f"btn_verify_{current_p}"):
             new_status = "draft" if is_verified else "verified"
             data_to_save = trans if trans else {"full_text": "", "lines": [], "engine": "manual"}
 
@@ -334,7 +343,7 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
             st.rerun()
 
     with t_c2:
-        if st.button(f"🤖 Nuova Chiamata {ocr_engine}", use_container_width=True, key=f"btn_ocr_{current_p}"):
+        if st.button(f"🤖 Nuova Chiamata {ocr_engine}", width="stretch", key=f"btn_ocr_{current_p}"):
             existing = storage.load_transcription(doc_id, current_p, library)
             if existing:
                 st.session_state["confirm_ocr_sync"] = current_p
@@ -344,7 +353,8 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
 
     if trans:
         st.caption(
-            f"Engine: {trans.get('engine')} | Conf: {trans.get('average_confidence', 'N/A')} | 🕒 {trans.get('timestamp', '-')}")
+            f"Engine: {trans.get('engine')} | Conf: {trans.get('average_confidence', 'N/A')} | 🕒 {trans.get('timestamp', '-')}"
+        )
         if is_manual:
             st.caption("✍️ Modificato Manualmente")
 
@@ -357,17 +367,17 @@ def render_history_sidebar(doc_id, library, current_p, current_data=None, curren
     st.markdown("### 📜 Cronologia")
 
     # Deletion logic
-    if st.button("🗑️ Svuota Tutto", use_container_width=True, key=f"clear_side_{current_p}"):
+    if st.button("🗑️ Svuota Tutto", width="stretch", key=f"clear_side_{current_p}"):
         st.session_state[f"confirm_clear_{current_p}"] = True
 
     if st.session_state.get(f"confirm_clear_{current_p}"):
         st.warning("Sicuro?")
         cc1, cc2 = st.columns(2)
-        if cc1.button("Sì", type="primary", use_container_width=True, key=f"c_ok_{current_p}"):
+        if cc1.button("Sì", type="primary", width="stretch", key=f"c_ok_{current_p}"):
             storage.clear_history(doc_id, current_p, library)
             del st.session_state[f"confirm_clear_{current_p}"]
             st.rerun()
-        if cc2.button("No", use_container_width=True, key=f"c_no_{current_p}"):
+        if cc2.button("No", width="stretch", key=f"c_no_{current_p}"):
             del st.session_state[f"confirm_clear_{current_p}"]
             st.rerun()
 
@@ -407,18 +417,27 @@ def render_history_sidebar(doc_id, library, current_p, current_data=None, curren
 
             with st.container():
                 st.markdown(
-                    f"<p style='margin-bottom:0px; font-size:0.95rem;'><b>{ts}</b>{v_label}{status_icon}</p><small style='color:#777; font-size:0.85rem;'>{icon} {eng}</small>", unsafe_allow_html=True)
+                    f"<p style='margin-bottom:0px; font-size:0.95rem;'><b>{ts}</b>{v_label}{status_icon}</p><small style='color:#777; font-size:0.85rem;'>{icon} {eng}</small>",
+                    unsafe_allow_html=True,
+                )
                 c1, c2 = st.columns([2, 1])
                 c1.markdown(
-                    f"<span style='font-size:0.95rem;'><b>{chars} ch</b></span> <span style='color:{diff_color}; font-size:0.8rem; font-family:monospace;'>({diff_str})</span>", unsafe_allow_html=True)
-                if c2.button("↩", key=f"restore_side_{current_p}_{idx}", use_container_width=True, help=f"Ripristina versione del {full_ts}"):
+                    f"<span style='font-size:0.95rem;'><b>{chars} ch</b></span> <span style='color:{diff_color}; font-size:0.8rem; font-family:monospace;'>({diff_str})</span>",
+                    unsafe_allow_html=True,
+                )
+                if c2.button(
+                    "↩",
+                    key=f"restore_side_{current_p}_{idx}",
+                    width="stretch",
+                    help=f"Ripristina versione del {full_ts}",
+                ):
                     # Safety snapshot of current text
                     if current_text:
                         snap = {
                             "full_text": current_text,
                             "engine": current_data.get("engine", "manual") if current_data else "manual",
                             "is_manual": True,
-                            "status": current_data.get("status", "draft") if current_data else "draft"
+                            "status": current_data.get("status", "draft") if current_data else "draft",
                         }
                         storage.save_history(doc_id, current_p, snap, library)
 

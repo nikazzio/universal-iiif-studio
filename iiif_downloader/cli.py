@@ -2,7 +2,6 @@ import argparse
 import sys
 
 # pylint: disable=broad-exception-caught
-
 from .logic import IIIFDownloader
 from .resolvers.gallica import GallicaResolver
 from .resolvers.generic import GenericResolver
@@ -29,21 +28,17 @@ def resolve_url(input_str):
 
 def wizard_mode():
     """Interactive mode for better usability."""
-    print("\n" + "="*40)
+    print("\n" + "=" * 40)
     print(" 🌍  UNIVERSAL IIIF DOWNLOADER  🌍")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
 
     url = input("Paste the URL (Manifest or Viewer link): ").strip()
     if not url:
         print("No URL provided. Exiting.")
         sys.exit(1)
 
-    out_name = input(
-        "Output filename (optional, press Enter for auto): "
-    ).strip()
-    ocr_model = input(
-        "OCR Model (optional, e.g. 'kraken', press Enter to skip): "
-    ).strip()
+    out_name = input("Output filename (optional, press Enter for auto): ").strip()
+    ocr_model = input("OCR Model (optional, e.g. 'kraken', press Enter to skip): ").strip()
 
     return url, out_name, ocr_model
 
@@ -120,7 +115,7 @@ def main():
             workers=workers,
             clean_cache=clean,
             prefer_images=prefer_images,
-            ocr_model=ocr_model
+            ocr_model=ocr_model,
         )
         downloader.run()
 
@@ -129,12 +124,6 @@ def main():
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        print(
-            "💡 Tip: 'Intelligent Support' tried to guess the Manifest from "
-            "your URL."
-        )
-        print(
-            "   If this failed, please paste the direct link to the "
-            "'manifest.json'."
-        )
+        print("💡 Tip: 'Intelligent Support' tried to guess the Manifest from your URL.")
+        print("   If this failed, please paste the direct link to the 'manifest.json'.")
         sys.exit(1)

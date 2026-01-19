@@ -32,11 +32,7 @@ class OCRStorage:
                 if doc_dir.is_dir():
                     # Clean look for metadata in new 'data' folder
                     if (doc_dir / "data" / "metadata.json").exists():
-                        docs.append({
-                            "id": doc_dir.name,
-                            "library": library_dir.name,
-                            "path": str(doc_dir)
-                        })
+                        docs.append({"id": doc_dir.name, "library": library_dir.name, "path": str(doc_dir)})
         return docs
 
     def get_document_paths(self, doc_id: str, library: str = "Unknown") -> Dict[str, Path]:
@@ -61,11 +57,13 @@ class OCRStorage:
             "pdf_dir": doc_path / "pdf",
             "pdf": doc_path / "pdf" / f"{doc_id}.pdf",
             "data": doc_path / "data",
+            "exports": doc_path / "data" / "exports",
+            "thumbnails": doc_path / "data" / "thumbnails",
             "metadata": doc_path / "data" / "metadata.json",
             "stats": doc_path / "data" / "image_stats.json",
             "transcription": doc_path / "data" / "transcription.json",
             "manifest": doc_path / "data" / "manifest.json",
-            "history": doc_path / "history"
+            "history": doc_path / "history",
         }
 
     def load_image_stats(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
@@ -100,7 +98,7 @@ class OCRStorage:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "is_manual": is_manual,
             "status": ocr_data.get("status", "draft"),  # draft, verified
-            "average_confidence": ocr_data.get("average_confidence", 1.0 if is_manual else 0.0)
+            "average_confidence": ocr_data.get("average_confidence", 1.0 if is_manual else 0.0),
         }
 
         # Update existing or add new
@@ -138,7 +136,9 @@ class OCRStorage:
         # Deduplication: Don't save if the text is identical to the last version
         if history_data:
             last_entry = history_data[-1]
-            if last_entry.get("full_text") == entry.get("full_text") and last_entry.get("status") == entry.get("status"):
+            if last_entry.get("full_text") == entry.get("full_text") and last_entry.get("status") == entry.get(
+                "status"
+            ):
                 logger.debug(
                     "Skipping duplicate history snapshot for page %s",
                     page_idx,
@@ -203,9 +203,5 @@ class OCRStorage:
                     doc_matches.append(page)
 
             if doc_matches:
-                results.append({
-                    "doc_id": doc["id"],
-                    "library": doc["library"],
-                    "matches": doc_matches
-                })
+                results.append({"doc_id": doc["id"], "library": doc["library"], "matches": doc_matches})
         return results

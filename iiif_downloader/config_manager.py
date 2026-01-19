@@ -59,6 +59,21 @@ DEFAULT_CONFIG_JSON: Dict[str, Any] = {
             "viewer_dpi": 150,
             "ocr_dpi": 300,
         },
+        "thumbnails": {
+            "max_long_edge_px": 320,
+            "jpeg_quality": 70,
+            "columns": 6,
+            "paginate_enabled": True,
+            "page_size": 48,
+            "default_select_all": True,
+            "actions_apply_to_all_default": False,
+            "hover_preview_enabled": True,
+            "hover_preview_max_long_edge_px": 900,
+            "hover_preview_jpeg_quality": 82,
+            "hover_preview_delay_ms": 550,
+            "inline_base64_max_tiles": 120,
+            "hover_preview_max_tiles": 72,
+        },
         "housekeeping": {
             "temp_cleanup_days": 7,
         },
@@ -129,9 +144,7 @@ class ConfigManager:
             # Ensure file exists for user edits
             try:
                 cfg_path.parent.mkdir(parents=True, exist_ok=True)
-                cfg_path.write_text(
-                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-                )
+                cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
@@ -156,9 +169,7 @@ class ConfigManager:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        self.path.write_text(json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def set_downloads_dir(self, value: str) -> None:
         self._data.setdefault("paths", {})["downloads_dir"] = (value or "downloads").strip()
@@ -171,7 +182,7 @@ class ConfigManager:
 
     def get_api_key(self, provider: str, default: str = "") -> str:
         # Keys come from config.json only (no env fallback)
-        return (self._data.get("api_keys", {}).get(provider) or default)
+        return self._data.get("api_keys", {}).get(provider) or default
 
     def resolve_path(self, key: str, default_rel: str) -> Path:
         raw = (self._data.get("paths", {}) or {}).get(key) or default_rel

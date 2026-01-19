@@ -34,8 +34,9 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
         # 1. Remove all spaces
         clean_s = s.replace(" ", "")
         # 2. Case normalization (BAV often uses 'lat.' instead of 'Lat.')
-        clean_s = clean_s.replace("Lat.", "lat.").replace(
-            "Gr.", "gr.").replace("Vat.", "vatic.").replace("Pal.", "pal.")
+        clean_s = (
+            clean_s.replace("Lat.", "lat.").replace("Gr.", "gr.").replace("Vat.", "vatic.").replace("Pal.", "pal.")
+        )
 
         clean_id = clean_s if clean_s.startswith("MSS_") else f"MSS_{clean_s}"
         return f"https://digi.vatlib.it/iiif/{clean_id}/manifest.json", clean_id
@@ -45,10 +46,13 @@ def resolve_shelfmark(library: str, shelfmark: str) -> Tuple[Optional[str], Opti
         s = s.strip().strip("/")
         # Handle cases where user pastes just the ID
         if "ark:/" not in s:
-            if s and len(s) > 3 and s[0] in ('b', 'c'):
+            if s and len(s) > 3 and s[0] in ("b", "c"):
                 s = f"ark:/12148/{s}"
             else:
-                return None, "Gallica richiede un ID ARK o un identificatore Gallica (es. btv1b10033406t, bpt6k9761787t)"
+                return (
+                    None,
+                    "Gallica richiede un ID ARK o un identificatore Gallica (es. btv1b10033406t, bpt6k9761787t)",
+                )
 
         doc_id = s.split("/")[-1]
         return f"https://gallica.bnf.fr/iiif/{s}/manifest.json", doc_id
@@ -91,7 +95,7 @@ def search_gallica(query: str, max_records: int = 10) -> List[Dict]:
         "version": "1.2",
         "query": cql_query,
         "maximumRecords": str(min(max_records, 50)),  # API limit is 50
-        "startRecord": "1"
+        "startRecord": "1",
     }
 
     results: List[Dict] = []
@@ -102,22 +106,22 @@ def search_gallica(query: str, max_records: int = 10) -> List[Dict]:
 
         # Define XML namespaces for parsing
         ns = {
-            'srw': 'http://www.loc.gov/zing/srw/',
-            'dc': 'http://purl.org/dc/elements/1.1/',
-            'oai_dc': 'http://www.openarchives.org/OAI/2.0/oai_dc/'
+            "srw": "http://www.loc.gov/zing/srw/",
+            "dc": "http://purl.org/dc/elements/1.1/",
+            "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
         }
 
         # Parse each result record
-        for record in root.findall('.//srw:record', ns):
-            title_elem = record.find('.//dc:title', ns)
-            identifier_elem = record.find('.//dc:identifier', ns)
+        for record in root.findall(".//srw:record", ns):
+            title_elem = record.find(".//dc:title", ns)
+            identifier_elem = record.find(".//dc:identifier", ns)
 
             if title_elem is not None and identifier_elem is not None:
                 identifier = identifier_elem.text
 
                 # Extract ARK identifier from the URL
                 if identifier and "ark:/" in identifier:
-                    ark = identifier[identifier.find("ark:/"):]
+                    ark = identifier[identifier.find("ark:/") :]
                     doc_id = ark.split("/")[-1]  # Extract btv... ID
 
                     results.append(
@@ -125,7 +129,7 @@ def search_gallica(query: str, max_records: int = 10) -> List[Dict]:
                             "id": doc_id,
                             "title": title_elem.text or "Sans titre",
                             "manifest_url": f"https://gallica.bnf.fr/iiif/{ark}/manifest.json",
-                            "preview_url": f"https://gallica.bnf.fr/{ark}.thumbnail"
+                            "preview_url": f"https://gallica.bnf.fr/{ark}.thumbnail",
                         }
                     )
 
