@@ -112,7 +112,7 @@ def _write_tile_rgb_to_mmap(
     for row in range(h):
         src_off = row * row_stride
         dst_off = ((y + row) * out_width + x) * 3
-        mm[dst_off: dst_off + row_stride] = tile_bytes[src_off: src_off + row_stride]
+        mm[dst_off : dst_off + row_stride] = tile_bytes[src_off : src_off + row_stride]
 
 
 def _tile_regions(plan: IIIFTilePlan) -> Iterable[Tuple[int, int, int, int]]:
@@ -210,7 +210,7 @@ def stitch_iiif_tiles_to_jpeg(
             try:
                 resp = session.get(tile_url, timeout=timeout_s)
                 if resp.status_code == 429:
-                    time.sleep((2 ** attempt) * throttle_base_wait_s)
+                    time.sleep((2**attempt) * throttle_base_wait_s)
                     continue
                 resp.raise_for_status()
                 tile_bytes = resp.content

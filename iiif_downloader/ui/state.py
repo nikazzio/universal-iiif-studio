@@ -23,7 +23,7 @@ def init_session_state():
         "search_results": [],
         "current_page": 1,
         "active_job_id": None,  # For async jobs
-        "job_status": {},      # job_id -> {status, progress, message}
+        "job_status": {},  # job_id -> {status, progress, message}
     }
 
     for key, val in defaults.items():

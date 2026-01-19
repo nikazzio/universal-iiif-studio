@@ -4,13 +4,21 @@
   "python.linting.pylintEnabled": false,
   "flake8.enabled": false,
   "pylint.enabled": false,
-  "ruff.enable": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.ruff": "explicit",
-    "source.organizeImports.ruff": "explicit"
-  },
+  "python.analysis.exclude": [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/downloads/**",
+    "**/logs/**",
+    "**/models/**",
+    "**/temp_images/**"
+  ],
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": true,
+      "source.organizeImports.ruff": true
+    }
   }
 }

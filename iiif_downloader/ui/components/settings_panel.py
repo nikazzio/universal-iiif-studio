@@ -42,9 +42,7 @@ def render_settings_page(cm: Any) -> None:
         cm.data.setdefault("paths", {})["models_dir"] = (
             st.session_state.get("cfg_models_dir", "models") or "models"
         ).strip()
-        cm.data.setdefault("paths", {})["logs_dir"] = (
-            st.session_state.get("cfg_logs_dir", "logs") or "logs"
-        ).strip()
+        cm.data.setdefault("paths", {})["logs_dir"] = (st.session_state.get("cfg_logs_dir", "logs") or "logs").strip()
 
         cm.set_setting("system.download_workers", _state_int("cfg_download_workers", 4))
         cm.set_setting("system.ocr_concurrency", _state_int("cfg_ocr_concurrency", 1))
@@ -248,17 +246,19 @@ def render_settings_page(cm: Any) -> None:
     else:
         a3.caption("Suggerimento: salva dopo aver modificato una tab.")
 
-    tabs = st.tabs([
-        "📁 Percorsi",
-        "⚡ Sistema",
-        "🎛️ UI",
-        "🖼️ IIIF",
-        "🖼️ Thumbnails",
-        "📄 PDF",
-        "🧹 Pulizia",
-        "🪵 Logging",
-        "🔑 API Keys",
-    ])
+    tabs = st.tabs(
+        [
+            "📁 Percorsi",
+            "⚡ Sistema",
+            "🎛️ UI",
+            "🖼️ IIIF",
+            "🖼️ Thumbnails",
+            "📄 PDF",
+            "🧹 Pulizia",
+            "🪵 Logging",
+            "🔑 API Keys",
+        ]
+    )
 
     with tabs[0]:
         p1, p2 = st.columns(2)
@@ -509,10 +509,7 @@ def render_settings_page(cm: Any) -> None:
             max_value=400,
             step=1,
             key="cfg_pdf_viewer_dpi",
-            help=(
-                "Usato per il rendering on-the-fly nello Studio quando mancano le immagini estratte. "
-                "Default 150."
-            ),
+            help=("Usato per il rendering on-the-fly nello Studio quando mancano le immagini estratte. Default 150."),
         )
         p2.slider(
             "DPI PDF (Import + OCR/LLM)",

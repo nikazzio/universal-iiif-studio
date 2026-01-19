@@ -90,8 +90,8 @@ def generate_pdf_from_images(image_paths, output_path):
         for p in image_paths:
             if Path(p).exists():
                 img = PILImage.open(p)
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
                 images.append(img)
 
         if images:

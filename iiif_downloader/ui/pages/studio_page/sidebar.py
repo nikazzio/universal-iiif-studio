@@ -14,7 +14,7 @@ def render_sidebar_metadata(meta, stats):
             if pages_s:
                 avg_w = sum(p["width"] for p in pages_s) // len(pages_s)
                 avg_h = sum(p["height"] for p in pages_s) // len(pages_s)
-                total_mb = sum(p["size_bytes"] for p in pages_s) / (1024*1024)
+                total_mb = sum(p["size_bytes"] for p in pages_s) / (1024 * 1024)
                 st.write(f"**Risoluzione Media**: {avg_w}x{avg_h} px")
                 st.write(f"**Peso Totale**: {total_mb:.1f} MB")
                 st.write(f"**Pagine**: {len(pages_s)}")
@@ -26,11 +26,11 @@ def render_sidebar_metadata(meta, stats):
             st.write(f"**Attribuzione**: {meta.get('attribution', '-')}")
             st.write(f"**Licenza**: {meta.get('license', '-')}")
 
-            if 'metadata' in meta and isinstance(meta['metadata'], list):
+            if "metadata" in meta and isinstance(meta["metadata"], list):
                 st.markdown("---")
-                for entry in meta['metadata']:
-                    label = entry.get('label')
-                    val = entry.get('value')
+                for entry in meta["metadata"]:
+                    label = entry.get("label")
+                    val = entry.get("value")
 
                     if isinstance(label, list):
                         label = label[0] if label else "Info"
@@ -52,7 +52,7 @@ def render_sidebar_jobs():
     active_job = job_manager.list_jobs(active_only=True)
     if active_job:
         for _jid, job in active_job.items():
-            st.sidebar.info(f"⚙️ {job['message']} ({int(job['progress']*100)}%)")
+            st.sidebar.info(f"⚙️ {job['message']} ({int(job['progress'] * 100)}%)")
 
 
 def render_sidebar_export(doc_id, paths):

@@ -130,9 +130,7 @@ def _build_tile_html(
     if preview_url:
         # Keep HTML flat: leading indentation/newlines can make Streamlit render
         # HTML as Markdown code blocks.
-        preview_html = (
-            f'<div class="uidl-preview"><img src="{preview_url}" alt="preview"/></div>'
-        )
+        preview_html = f'<div class="uidl-preview"><img src="{preview_url}" alt="preview"/></div>'
 
     tile_html = (
         '<div class="uidl-tile">'
@@ -240,8 +238,4 @@ def render_thumbnail_grid(
             unsafe_allow_html=True,
         )
 
-    return [
-        p
-        for p in action_pages
-        if bool(st.session_state.get(f"export_page_{doc_key}_{p}", False))
-    ]
+    return [p for p in action_pages if bool(st.session_state.get(f"export_page_{doc_key}_{p}", False))]

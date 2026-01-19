@@ -34,9 +34,7 @@ except OSError:
     LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Shared formatters
-CONSOLE_FORMAT = logging.Formatter(
-    "%(levelname)s | %(name)s | %(message)s"
-)
+CONSOLE_FORMAT = logging.Formatter("%(levelname)s | %(name)s | %(message)s")
 
 FILE_FORMAT = logging.Formatter(
     "%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s] %(message)s",
@@ -110,5 +108,5 @@ def get_logger(name: str):
 def get_download_logger(doc_id: str):
     """Get a logger instance for a specific download."""
     # Sanitize doc_id
-    safe_id = "".join(c for c in doc_id if c.isalnum() or c in ('-', '_'))[:50]
+    safe_id = "".join(c for c in doc_id if c.isalnum() or c in ("-", "_"))[:50]
     return get_logger(f"download.{safe_id}")

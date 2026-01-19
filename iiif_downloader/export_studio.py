@@ -110,8 +110,12 @@ def _add_cover_page(
 
     page.draw_rect(rect, color=None, fill=light_bg)
     page.draw_rect(fitz.Rect(0, 0, rect.width, top_band_h), color=None, fill=accent)
-    page.draw_line(fitz.Point(margin_x, top_band_h + 18), fitz.Point(rect.width -
-                   margin_x, top_band_h + 18), color=(0.85, 0.85, 0.85), width=1)
+    page.draw_line(
+        fitz.Point(margin_x, top_band_h + 18),
+        fitz.Point(rect.width - margin_x, top_band_h + 18),
+        color=(0.85, 0.85, 0.85),
+        width=1,
+    )
 
     institution = _safe_meta_get(meta, "attribution", "institution", "provider", "repository")
     shelfmark = _safe_meta_get(meta, "shelfmark", "id", "identifier")
@@ -160,12 +164,14 @@ def _add_cover_page(
         rows.append(("Sorgente", source_url))
 
     if rows:
-        page.insert_text(fitz.Point(margin_x, meta_y - 16), "Metadati",
-                         fontsize=13, fontname="helv", color=(0.2, 0.2, 0.2))
+        page.insert_text(
+            fitz.Point(margin_x, meta_y - 16), "Metadati", fontsize=13, fontname="helv", color=(0.2, 0.2, 0.2)
+        )
         yy = meta_y
         for k, v in rows[:6]:
-            page.insert_text(fitz.Point(margin_x, yy), f"{k}:",
-                             fontsize=10.5, fontname="helv", color=(0.25, 0.25, 0.25))
+            page.insert_text(
+                fitz.Point(margin_x, yy), f"{k}:", fontsize=10.5, fontname="helv", color=(0.25, 0.25, 0.25)
+            )
             page.insert_textbox(
                 fitz.Rect(margin_x + left_col_w, yy - 2, rect.width - margin_x, yy + 16),
                 _truncate(v, 180),
@@ -179,8 +185,9 @@ def _add_cover_page(
     # Curator / description
     body_top = meta_y + (len(rows[:6]) * 18) + 30
     if curator:
-        page.insert_text(fitz.Point(margin_x, body_top), "Curatore / Note",
-                         fontsize=12.5, fontname="helv", color=(0.2, 0.2, 0.2))
+        page.insert_text(
+            fitz.Point(margin_x, body_top), "Curatore / Note", fontsize=12.5, fontname="helv", color=(0.2, 0.2, 0.2)
+        )
         page.insert_textbox(
             fitz.Rect(margin_x, body_top + 14, rect.width - margin_x, body_top + 70),
             curator,
@@ -192,8 +199,9 @@ def _add_cover_page(
         body_top += 78
 
     if description:
-        page.insert_text(fitz.Point(margin_x, body_top), "Descrizione",
-                         fontsize=12.5, fontname="helv", color=(0.2, 0.2, 0.2))
+        page.insert_text(
+            fitz.Point(margin_x, body_top), "Descrizione", fontsize=12.5, fontname="helv", color=(0.2, 0.2, 0.2)
+        )
         page.insert_textbox(
             fitz.Rect(margin_x, body_top + 14, rect.width - margin_x, rect.height - 90),
             description,
@@ -416,7 +424,7 @@ def build_professional_pdf(
         images_added = 0
 
         for page_idx in selected_pages:
-            img_path = scans_dir / f"pag_{page_idx-1:04d}.jpg"
+            img_path = scans_dir / f"pag_{page_idx - 1:04d}.jpg"
             if not img_path.exists():
                 continue
 

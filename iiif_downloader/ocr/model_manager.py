@@ -52,13 +52,7 @@ class ModelManager:
 
     def list_installed_models(self) -> List[str]:
         """Returns a list of installed `.mlmodel` file names."""
-        return sorted(
-            {
-                f.name
-                for f in self.models_dir.glob("*.mlmodel")
-                if f.is_file()
-            }
-        )
+        return sorted({f.name for f in self.models_dir.glob("*.mlmodel") if f.is_file()})
 
     def get_available_models(self) -> Dict[str, AvailableModel]:
         """Hardcoded list for prototype.
@@ -79,19 +73,13 @@ class ModelManager:
                 key="CATMuS Medieval (Latin/Graphematic)",
                 doi="10.5281/zenodo.12743230",
                 kind="manuscript",
-                description=(
-                    "Graphematic transcription approach for medieval Latin "
-                    "manuscripts."
-                ),
+                description=("Graphematic transcription approach for medieval Latin manuscripts."),
             ),
             AvailableModel(
                 key="HTR Medieval Documentary (Best)",
                 doi="10.5281/zenodo.7547438",
                 kind="manuscript",
-                description=(
-                    "Specialized for 12th-15th c. documentary manuscripts "
-                    "(accuracy ~94%)."
-                ),
+                description=("Specialized for 12th-15th c. documentary manuscripts (accuracy ~94%)."),
             ),
             AvailableModel(
                 key="Chtulhu (Printed Books)",
@@ -129,13 +117,7 @@ class ModelManager:
         url = "https://zenodo.org/api/records"
         # We append 'kraken' to ensure we find models for the right engine
         search_q = f"kraken {query}" if "kraken" not in query.lower() else query
-        params = {
-            "q": search_q,
-            "status": "published",
-            "size": 15,
-            "sort": "bestmatch",
-            "all_versions": "false"
-        }
+        params = {"q": search_q, "status": "published", "size": 15, "sort": "bestmatch", "all_versions": "false"}
         try:
             r = requests.get(url, params=params, timeout=20)
             r.raise_for_status()
@@ -151,12 +133,14 @@ class ModelManager:
                 # we don't fetch file list for all hits to stay fast,
                 # but we can check if 'mlmodel' is in title or description.
                 if "mlmodel" in title.lower() or "mlmodel" in desc.lower() or "kraken" in title.lower():
-                    results.append({
-                        "title": title,
-                        "doi": h.get("doi") or h.get("conceptdoi"),
-                        "description": desc[:300].replace("<p>", "").replace("</p>", "") + "...",
-                        "links": h.get("links", {})
-                    })
+                    results.append(
+                        {
+                            "title": title,
+                            "doi": h.get("doi") or h.get("conceptdoi"),
+                            "description": desc[:300].replace("<p>", "").replace("</p>", "") + "...",
+                            "links": h.get("links", {}),
+                        }
+                    )
             return results
         except (RequestException, ValueError, OSError) as e:
             print(f"Zenodo search failed: {e}")
@@ -168,13 +152,7 @@ class ModelManager:
     def find_installed_model_for_key(self, model_key: str) -> Optional[str]:
         """Returns an installed `.mlmodel` filename for a model key."""
         prefix = f"{_safe_filename(model_key)}__"
-        matches = sorted(
-            [
-                p.name
-                for p in self.models_dir.glob(prefix + "*.mlmodel")
-                if p.is_file()
-            ]
-        )
+        matches = sorted([p.name for p in self.models_dir.glob(prefix + "*.mlmodel") if p.is_file()])
         return matches[0] if matches else None
 
     def _parse_zenodo_record_id(self, doi_or_record: str) -> Optional[str]:
@@ -223,19 +201,12 @@ class ModelManager:
                 f"Zenodo record {record_id} has no downloadable files.",
             )
 
-        ml_files = [
-            f
-            for f in files
-            if str(f.get("key", "")).lower().endswith(".mlmodel")
-        ]
+        ml_files = [f for f in files if str(f.get("key", "")).lower().endswith(".mlmodel")]
         if not ml_files:
             keys = ", ".join([str(f.get("key")) for f in files])
             return (
                 False,
-                (
-                    f"No .mlmodel found in Zenodo record {record_id}. "
-                    f"Files: {keys}"
-                ),
+                (f"No .mlmodel found in Zenodo record {record_id}. Files: {keys}"),
             )
 
         # If there are multiple, try to find one that matches the key or has 'best'/'final'
@@ -257,10 +228,7 @@ class ModelManager:
             )
 
         # Use a stable, conflict-resistant local filename.
-        local_name = (
-            f"{_safe_filename(model_key)}__{record_id}__"
-            f"{_safe_filename(file_key)}"
-        )
+        local_name = f"{_safe_filename(model_key)}__{record_id}__{_safe_filename(file_key)}"
         if not local_name.lower().endswith(".mlmodel"):
             local_name += ".mlmodel"
 

@@ -144,9 +144,7 @@ class ConfigManager:
             # Ensure file exists for user edits
             try:
                 cfg_path.parent.mkdir(parents=True, exist_ok=True)
-                cfg_path.write_text(
-                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-                )
+                cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
@@ -171,9 +169,7 @@ class ConfigManager:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        self.path.write_text(json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def set_downloads_dir(self, value: str) -> None:
         self._data.setdefault("paths", {})["downloads_dir"] = (value or "downloads").strip()
@@ -186,7 +182,7 @@ class ConfigManager:
 
     def get_api_key(self, provider: str, default: str = "") -> str:
         # Keys come from config.json only (no env fallback)
-        return (self._data.get("api_keys", {}).get(provider) or default)
+        return self._data.get("api_keys", {}).get(provider) or default
 
     def resolve_path(self, key: str, default_rel: str) -> Path:
         raw = (self._data.get("paths", {}) or {}).get(key) or default_rel

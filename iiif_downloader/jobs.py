@@ -39,19 +39,19 @@ class JobManager:
                 "message": "Initializing...",
                 "result": None,
                 "error": None,
-                "created_at": time.time()
+                "created_at": time.time(),
             }
 
         def worker_wrapper():
             try:
                 # Progress callback injector
                 def update_progress(current, total, msg=None):
-                    self.update_job(job_id, progress=current/total, message=msg or f"Processing {current}/{total}")
+                    self.update_job(job_id, progress=current / total, message=msg or f"Processing {current}/{total}")
 
                 # Inject progress callback if the function accepts it
                 # We assume task_func can accept 'progress_callback' kwarg
-                if 'progress_callback' not in kwargs:
-                    kwargs['progress_callback'] = update_progress
+                if "progress_callback" not in kwargs:
+                    kwargs["progress_callback"] = update_progress
 
                 with self._lock:
                     self._jobs[job_id]["status"] = "running"

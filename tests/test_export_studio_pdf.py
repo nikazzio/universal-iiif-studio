@@ -8,9 +8,7 @@ from PIL import Image
 from iiif_downloader.export_studio import build_professional_pdf
 
 
-def _write_scan(
-    scans_dir: Path, idx0: int, size=(800, 1200), color=(240, 240, 240)
-) -> Path:
+def _write_scan(scans_dir: Path, idx0: int, size=(800, 1200), color=(240, 240, 240)) -> Path:
     scans_dir.mkdir(parents=True, exist_ok=True)
     p = scans_dir / f"pag_{idx0:04d}.jpg"
     img = Image.new("RGB", size, color)

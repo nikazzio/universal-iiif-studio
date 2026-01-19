@@ -27,9 +27,7 @@ def safe_read_json(p: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def load_document_option(
-    storage: OCRStorage, doc: Dict[str, Any]
-) -> Optional[DocOption]:
+def load_document_option(storage: OCRStorage, doc: Dict[str, Any]) -> Optional[DocOption]:
     doc_dir = Path(doc.get("path") or "")
     if not doc_dir.exists():
         return None
@@ -45,6 +43,4 @@ def load_document_option(
         meta = {"label": doc.get("title") or doc_dir.name}
 
     label = str(meta.get("label") or meta.get("title") or doc_dir.name)
-    return DocOption(
-        label=label, doc_id=doc_id, library=library, doc_dir=doc_dir, meta=meta
-    )
+    return DocOption(label=label, doc_id=doc_id, library=library, doc_dir=doc_dir, meta=meta)

@@ -13,13 +13,9 @@ def test_tile_html_no_leading_whitespace_or_newline():
         is_selected=True,
     )
 
-    assert html_s.startswith("<div"), (
-        "Tile HTML must start with a tag (no indentation/newline)"
-    )
+    assert html_s.startswith("<div"), "Tile HTML must start with a tag (no indentation/newline)"
     assert not html_s[:1].isspace(), "Tile HTML must not start with whitespace"
-    assert "\n" not in html_s, (
-        "Tile HTML should be a single line to avoid Markdown code-block rendering"
-    )
+    assert "\n" not in html_s, "Tile HTML should be a single line to avoid Markdown code-block rendering"
     assert 'class="uidl-tile"' in html_s
     assert 'class="uidl-preview"' in html_s
 
@@ -38,7 +34,5 @@ def test_tile_html_omits_preview_when_missing():
 
 def test_css_no_leading_whitespace():
     css = _build_css(columns=6, hover_preview_delay_ms=550)
-    assert css.startswith("<style>"), (
-        "CSS must start with <style> (no indentation/newline)"
-    )
+    assert css.startswith("<style>"), "CSS must start with <style> (no indentation/newline)"
     assert not css[:1].isspace()

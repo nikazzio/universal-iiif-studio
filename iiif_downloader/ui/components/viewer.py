@@ -9,12 +9,15 @@ from iiif_downloader.config_manager import get_config_manager
 
 def inject_premium_styles():
     """Inject basic CSS for the page."""
-    st.markdown("""
+    st.markdown(
+        """
     <style>
         /* This hides the default padding for components to make them flush */
         iframe { border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.15) !important; }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def interactive_viewer(image, zoom_percent: int):

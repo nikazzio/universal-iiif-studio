@@ -4,6 +4,7 @@ Legacy test for Oxford/Bodleian API endpoint.
 Note: This API endpoint is deprecated (returns 404) as of January 2026.
 This test is kept for historical reference.
 """
+
 import requests
 
 from iiif_downloader.utils import DEFAULT_HEADERS

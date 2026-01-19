@@ -34,11 +34,7 @@ def _get_bool_setting(key: str, default: bool) -> bool:
 
 def _toggle_from_query_params(*, doc_key: str) -> None:
     toggle = st.query_params.get("export_toggle")
-    if (
-        toggle
-        and isinstance(toggle, str)
-        and not st.session_state.get(f"_export_toggle_done_{doc_key}", False)
-    ):
+    if toggle and isinstance(toggle, str) and not st.session_state.get(f"_export_toggle_done_{doc_key}", False):
         try:
             target_doc, target_p_s = toggle.split(":", 1)
             if target_doc == doc_key:
@@ -68,9 +64,7 @@ def _paginate(*, items: List[int], enabled: bool, page_size: int) -> List[int]:
         return items
 
     page_count = max(1, (total + page_size - 1) // page_size)
-    page_index = st.number_input(
-        "Pagina", min_value=1, max_value=page_count, value=1, step=1
-    )
+    page_index = st.number_input("Pagina", min_value=1, max_value=page_count, value=1, step=1)
     start = (int(page_index) - 1) * page_size
     end = min(total, start + page_size)
     return items[start:end]
@@ -78,16 +72,10 @@ def _paginate(*, items: List[int], enabled: bool, page_size: int) -> List[int]:
 
 def render_export_studio_page() -> None:
     st.title("Export Studio")
-    st.caption(
-        "Crea un PDF professionale (frontespizio + pagine selezionate + colophon)."
-    )
+    st.caption("Crea un PDF professionale (frontespizio + pagine selezionate + colophon).")
 
-    thumb_max_edge = _get_int_setting(
-        "thumbnails.max_long_edge_px", 320, min_v=120, max_v=900
-    )
-    thumb_jpeg_quality = _get_int_setting(
-        "thumbnails.jpeg_quality", 70, min_v=30, max_v=95
-    )
+    thumb_max_edge = _get_int_setting("thumbnails.max_long_edge_px", 320, min_v=120, max_v=900)
+    thumb_jpeg_quality = _get_int_setting("thumbnails.jpeg_quality", 70, min_v=30, max_v=95)
     thumb_columns = _get_int_setting("thumbnails.columns", 6, min_v=3, max_v=10)
 
     paginate_enabled = _get_bool_setting("thumbnails.paginate_enabled", True)
@@ -96,22 +84,12 @@ def render_export_studio_page() -> None:
     default_select_all = _get_bool_setting("thumbnails.default_select_all", True)
 
     hover_preview_enabled = _get_bool_setting("thumbnails.hover_preview_enabled", True)
-    hover_preview_max_edge = _get_int_setting(
-        "thumbnails.hover_preview_max_long_edge_px", 900, min_v=300, max_v=2000
-    )
-    hover_preview_jpeg_quality = _get_int_setting(
-        "thumbnails.hover_preview_jpeg_quality", 82, min_v=30, max_v=95
-    )
-    hover_preview_delay_ms = _get_int_setting(
-        "thumbnails.hover_preview_delay_ms", 550, min_v=0, max_v=3000
-    )
+    hover_preview_max_edge = _get_int_setting("thumbnails.hover_preview_max_long_edge_px", 900, min_v=300, max_v=2000)
+    hover_preview_jpeg_quality = _get_int_setting("thumbnails.hover_preview_jpeg_quality", 82, min_v=30, max_v=95)
+    hover_preview_delay_ms = _get_int_setting("thumbnails.hover_preview_delay_ms", 550, min_v=0, max_v=3000)
 
-    inline_base64_max_tiles = _get_int_setting(
-        "thumbnails.inline_base64_max_tiles", 120, min_v=24, max_v=500
-    )
-    hover_preview_max_tiles = _get_int_setting(
-        "thumbnails.hover_preview_max_tiles", 72, min_v=12, max_v=200
-    )
+    inline_base64_max_tiles = _get_int_setting("thumbnails.inline_base64_max_tiles", 120, min_v=24, max_v=500)
+    hover_preview_max_tiles = _get_int_setting("thumbnails.hover_preview_max_tiles", 72, min_v=12, max_v=200)
 
     storage = OCRStorage()
     documents = storage.list_documents()
@@ -147,9 +125,7 @@ def render_export_studio_page() -> None:
     st.subheader("Frontespizio")
     col1, col2 = st.columns(2)
     with col1:
-        cover_title = st.text_input(
-            "Titolo", value=str(doc_opt.meta.get("label") or doc_opt.label)
-        )
+        cover_title = st.text_input("Titolo", value=str(doc_opt.meta.get("label") or doc_opt.label))
         cover_curator = st.text_input("Curatore / Note", value="")
     with col2:
         cover_description = st.text_area("Descrizione", value="", height=110)
@@ -162,12 +138,8 @@ def render_export_studio_page() -> None:
     cover_logo_bytes = cover_logo.read() if cover_logo is not None else None
 
     st.subheader("Opzioni PDF")
-    compression = st.selectbox(
-        "Compressione", list(COMPRESSION_PROFILES.keys()), index=1
-    )
-    mode = st.selectbox(
-        "Trascrizione", ["Solo immagini", "Testo a fronte", "PDF Ricercabile"], index=0
-    )
+    compression = st.selectbox("Compressione", list(COMPRESSION_PROFILES.keys()), index=1)
+    mode = st.selectbox("Trascrizione", ["Solo immagini", "Testo a fronte", "PDF Ricercabile"], index=0)
 
     st.subheader("Pagine")
     doc_key = f"{doc_opt.library}_{doc_opt.doc_id}".replace(" ", "_")
@@ -194,9 +166,7 @@ def render_export_studio_page() -> None:
         )
 
     effective_paginate = paginate_enabled or (not inline_enabled)
-    visible_pages = _paginate(
-        items=action_pages, enabled=effective_paginate, page_size=page_size
-    )
+    visible_pages = _paginate(items=action_pages, enabled=effective_paginate, page_size=page_size)
 
     init_key = f"_export_init_{doc_key}"
     if default_select_all and not st.session_state.get(init_key, False):
@@ -229,9 +199,7 @@ def render_export_studio_page() -> None:
     out_dir = get_config_manager().get_downloads_dir() / "exports"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    default_name = clean_filename(
-        f"{doc_opt.library}_{doc_opt.doc_id}_{compression}_{mode}.pdf"
-    )
+    default_name = clean_filename(f"{doc_opt.library}_{doc_opt.doc_id}_{compression}_{mode}.pdf")
     out_name = st.text_input("Nome file PDF", value=default_name)
 
     if st.button(
@@ -276,8 +244,6 @@ def render_export_studio_page() -> None:
             )
         st.success(f"PDF generato: {out_path}")
         try:
-            st.download_button(
-                "⬇️ Scarica PDF", data=out_path.read_bytes(), file_name=out_path.name
-            )
+            st.download_button("⬇️ Scarica PDF", data=out_path.read_bytes(), file_name=out_path.name)
         except OSError:
             pass
