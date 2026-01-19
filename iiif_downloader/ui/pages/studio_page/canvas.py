@@ -1,3 +1,4 @@
+import html
 import os
 import time
 
@@ -310,8 +311,6 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
     # Fallback: If no rich text but we have plain text (from OCR or History Restore)
     # We construct basic HTML paragraphs.
     if not rich_content and initial_text:
-        import html
-
         # simplistic conversion
         rich_content = "".join(f"<p>{html.escape(line)}</p>" for line in initial_text.splitlines() if line.strip())
 
@@ -489,8 +488,6 @@ def render_history_sidebar(doc_id, library, current_p, current_data=None, curren
                     if current_text:
                         # Convert HTML to plain text for history snapshot
                         # We use simple parsing since we just need a backup
-                        from bs4 import BeautifulSoup
-
                         soup_snap = BeautifulSoup(current_text, "html.parser")
                         snap_plain = soup_snap.get_text("\n")
 
@@ -512,7 +509,12 @@ def render_history_sidebar(doc_id, library, current_p, current_data=None, curren
                     # Update Quill editor state to match the restored content
                     restored_rich = entry.get("rich_text")
                     restored_plain = entry.get("full_text", "")
-                    st.session_state[edit_key] = restored_rich if restored_rich is not None else restored_plain
+
+                    # Robust fallback: use valid rich text if available, otherwise plain text
+                    if restored_rich:
+                        st.session_state[edit_key] = restored_rich
+                    else:
+                        st.session_state[edit_key] = restored_plain
 
                     toast("Versione ripristinata!")
                     st.rerun()

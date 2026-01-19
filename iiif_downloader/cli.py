@@ -4,13 +4,12 @@ import sys
 # pylint: disable=broad-exception-caught
 from .logger import get_logger, setup_logging
 from .logic import IIIFDownloader
-
-logger = get_logger(__name__)
-
 from .resolvers.gallica import GallicaResolver
 from .resolvers.generic import GenericResolver
 from .resolvers.oxford import OxfordResolver
 from .resolvers.vatican import VaticanResolver
+
+logger = get_logger(__name__)
 
 
 def resolve_url(input_str):
