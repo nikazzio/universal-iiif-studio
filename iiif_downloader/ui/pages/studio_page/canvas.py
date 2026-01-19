@@ -293,9 +293,6 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
 
     # --- STATE INITIALIZATION ---
     # We rely on st_quill 'value' parameter for initialization.
-    # if edit_key not in st.session_state:
-    #    st.session_state[edit_key] = initial_text
-
     # --- OCR TRIGGERS (Confirmed or Initial) ---
     # We handle OCR calls at the top so the st.status loader is always in a consistent position.
     if st.session_state.get("confirm_ocr_sync") == current_p:
