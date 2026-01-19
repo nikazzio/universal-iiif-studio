@@ -254,7 +254,9 @@ File: `iiif_downloader/ui/pages/studio_page/canvas.py`
 
 - `render_transcription_editor(doc_id, library, current_p, ocr_engine, current_model)`
   - Carica trascrizione pagina da `OCRStorage`.
-  - Editor basato su `st.form` con `text_area`.
+  - Editor Rich Text (WYSIWYG) basato su `streamlit-quill`.
+  - Supporta formattazione avanzata (grassetto, corsivo, elenchi).
+  - Salva i dati in formato duale: HTML (per rendering) e Plain Text (per indicizzazione/PDF).
   - Salva in `transcription.json` con `is_manual=True` e mostra toast.
   - Stato pagina: `draft` / `verified`.
   - “Nuova chiamata OCR” gestisce sovrascrittura con conferma se esiste testo.
@@ -263,7 +265,10 @@ File: `iiif_downloader/ui/pages/studio_page/canvas.py`
 
 - `OCRStorage.save_history(...)` salva snapshot su `history/p####_history.json`.
 - UI: `render_history_sidebar(...)`
-  - Elenca versioni, differenza caratteri, ripristino (restore) con snapshot di sicurezza.
+  - Elenca versioni con timestamp e icona engine.
+  - Mostra differenza caratteri rispetto versione precedente.
+  - Ripristino (restore) con snapshot di sicurezza automatico della versione corrente.
+  - Supporta il ripristino corretto sia di testo semplice che formattato (RTF/HTML).
 
 ---
 
