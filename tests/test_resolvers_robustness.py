@@ -1,6 +1,7 @@
 """
 Tests for resolver robustness: trailing slashes, IDs from wrong libraries, etc.
 """
+
 import sys
 from pathlib import Path
 

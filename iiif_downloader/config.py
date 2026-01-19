@@ -12,6 +12,4 @@ and then use:
     get_config_manager().get_setting("section.key", default)
 """
 
-raise RuntimeError(
-    "Legacy config module disabled. Use iiif_downloader.config_manager.get_config_manager() instead."
-)
+raise RuntimeError("Legacy config module disabled. Use iiif_downloader.config_manager.get_config_manager() instead.")

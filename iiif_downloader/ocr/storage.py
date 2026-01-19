@@ -65,6 +65,8 @@ class OCRStorage:
             "pdf_dir": doc_path / "pdf",
             "pdf": doc_path / "pdf" / f"{doc_id}.pdf",
             "data": doc_path / "data",
+            "exports": doc_path / "data" / "exports",
+            "thumbnails": doc_path / "data" / "thumbnails",
             "metadata": doc_path / "data" / "metadata.json",
             "stats": doc_path / "data" / "image_stats.json",
             "transcription": doc_path / "data" / "transcription.json",

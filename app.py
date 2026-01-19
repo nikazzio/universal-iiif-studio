@@ -1,15 +1,18 @@
 import streamlit as st
 
+import iiif_downloader
+
 # Initialize Config & State first
 from iiif_downloader.config_manager import get_config_manager
+from iiif_downloader.ui.components.settings_panel import render_settings_page
 
 # Page Modules
 from iiif_downloader.ui.discovery import render_discovery_page
+from iiif_downloader.ui.pages.export_studio import render_export_studio_page
 from iiif_downloader.ui.pages.studio_page import render_studio_page
 from iiif_downloader.ui.search import render_search_page
 from iiif_downloader.ui.state import init_session_state
 from iiif_downloader.ui.styling import load_custom_css
-from iiif_downloader.ui.components.settings_panel import render_settings_page
 from iiif_downloader.utils import cleanup_old_files
 
 
@@ -19,7 +22,7 @@ def main():
         layout="wide",
         page_title="Universal IIIF Studio",
         page_icon="📜",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="expanded",
     )
 
     # Load user-local config.json early
@@ -52,13 +55,19 @@ def main():
 
     with st.sidebar:
         st.title("🏛️ IIIF Studio")
-        st.caption("v0.3.1")
+        st.caption(f"v{getattr(iiif_downloader, '__version__', '0.0.0')}")
 
         # Determine default index
         default_idx = 0
         nav_override = st.session_state.get("nav_override")
         if nav_override:
-            mapping = {"Discovery": 0, "Studio": 1, "Ricerca Globale": 2, "Impostazioni": 3}
+            mapping = {
+                "Discovery": 0,
+                "Studio": 1,
+                "Export Studio": 2,
+                "Ricerca Globale": 3,
+                "Impostazioni": 4,
+            }
             default_idx = mapping.get(nav_override, 0)
             st.session_state["nav_override"] = None  # Reset
 
@@ -73,6 +82,11 @@ def main():
                     "Studio",
                     icon="easel",
                     description="Leggi e Correggi",
+                ),
+                sac.MenuItem(
+                    "Export Studio",
+                    icon="filetype-pdf",
+                    description="PDF professionali",
                 ),
                 sac.MenuItem(
                     "Ricerca Globale",
@@ -93,13 +107,15 @@ def main():
     st.sidebar.markdown("---")
 
     # 3. Routing
-    if app_mode == 'Discovery':
+    if app_mode == "Discovery":
         render_discovery_page()
-    elif app_mode == 'Studio':
+    elif app_mode == "Studio":
         render_studio_page()
-    elif app_mode == 'Ricerca Globale':
+    elif app_mode == "Export Studio":
+        render_export_studio_page()
+    elif app_mode == "Ricerca Globale":
         render_search_page()
-    elif app_mode == 'Impostazioni':
+    elif app_mode == "Impostazioni":
         render_settings_page(cm)
 
     # 4. Global Footer / Debug

@@ -87,10 +87,7 @@ class ModelManager:
                 key="HTR Medieval Documentary (Best)",
                 doi="10.5281/zenodo.7547438",
                 kind="manuscript",
-                description=(
-                    "Specialized for 12th-15th c. documentary manuscripts "
-                    "(accuracy ~94%)."
-                ),
+                description=("Specialized for 12th-15th c. documentary manuscripts (accuracy ~94%)."),
             ),
             AvailableModel(
                 key="Chtulhu (Printed Books)",

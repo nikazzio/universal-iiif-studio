@@ -4,12 +4,12 @@ Test script for library search APIs (Gallica SRU and Oxford).
 Note: Oxford API is deprecated as of Jan 2026 and will return errors.
 Run from project root: python -m tests.test_search_apis
 """
+
 import pytest
 import requests
 from requests import RequestException
 
 from iiif_downloader.config_manager import get_config_manager
-
 
 pytestmark = pytest.mark.skipif(
     not bool(get_config_manager().get_setting("testing.run_live_tests", False)),
@@ -45,11 +45,7 @@ def test_oxford():
     query = "dante"
     print(f"\nTesting Oxford with query: {query}")
     url = "https://digital.bodleian.ox.ac.uk/api/search/"
-    params = {
-        "q": query,
-        "format": "json",
-        "rows": 5
-    }
+    params = {"q": query, "format": "json", "rows": 5}
     try:
         r = requests.get(url, params=params, timeout=10)
         print(f"Status Code: {r.status_code}")

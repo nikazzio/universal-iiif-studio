@@ -1,0 +1,24 @@
+{
+  "python.linting.enabled": false,
+  "python.linting.flake8Enabled": false,
+  "python.linting.pylintEnabled": false,
+  "flake8.enabled": false,
+  "pylint.enabled": false,
+  "python.analysis.exclude": [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/downloads/**",
+    "**/logs/**",
+    "**/models/**",
+    "**/temp_images/**"
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": true,
+      "source.organizeImports.ruff": true
+    }
+  }
+}

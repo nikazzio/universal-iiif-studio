@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 try:
     from kraken import binarization, pageseg, rpred
     from kraken.lib import models
+
     KRAKEN_AVAILABLE = True
     KRAKEN_IMPORT_ERROR = None
 except (ImportError, AttributeError, RuntimeError) as e:
@@ -49,12 +50,12 @@ class OCRResult:
         # Ensure boxes are serializable if needed, but here they usually are
         return d
 
+
 # --- Provider Interfaces ---
 
 
 class OCRProvider(Protocol):
-    def process(self, image: Image.Image, status_callback: Optional[Callable[[str], None]] = None) -> OCRResult:
-        ...
+    def process(self, image: Image.Image, status_callback: Optional[Callable[[str], None]] = None) -> OCRResult: ...
 
 
 def _image_to_base64(image: Image.Image, quality: int = 95) -> str:
@@ -62,6 +63,7 @@ def _image_to_base64(image: Image.Image, quality: int = 95) -> str:
     buf = BytesIO()
     image.save(buf, format="JPEG", quality=quality, subsampling=0)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
 
 # --- Providers Implementation ---
 
@@ -136,9 +138,7 @@ class GoogleVisionProvider:
             img_str = _image_to_base64(image)
 
             url = f"https://vision.googleapis.com/v1/images:annotate?key={self.api_key}"
-            payload = {
-                "requests": [{"image": {"content": img_str}, "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]
-            }
+            payload = {"requests": [{"image": {"content": img_str}, "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]}
             if status_callback:
                 status_callback("Chiamata alle API di Google Vision...")
             r = requests.post(url, json=payload, timeout=30)
@@ -268,6 +268,7 @@ class OpenAIProvider:
             w, h = image.size
             logger.info("Processing image for OpenAI: %sx%s, mode=%s", w, h, image.mode)
             from openai import OpenAI
+
             client = OpenAI(api_key=self.api_key)
 
             base64_image = _image_to_base64(image)
@@ -295,11 +296,8 @@ class OpenAIProvider:
                             {"type": "text", "text": prompt},
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}",
-                                    "detail": "high"
-                                }
-                            }
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"},
+                            },
                         ],
                     }
                 ],
@@ -342,6 +340,7 @@ class AnthropicProvider:
 
         try:
             from anthropic import Anthropic
+
             client = Anthropic(api_key=self.api_key)
 
             img_data = _image_to_base64(image)
@@ -363,7 +362,7 @@ class AnthropicProvider:
                                     "data": img_data,
                                 },
                             },
-                            {"type": "text", "text": prompt}
+                            {"type": "text", "text": prompt},
                         ],
                     }
                 ],
@@ -381,11 +380,14 @@ class AnthropicProvider:
         except Exception as e:
             return OCRResult("", [], "Anthropic", error=str(e))
 
+
 # --- Main Processor Proxy (Backward Compatibility) ---
 
 
 class OCRProcessor:
-    def __init__(self, model_path=None, google_api_key=None, hf_token=None, openai_api_key=None, anthropic_api_key=None):
+    def __init__(
+        self, model_path=None, google_api_key=None, hf_token=None, openai_api_key=None, anthropic_api_key=None
+    ):
         self.model_path = model_path
         self.google_api_key = google_api_key
         self.hf_token = hf_token
@@ -409,32 +411,46 @@ class OCRProcessor:
             return {"error": "Modello Kraken non caricato"}
         return prov.process(im, status_callback=status_callback).to_dict()
 
-    def process_image_google_vision(self, image_input: Union[str, Any, Image.Image], status_callback=None) -> Dict[str, Any]:
+    def process_image_google_vision(
+        self, image_input: Union[str, Any, Image.Image], status_callback=None
+    ) -> Dict[str, Any]:
         im = self._load_im(image_input)
         if isinstance(im, dict) and "error" in im:
             return im
         return GoogleVisionProvider(self.google_api_key).process(im, status_callback=status_callback).to_dict()
 
-    def process_image_huggingface(self, image_input: Union[str, Any, Image.Image], model_id=None, status_callback=None) -> Dict[str, Any]:
+    def process_image_huggingface(
+        self, image_input: Union[str, Any, Image.Image], model_id=None, status_callback=None
+    ) -> Dict[str, Any]:
         im = self._load_im(image_input)
         if isinstance(im, dict) and "error" in im:
             return im
         model_id = model_id or "magistermilitum/tridis_v2_HTR_historical_manuscripts"
         return HFInferenceProvider(self.hf_token, model_id).process(im, status_callback=status_callback).to_dict()
 
-    def process_image_openai(self, image_input: Union[str, Any, Image.Image], model="gpt-5", status_callback=None) -> Dict[str, Any]:
+    def process_image_openai(
+        self, image_input: Union[str, Any, Image.Image], model="gpt-5", status_callback=None
+    ) -> Dict[str, Any]:
         im = self._load_im(image_input)
         if isinstance(im, dict) and "error" in im:
             return im
         return OpenAIProvider(self.openai_api_key, model).process(im, status_callback=status_callback).to_dict()
 
-    def process_image_anthropic(self, image_input: Union[str, Any, Image.Image], model="claude-4-sonnet", status_callback=None) -> Dict[str, Any]:
+    def process_image_anthropic(
+        self, image_input: Union[str, Any, Image.Image], model="claude-4-sonnet", status_callback=None
+    ) -> Dict[str, Any]:
         im = self._load_im(image_input)
         if isinstance(im, dict) and "error" in im:
             return im
         return AnthropicProvider(self.anthropic_api_key, model).process(im, status_callback=status_callback).to_dict()
 
-    def process_page(self, image: Image.Image, engine: str = "kraken", model: Optional[str] = None, status_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    def process_page(
+        self,
+        image: Image.Image,
+        engine: str = "kraken",
+        model: Optional[str] = None,
+        status_callback: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
         """Unified entry point for OCR."""
         if engine == "kraken":
             return self.process_image(image, status_callback=status_callback)
@@ -443,7 +459,9 @@ class OCRProcessor:
         elif engine == "openai":
             return self.process_image_openai(image, model=model or "gpt-5", status_callback=status_callback)
         elif engine == "anthropic":
-            return self.process_image_anthropic(image, model=model or "claude-4-sonnet", status_callback=status_callback)
+            return self.process_image_anthropic(
+                image, model=model or "claude-4-sonnet", status_callback=status_callback
+            )
         elif engine == "huggingface":
             return self.process_image_huggingface(image, model_id=model, status_callback=status_callback)
         else:

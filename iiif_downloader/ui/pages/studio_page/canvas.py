@@ -10,8 +10,8 @@ from bs4 import BeautifulSoup
 from iiif_downloader.logger import get_logger
 from iiif_downloader.pdf_utils import load_pdf_page
 from iiif_downloader.ui.components.viewer import interactive_viewer
-from iiif_downloader.ui.state import get_storage
 from iiif_downloader.ui.notifications import toast
+from iiif_downloader.ui.state import get_storage
 
 from .ocr_utils import run_ocr_sync
 
@@ -219,7 +219,7 @@ def render_main_canvas(
         # --- NAVIGATION BUTTONS (Experiment: below image) ---
         c_nav1, c_nav2, c_nav3 = st.columns([1, 2, 1])
         with c_nav1:
-            if st.button("PREV ◀", use_container_width=True, key="btn_prev_sub"):
+            if st.button("PREV ◀", width="stretch", key="btn_prev_sub"):
                 st.session_state[page_key] = max(1, current_p - 1)
                 st.session_state["current_page"] = st.session_state[page_key]
                 st.rerun()
@@ -233,7 +233,7 @@ def render_main_canvas(
                 unsafe_allow_html=True,
             )
         with c_nav3:
-            if st.button("▶ NEXT", use_container_width=True, key="btn_next_sub"):
+            if st.button("▶ NEXT", width="stretch", key="btn_next_sub"):
                 st.session_state[page_key] = min(total_pages, current_p + 1)
                 st.session_state["current_page"] = st.session_state[page_key]
                 st.rerun()
@@ -298,11 +298,11 @@ def render_transcription_editor(doc_id, library, current_p, ocr_engine, current_
     if st.session_state.get("confirm_ocr_sync") == current_p:
         st.warning("⚠️ Testo esistente! Sovrascrivere?", icon="⚠️")
         c1, c2 = st.columns(2)
-        if c1.button("Sì, Sovrascrivi", use_container_width=True, type="primary"):
+        if c1.button("Sì, Sovrascrivi", width="stretch", type="primary"):
             st.session_state["trigger_ocr_sync"] = current_p
             st.session_state["confirm_ocr_sync"] = None
             st.rerun()
-        if c2.button("No, Annulla", use_container_width=True):
+        if c2.button("No, Annulla", width="stretch"):
             st.session_state["confirm_ocr_sync"] = None
             st.rerun()
 
@@ -467,7 +467,7 @@ def render_history_sidebar(
             storage.clear_history(doc_id, current_p, library)
             del st.session_state[f"confirm_clear_{current_p}"]
             st.rerun()
-        if cc2.button("No", use_container_width=True, key=f"c_no_{current_p}"):
+        if cc2.button("No", width="stretch", key=f"c_no_{current_p}"):
             del st.session_state[f"confirm_clear_{current_p}"]
             st.rerun()
 
