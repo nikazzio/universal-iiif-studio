@@ -3,7 +3,11 @@ import sys
 
 # pylint: disable=broad-exception-caught
 
+from .logger import get_logger, setup_logging
 from .logic import IIIFDownloader
+
+logger = get_logger(__name__)
+
 from .resolvers.gallica import GallicaResolver
 from .resolvers.generic import GenericResolver
 from .resolvers.oxford import OxfordResolver
@@ -29,18 +33,16 @@ def resolve_url(input_str):
 
 def wizard_mode():
     """Interactive mode for better usability."""
-    print("\n" + "="*40)
+    print("\n" + "=" * 40)
     print(" 🌍  UNIVERSAL IIIF DOWNLOADER  🌍")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
 
     url = input("Paste the URL (Manifest or Viewer link): ").strip()
     if not url:
         print("No URL provided. Exiting.")
         sys.exit(1)
 
-    out_name = input(
-        "Output filename (optional, press Enter for auto): "
-    ).strip()
+    out_name = input("Output filename (optional, press Enter for auto): ").strip()
     ocr_model = input(
         "OCR Model (optional, e.g. 'kraken', press Enter to skip): "
     ).strip()
@@ -49,6 +51,7 @@ def wizard_mode():
 
 
 def main():
+    setup_logging()
     parser = argparse.ArgumentParser(description="Universal IIIF Downloader")
     parser.add_argument(
         "url",
@@ -120,7 +123,7 @@ def main():
             workers=workers,
             clean_cache=clean,
             prefer_images=prefer_images,
-            ocr_model=ocr_model
+            ocr_model=ocr_model,
         )
         downloader.run()
 
@@ -128,13 +131,10 @@ def main():
             downloader.create_pdf()
 
     except Exception as e:
+        logger.exception("Fatal error during CLI execution")
         print(f"\n❌ Error: {e}")
         print(
-            "💡 Tip: 'Intelligent Support' tried to guess the Manifest from "
-            "your URL."
+            "💡 Tip: 'Intelligent Support' tried to guess the Manifest from your URL."
         )
-        print(
-            "   If this failed, please paste the direct link to the "
-            "'manifest.json'."
-        )
+        print("   If this failed, please paste the direct link to the 'manifest.json'.")
         sys.exit(1)

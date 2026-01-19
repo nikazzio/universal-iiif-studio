@@ -49,7 +49,7 @@ def get_json(url, headers=None, retries=3):
 
             # If rate limited, wait longer
             if resp.status_code == 429:
-                wait_time = (2 ** attempt) * 2
+                wait_time = (2**attempt) * 2
                 logger.warning(
                     "Rate limited (429) on %s, waiting %ss",
                     url,
@@ -75,7 +75,6 @@ def get_json(url, headers=None, retries=3):
                             "Response preview: %s",
                             response_text[:200],
                         )
-                        print(f"Response Text (first 200 chars): {response_text[:200]}")
                 raise
 
             logger.warning(
@@ -84,7 +83,7 @@ def get_json(url, headers=None, retries=3):
                 retries,
                 url,
             )
-            wait_time = 2 ** attempt
+            wait_time = 2**attempt
             time.sleep(wait_time)
         except ValueError as e:
             # This happens if resp.json() fails
@@ -92,7 +91,6 @@ def get_json(url, headers=None, retries=3):
             try:
                 preview = resp.text[:200]
                 logger.debug("Response preview: %s", preview)
-                print(f"Response preview (first 200 chars): {preview}")
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.debug("Failed to read response preview", exc_info=True)
             raise
@@ -103,6 +101,7 @@ def get_json(url, headers=None, retries=3):
 def save_json(path, data):
     """Saves data to a local JSON file."""
     import json
+
     p = Path(path)
     ensure_dir(p.parent)
     with p.open("w", encoding="utf-8") as f:
@@ -112,6 +111,7 @@ def save_json(path, data):
 def load_json(path):
     """Loads a JSON file, returns None if not found."""
     import json
+
     p = Path(path)
     if not p.exists():
         return None
@@ -136,7 +136,9 @@ def clean_dir(path: Union[str, os.PathLike]):
         shutil.rmtree(p)
 
 
-def cleanup_old_files(path: Union[str, os.PathLike], *, older_than_days: int = 7) -> dict:
+def cleanup_old_files(
+    path: Union[str, os.PathLike], *, older_than_days: int = 7
+) -> dict:
     """Delete files/dirs under `path` older than `older_than_days`.
 
     Returns stats like {"deleted": X, "errors": Y, "skipped": Z}.

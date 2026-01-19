@@ -13,3 +13,5 @@ PyMuPDF
 streamlit-antd-components
 openai
 anthropic
+streamlit-quill
+beautifulsoup4

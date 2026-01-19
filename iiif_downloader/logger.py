@@ -34,9 +34,7 @@ except OSError:
     LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Shared formatters
-CONSOLE_FORMAT = logging.Formatter(
-    "%(levelname)s | %(name)s | %(message)s"
-)
+CONSOLE_FORMAT = logging.Formatter("%(levelname)s | %(name)s | %(message)s")
 
 FILE_FORMAT = logging.Formatter(
     "%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s] %(message)s",
@@ -55,20 +53,21 @@ def setup_logging():
     log_level = _get_configured_log_level()
     effective_level = getattr(logging, log_level, logging.INFO)
 
-    # If already configured and the level didn't change, do nothing.
-    if bool(_STATE["initialized"]) and _STATE["last_level"] == log_level:
-        return
+    # Check existence of handlers to detect prior initialization
+    # (Checking _STATE is insufficient if module is reloaded in Streamlit)
+    if app_logger.hasHandlers():
+        # Only update if level actually changed
+        if app_logger.level != effective_level:
+            app_logger.setLevel(effective_level)
+            for h in app_logger.handlers:
+                try:
+                    h.setLevel(effective_level)
+                except (TypeError, ValueError, AttributeError):
+                    pass
+            app_logger.info("Logging level updated (Level: %s)", log_level)
 
-    # If already configured, just update levels.
-    if bool(_STATE["initialized"]) and app_logger.handlers:
-        app_logger.setLevel(effective_level)
-        for h in app_logger.handlers:
-            try:
-                h.setLevel(effective_level)
-            except (TypeError, ValueError, AttributeError):
-                pass
+        _STATE["initialized"] = True
         _STATE["last_level"] = log_level
-        app_logger.info("Logging level updated (Level: %s)", log_level)
         return
 
     # First-time configuration.
@@ -110,5 +109,5 @@ def get_logger(name: str):
 def get_download_logger(doc_id: str):
     """Get a logger instance for a specific download."""
     # Sanitize doc_id
-    safe_id = "".join(c for c in doc_id if c.isalnum() or c in ('-', '_'))[:50]
+    safe_id = "".join(c for c in doc_id if c.isalnum() or c in ("-", "_"))[:50]
     return get_logger(f"download.{safe_id}")

@@ -6,6 +6,10 @@ from typing import Dict, List, Optional, Tuple
 import requests
 from requests import RequestException
 
+from iiif_downloader.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True)
 class AvailableModel:
@@ -53,11 +57,7 @@ class ModelManager:
     def list_installed_models(self) -> List[str]:
         """Returns a list of installed `.mlmodel` file names."""
         return sorted(
-            {
-                f.name
-                for f in self.models_dir.glob("*.mlmodel")
-                if f.is_file()
-            }
+            {f.name for f in self.models_dir.glob("*.mlmodel") if f.is_file()}
         )
 
     def get_available_models(self) -> Dict[str, AvailableModel]:
@@ -80,8 +80,7 @@ class ModelManager:
                 doi="10.5281/zenodo.12743230",
                 kind="manuscript",
                 description=(
-                    "Graphematic transcription approach for medieval Latin "
-                    "manuscripts."
+                    "Graphematic transcription approach for medieval Latin manuscripts."
                 ),
             ),
             AvailableModel(
@@ -134,7 +133,7 @@ class ModelManager:
             "status": "published",
             "size": 15,
             "sort": "bestmatch",
-            "all_versions": "false"
+            "all_versions": "false",
         }
         try:
             r = requests.get(url, params=params, timeout=20)
@@ -150,16 +149,25 @@ class ModelManager:
                 # Check if it likely contains an mlmodel
                 # we don't fetch file list for all hits to stay fast,
                 # but we can check if 'mlmodel' is in title or description.
-                if "mlmodel" in title.lower() or "mlmodel" in desc.lower() or "kraken" in title.lower():
-                    results.append({
-                        "title": title,
-                        "doi": h.get("doi") or h.get("conceptdoi"),
-                        "description": desc[:300].replace("<p>", "").replace("</p>", "") + "...",
-                        "links": h.get("links", {})
-                    })
+                if (
+                    "mlmodel" in title.lower()
+                    or "mlmodel" in desc.lower()
+                    or "kraken" in title.lower()
+                ):
+                    results.append(
+                        {
+                            "title": title,
+                            "doi": h.get("doi") or h.get("conceptdoi"),
+                            "description": desc[:300]
+                            .replace("<p>", "")
+                            .replace("</p>", "")
+                            + "...",
+                            "links": h.get("links", {}),
+                        }
+                    )
             return results
         except (RequestException, ValueError, OSError) as e:
-            print(f"Zenodo search failed: {e}")
+            logger.error("Zenodo search failed: %s", e)
             return []
 
     def get_model_path(self, model_filename: str) -> Path:
@@ -169,11 +177,7 @@ class ModelManager:
         """Returns an installed `.mlmodel` filename for a model key."""
         prefix = f"{_safe_filename(model_key)}__"
         matches = sorted(
-            [
-                p.name
-                for p in self.models_dir.glob(prefix + "*.mlmodel")
-                if p.is_file()
-            ]
+            [p.name for p in self.models_dir.glob(prefix + "*.mlmodel") if p.is_file()]
         )
         return matches[0] if matches else None
 
@@ -224,18 +228,13 @@ class ModelManager:
             )
 
         ml_files = [
-            f
-            for f in files
-            if str(f.get("key", "")).lower().endswith(".mlmodel")
+            f for f in files if str(f.get("key", "")).lower().endswith(".mlmodel")
         ]
         if not ml_files:
             keys = ", ".join([str(f.get("key")) for f in files])
             return (
                 False,
-                (
-                    f"No .mlmodel found in Zenodo record {record_id}. "
-                    f"Files: {keys}"
-                ),
+                (f"No .mlmodel found in Zenodo record {record_id}. Files: {keys}"),
             )
 
         # If there are multiple, try to find one that matches the key or has 'best'/'final'
@@ -258,8 +257,7 @@ class ModelManager:
 
         # Use a stable, conflict-resistant local filename.
         local_name = (
-            f"{_safe_filename(model_key)}__{record_id}__"
-            f"{_safe_filename(file_key)}"
+            f"{_safe_filename(model_key)}__{record_id}__{_safe_filename(file_key)}"
         )
         if not local_name.lower().endswith(".mlmodel"):
             local_name += ".mlmodel"

@@ -4,7 +4,9 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Optional
 
-logger = logging.getLogger(__name__)
+from iiif_downloader.logger import get_logger
+
+logger = get_logger(__name__)
 
 # This module intentionally shields the UI from unexpected job exceptions.
 # pylint: disable=broad-exception-caught
@@ -20,7 +22,9 @@ class JobManager:
             cls._instance = super(JobManager, cls).__new__(cls)
         return cls._instance
 
-    def submit_job(self, task_func: Callable, args=(), kwargs=None, job_type="generic") -> str:
+    def submit_job(
+        self, task_func: Callable, args=(), kwargs=None, job_type="generic"
+    ) -> str:
         """
         Submits a task to run in a background thread.
         Returns the job_id.
@@ -39,19 +43,23 @@ class JobManager:
                 "message": "Initializing...",
                 "result": None,
                 "error": None,
-                "created_at": time.time()
+                "created_at": time.time(),
             }
 
         def worker_wrapper():
             try:
                 # Progress callback injector
                 def update_progress(current, total, msg=None):
-                    self.update_job(job_id, progress=current/total, message=msg or f"Processing {current}/{total}")
+                    self.update_job(
+                        job_id,
+                        progress=current / total,
+                        message=msg or f"Processing {current}/{total}",
+                    )
 
                 # Inject progress callback if the function accepts it
                 # We assume task_func can accept 'progress_callback' kwarg
-                if 'progress_callback' not in kwargs:
-                    kwargs['progress_callback'] = update_progress
+                if "progress_callback" not in kwargs:
+                    kwargs["progress_callback"] = update_progress
 
                 with self._lock:
                     self._jobs[job_id]["status"] = "running"
@@ -93,7 +101,11 @@ class JobManager:
     def list_jobs(self, active_only=False):
         with self._lock:
             if active_only:
-                return {k: v for k, v in self._jobs.items() if v["status"] in ["pending", "running"]}
+                return {
+                    k: v
+                    for k, v in self._jobs.items()
+                    if v["status"] in ["pending", "running"]
+                }
             return self._jobs.copy()
 
 
