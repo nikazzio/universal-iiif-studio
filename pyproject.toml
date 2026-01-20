@@ -1,8 +1,9 @@
 [tool.ruff]
+# Manteniamo le tue impostazioni base
 line-length = 120
 target-version = "py310"
 
-# Never lint caches, venvs, or large data folders.
+# Cartelle escluse dal linting
 exclude = [
   ".git",
   ".ruff_cache",
@@ -13,21 +14,56 @@ exclude = [
   "logs",
   "models",
   "temp_images",
+  "build",
+  "dist",
 ]
 
 [tool.ruff.lint]
-# Keep the default rule set (E/F) and import sorting.
-extend-select = ["I"]
+# 1. REGOLE ATTIVATE (Select)
+# Abbiamo ampliato drasticamente il controllo
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # Isort (ordinamento import automatico)
+    "N",    # Pep8-naming (nomi classi/funzioni)
+    "UP",   # Pyupgrade (sintassi moderna)
+    "B",    # Bugbear (scova bug logici)
+    "S",    # Bandit (SICUREZZA)
+    "D",    # Pydocstyle (DOCUMENTAZIONE obbligatoria)
+    "SIM",  # Simplify (semplificazione codice)
+    "A",    # Builtins (evita sovrascrittura nomi nativi)
+    "PTH",  # Pathlib (obbliga all'uso di Path invece di os.path)
+    "C90",  # McCabe (complessità ciclica)
+]
+
+# 2. REGOLE IGNORATE
+# Utile per non essere troppo bloccati durante lo sviluppo rapido
+ignore = [
+    "D100", # Manca docstring nel modulo
+    "D104", # Manca docstring nel pacchetto (__init__.py)
+    "D203", # Conflitto spaziature docstring
+    "D213", # Conflitto spaziature docstring
+    "S101", # Permette l'uso di assert (fondamentale per i test)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google" # Standard per le docstring
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10 # Ti avvisa se una funzione è troppo "ingarbugliata"
 
 [tool.ruff.lint.per-file-ignores]
-# Tests often use sys.path hacks; keep lint noise low while we migrate to packaging.
-"tests/**/*.py" = ["E402"]
+# Manteniamo il tuo ignore specifico per i test
+"tests/**/*.py" = ["E402", "S101"]
+
+[tool.ruff.format]
+# Configurazione per il formatter (stile Black)
+quote-style = "double"
+indent-style = "space"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
-testpaths = [
-    "tests",
-]
+testpaths = ["tests"]
 python_files = "test_*.py"
-

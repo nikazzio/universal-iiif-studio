@@ -1,0 +1,9 @@
+# Include le dipendenze base
+-r requirements.txt
+
+# Qualità del Codice e Linting
+ruff
+pre-commit
+
+# Testing
+pytest

@@ -24,3 +24,22 @@ config.yaml
 tests/out/
 logs/
 
+# --- Ruff & Testing ---
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Packaging & Distribution (per l'eseguibile) ---
+dist/
+build/
+*.spec
+
+# --- Databases (Generico) ---
+*.sqlite
+*.db-journal
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.swp
