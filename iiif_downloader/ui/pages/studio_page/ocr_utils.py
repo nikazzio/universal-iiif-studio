@@ -15,6 +15,10 @@ logger = get_logger(__name__)
 
 
 def render_ocr_controls(doc_id, library):
+    """Render the OCR control panel in the sidebar.
+
+    Allows selection of OCR engine and model, and triggers batch or single-page OCR.
+    """
     st.sidebar.subheader("Strumenti OCR")
 
     storage = get_storage()
@@ -73,6 +77,7 @@ def render_ocr_controls(doc_id, library):
 
 
 def run_ocr_sync(doc_id, library, page_idx, engine, model):
+    """Run OCR synchronously for a single page and update the UI."""
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
     page_img_path = Path(paths["scans"]) / f"pag_{page_idx - 1:04d}.jpg"
@@ -88,13 +93,24 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
 
             cm = get_config_manager()
             ocr_dpi = int(cm.get_setting("pdf.ocr_dpi", 300))
-            img, pdf_err = load_pdf_page(str(pdf_path), page_idx, dpi=ocr_dpi, return_error=True)
+
+            # Explicitly verify the result type to satisfy static analysis
+            load_res = load_pdf_page(str(pdf_path), page_idx, dpi=ocr_dpi, return_error=True)
+            if isinstance(load_res, tuple):
+                img, pdf_err = load_res
+            else:
+                img, pdf_err = None, "Errore imprevisto nel caricamento del PDF"
+
             if pdf_err:
                 st.error(pdf_err)
                 return
         else:
             st.error("Immagine non trovata, impossibile eseguire OCR.")
             return
+
+    if img is None:
+        st.error("Impossibile caricare l'immagine per l'OCR.")
+        return
 
     with st.status(f"Elaborazione OCR ({engine})...", expanded=True) as status:
 
@@ -130,6 +146,7 @@ def run_ocr_sync(doc_id, library, page_idx, engine, model):
 
 
 def run_ocr_batch_task(doc_id, library, engine, model, progress_callback=None):
+    """Background task to run OCR on all pages of a document."""
     storage = get_storage()
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = paths["scans"]

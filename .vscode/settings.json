@@ -8,10 +8,18 @@
     "**/models/**",
     "**/temp_images/**"
   ],
+
+  // Disabilita i linter legacy solo in questo workspace
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": false,
+  "flake8.enabled": false,
+  "pylint.enabled": false,
+
   // --- Configurazione Pylance ---
   "python.languageServer": "Pylance",
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.diagnosticMode": "openFilesOnly",
+  
   // --- Configurazione specifica per Python ---
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
@@ -22,6 +30,7 @@
     },
     "editor.rulers": [120]
   },
+  
   // --- Configurazione Ruff ---
   "ruff.nativeServer": true
 }
