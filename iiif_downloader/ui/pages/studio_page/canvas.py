@@ -112,9 +112,9 @@ def _handle_page_navigation(doc_id: str, total_pages: int) -> int:
             target_p = int(q_page)
             if 1 <= target_p <= total_pages:
                 StudioState.set_current_page(doc_id, target_p)
-                # Clear query params to prevent sticky behavior
-                for k in list(st.query_params.keys()):
-                    del st.query_params[k]
+                # Clear page_nav query param to prevent sticky behavior
+                if "page_nav" in st.query_params:
+                    del st.query_params["page_nav"]
         except (TypeError, ValueError):
             logger.debug("Invalid page_nav query param: %r", q_page)
 

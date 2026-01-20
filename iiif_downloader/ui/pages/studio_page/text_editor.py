@@ -232,25 +232,27 @@ def _render_transcription_tab(
             margin: 1.5em 0;
         }
         /* COMPATTAMENTO AGGRESSIVO - Riduce tutti gli spazi verticali */
-        /* Rimuove padding dalla colonna principale */
-        [data-testid="stVerticalBlock"].st-emotion-cache-tn0cau {
+        
+        /* Riduce il gap in TUTTI i blocchi verticali */
+        [data-testid="stVerticalBlock"] {
             gap: 0.2rem !important;
-            padding: 0 !important;
         }
-        /* Compatta tutti gli stElementContainer nella colonna trascrizione */
-        .stElementContainer.st-emotion-cache-3pwa5w,
-        .stElementContainer.st-emotion-cache-1vo6xi6 {
+        
+        /* Compatta tutti gli stElementContainer */
+        .stElementContainer {
             margin-top: 0 !important;
             margin-bottom: 0.3rem !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
         }
+        
         /* Compatta i layout wrapper */
-        [data-testid="stLayoutWrapper"].st-emotion-cache-18kf3ut {
+        [data-testid="stLayoutWrapper"] {
             margin-top: 0 !important;
             margin-bottom: 0.3rem !important;
             padding: 0 !important;
         }
+        
         /* Rimuove gap tra caption e CSS style block */
         .stElementContainer:has([data-testid="stCaptionContainer"]) {
             margin-bottom: 0 !important;
@@ -280,7 +282,7 @@ def _render_transcription_tab(
         }
         /* Alternativa: targetizza direttamente il container dell'editor */
         .stElementContainer[class*="trans_editor"],
-        .stElementContainer:has(.st-emotion-cache-8atqhb > iframe) {
+        .stElementContainer:has(iframe) {
             margin-top: -5px !important;
         }
         </style>

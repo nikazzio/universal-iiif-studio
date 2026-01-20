@@ -8,13 +8,20 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Tuple
 
+import streamlit as st
 from PIL import Image, ImageEnhance
+
+
+from iiif_downloader.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ImageProcessor:
     """Handles image processing operations for the Studio page."""
 
     @staticmethod
+    @st.cache_data(show_spinner=False)
     def load_image(image_path: Path) -> Optional[Image.Image]:
         """
         Load an image from disk.
@@ -29,7 +36,7 @@ class ImageProcessor:
             if image_path.exists():
                 return Image.open(str(image_path))
         except Exception as e:
-            print(f"Error loading image: {e}")
+            logger.error(f"Error loading image: {e}")
         return None
 
     @staticmethod
