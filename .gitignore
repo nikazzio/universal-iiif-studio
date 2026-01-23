@@ -40,7 +40,7 @@ build/
 # --- Databases (Generico) ---
 *.sqlite
 *.db-journal
-repomix-output-universal-iiif.md
+repomix-output-universal-iiif.xml
 
 # --- IDE & Editors ---
 .vscode/
