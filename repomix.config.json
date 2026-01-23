@@ -4,9 +4,9 @@
     "maxFileSize": 40000000
   },
   "output": {
-    "filePath": "repomix-output-universal-iiif.md",
-    "style": "markdown",
-    "parsableStyle": false,
+    "filePath": "repomix-output-universal-iiif.xml",
+    "style": "xml",
+    "parsableStyle": true,
     "compress": true,
     "headerText": "Universal IIIF Downloader & Studio (v0.5.1) – focus on app.py, main.py, iiif_downloader/, docs/, tests/, and AGENTS.md for workflow context; ignore assets/downloads, vault/log caches, and generated binaries.",
     "instructionFilePath": "AGENTS.md",
