@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pymupdf as fitz
 from PIL import Image as PILImage
@@ -13,12 +15,14 @@ from PIL import Image as PILImage
 
 @dataclass(frozen=True)
 class CompressionProfile:
+    """Compression configuration including quality and resizing limits."""
+
     name: str
-    max_long_edge_px: Optional[int]
+    max_long_edge_px: int | None
     jpeg_quality: int
 
 
-COMPRESSION_PROFILES: Dict[str, CompressionProfile] = {
+COMPRESSION_PROFILES: dict[str, CompressionProfile] = {
     "High-Res": CompressionProfile("High-Res", None, 95),
     "Standard": CompressionProfile("Standard", 2600, 82),
     "Light": CompressionProfile("Light", 1500, 60),
@@ -36,7 +40,7 @@ def _truncate(s: str, max_len: int) -> str:
     return s[: max(0, max_len - 1)].rstrip() + "…"
 
 
-def _safe_meta_get(meta: Dict[str, Any], *keys: str) -> str:
+def _safe_meta_get(meta: dict[str, Any], *keys: str) -> str:
     for k in keys:
         v = meta.get(k)
         if v is None:
@@ -48,16 +52,17 @@ def _safe_meta_get(meta: Dict[str, Any], *keys: str) -> str:
 
 
 def clean_filename(name: str) -> str:
+    """Sanitize a string to be safe for use as a filename."""
     s = re.sub(r"\s+", "_", (name or "export").strip())
     s = re.sub(r"[^A-Za-z0-9._-]", "", s)
     return s or "export"
 
 
-def _load_transcription_map(transcription_json: Optional[Dict[str, Any]]) -> Dict[int, str]:
+def _load_transcription_map(transcription_json: dict[str, Any] | None) -> dict[int, str]:
     if not transcription_json:
         return {}
     pages = transcription_json.get("pages") or []
-    out: Dict[int, str] = {}
+    out: dict[int, str] = {}
     for p in pages:
         try:
             idx = int(p.get("page_index"))
@@ -74,7 +79,7 @@ def _encode_jpeg_bytes(img: PILImage.Image, quality: int) -> bytes:
     return buf.getvalue()
 
 
-def _prepare_image_bytes(image_path: Path, profile: CompressionProfile) -> Tuple[bytes, Tuple[int, int]]:
+def _prepare_image_bytes(image_path: Path, profile: CompressionProfile) -> tuple[bytes, tuple[int, int]]:
     img = PILImage.open(str(image_path))
     if img.mode != "RGB":
         img = img.convert("RGB")
@@ -91,13 +96,13 @@ def _prepare_image_bytes(image_path: Path, profile: CompressionProfile) -> Tuple
     return raw, img.size
 
 
-def _add_cover_page(
+def _add_cover_page(  # noqa: C901
     doc: fitz.Document,
     title: str,
     curator: str,
     description: str,
-    meta: Dict[str, Any],
-    logo_bytes: Optional[bytes] = None,
+    meta: dict[str, Any],
+    logo_bytes: bytes | None = None,
 ) -> None:
     page = doc.new_page(width=_A4_W, height=_A4_H)  # A4 points
     rect = page.rect
@@ -153,7 +158,7 @@ def _add_cover_page(
     # Metadata summary (right under band)
     meta_y = top_band_h + 42
     left_col_w = 140
-    rows: List[Tuple[str, str]] = []
+    rows: list[tuple[str, str]] = []
     if institution:
         rows.append(("Istituzione", institution))
     if shelfmark:
@@ -305,7 +310,7 @@ def _add_image_page(
             font=fitz.Font("helv"),
             fontsize=9.5,
             align=0,
-            warn=None,
+            warn=False,
         )
         tw.write_text(page, color=(0, 0, 0), render_mode=0)
 
@@ -319,9 +324,65 @@ def _add_image_page(
             font=fitz.Font("helv"),
             fontsize=6.5,
             align=0,
-            warn=None,
+            warn=False,
         )
         tw.write_text(page, color=(0, 0, 0), render_mode=3)
+
+
+def _fits_text_in_box(
+    box_rect: fitz.Rect, text: str, font: fitz.Font, fontsize: float
+) -> bool:
+    """Return True if the supplied text fits inside the provided rectangle."""
+    rect = fitz.Rect(box_rect)
+    tw = fitz.TextWriter(rect)
+    try:
+        tw.fill_textbox(
+            rect,
+            text,
+            font=font,
+            fontsize=fontsize,
+            align=0,
+            warn=False,
+        )
+        return True
+    except ValueError:
+        return False
+
+
+def _split_chunk_at_boundary(text: str, length: int) -> tuple[str, str]:
+    if length >= len(text):
+        return text, ""
+    cutoff = text.rfind("\n", 0, length)
+    if cutoff >= 0:
+        return text[: cutoff + 1], text[cutoff + 1 :]
+    cutoff = text.rfind(" ", 0, length)
+    if cutoff >= 0:
+        return text[: cutoff + 1], text[cutoff + 1 :]
+    return text[:length], text[length:]
+
+
+def _slice_transcription_text(
+    text: str, box_rect: fitz.Rect, font: fitz.Font, fontsize: float
+) -> tuple[str, str]:
+    if not text:
+        return "", ""
+    low, high, best = 1, len(text), 0
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = text[:mid]
+        if _fits_text_in_box(box_rect, candidate, font, fontsize):
+            best = mid
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    if best == 0:
+        best = min(1, len(text))
+
+    chunk, remainder = _split_chunk_at_boundary(text, best)
+    if not chunk:
+        chunk, remainder = text[0], text[1:]
+    return chunk, remainder
 
 
 def _add_transcription_page(
@@ -330,74 +391,86 @@ def _add_transcription_page(
     page_label: str,
     include_header: bool = True,
 ) -> None:
-    page = doc.new_page(width=_A4_W, height=_A4_H)
-    rect = page.rect
-
-    margin = 54
-    if page_label:
-        page.insert_text(
-            fitz.Point(margin, 28),
-            page_label,
-            fontsize=9.5,
-            fontname="helv",
-            color=(0.45, 0.45, 0.45),
-        )
-
-    if include_header:
-        page.insert_text(
-            fitz.Point(margin, 60),
-            "Trascrizione",
-            fontsize=18,
-            fontname="helv",
-            color=(0.18, 0.18, 0.18),
-        )
-        page.draw_line(
-            fitz.Point(margin, 72),
-            fitz.Point(rect.width - margin, 72),
-            color=(0.85, 0.85, 0.85),
-            width=1,
-        )
-        top = 92
-    else:
-        top = 60
-
     if not (text or "").strip():
         # Keep the page intentionally minimal to avoid confusion.
         return
 
-    # A readable, modern default: Helvetica.
-    tw = fitz.TextWriter(rect)
-    tw.fill_textbox(
-        fitz.Rect(margin, top, rect.width - margin, rect.height - margin),
-        text,
-        font=fitz.Font("helv"),
-        fontsize=11,
-        align=0,
-        warn=None,
-    )
-    tw.write_text(page, color=(0.12, 0.12, 0.12), render_mode=0)
+    font = fitz.Font("helv")
+    fontsize = 11
+    margin = 54
+    remaining = text
+    page_index = 0
+
+    while remaining:
+        page = doc.new_page(width=_A4_W, height=_A4_H)
+        rect = page.rect
+        content_top = 92 if include_header and page_index == 0 else 60
+        has_header = include_header and page_index == 0
+
+        if page_label:
+            label = page_label if page_index == 0 else f"{page_label} (continua)"
+            page.insert_text(
+                fitz.Point(margin, 28),
+                label,
+                fontsize=9.5,
+                fontname="helv",
+                color=(0.45, 0.45, 0.45),
+            )
+
+        if has_header:
+            page.insert_text(
+                fitz.Point(margin, 60),
+                "Trascrizione",
+                fontsize=18,
+                fontname="helv",
+                color=(0.18, 0.18, 0.18),
+            )
+            page.draw_line(
+                fitz.Point(margin, 72),
+                fitz.Point(rect.width - margin, 72),
+                color=(0.85, 0.85, 0.85),
+                width=1,
+            )
+
+        text_area = fitz.Rect(margin, content_top, rect.width - margin, rect.height - margin)
+        chunk, remaining = _slice_transcription_text(remaining, fitz.Rect(text_area), font, fontsize)
+        if not chunk:
+            break
+
+        tw = fitz.TextWriter(rect)
+        tw.fill_textbox(
+            text_area,
+            chunk,
+            font=font,
+            fontsize=fontsize,
+            align=0,
+            warn=False,
+        )
+        tw.write_text(page, color=(0.12, 0.12, 0.12), render_mode=0)
+
+        page_index += 1
 
 
 def build_professional_pdf(
     *,
     doc_dir: Path,
     output_path: Path,
-    selected_pages: List[int],
+    selected_pages: list[int],
     cover_title: str,
     cover_curator: str,
     cover_description: str,
-    manifest_meta: Dict[str, Any],
-    transcription_json: Optional[Dict[str, Any]],
+    manifest_meta: dict[str, Any],
+    transcription_json: dict[str, Any] | None,
     mode: str,
     compression: str,
     source_url: str,
-    cover_logo_bytes: Optional[bytes] = None,
+    cover_logo_bytes: bytes | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> Path:
     """Assemble [Cover] + [Selected Pages] + [Colophon] into a single PDF.
 
     Page indices are 1-based.
     """
-
     profile = COMPRESSION_PROFILES.get(compression) or COMPRESSION_PROFILES["Standard"]
     trans_map = _load_transcription_map(transcription_json)
 
@@ -422,17 +495,20 @@ def build_professional_pdf(
         original_bytes_total = 0
         encoded_bytes_total = 0
         images_added = 0
+        total_pages_to_process = len(selected_pages)
 
-        for page_idx in selected_pages:
+        for idx, page_idx in enumerate(selected_pages):
+            if progress_callback:
+                progress_callback(idx, total_pages_to_process)
+
             img_path = scans_dir / f"pag_{page_idx - 1:04d}.jpg"
             if not img_path.exists():
                 continue
 
             img_bytes, _ = _prepare_image_bytes(img_path, profile)
-            try:
+            with contextlib.suppress(OSError):
                 original_bytes_total += int(img_path.stat().st_size)
-            except OSError:
-                pass
+
             encoded_bytes_total += len(img_bytes)
             images_added += 1
             page_text = trans_map.get(page_idx, "")

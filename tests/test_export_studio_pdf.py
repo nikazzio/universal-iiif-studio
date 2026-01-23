@@ -70,8 +70,8 @@ def test_testo_a_fronte_renders_some_text_even_if_long(tmp_path: Path) -> None:
 
     pdf = fitz.open(out_path)
     try:
-        # page 0 = cover, page 1 = scan, page 2 = transcription
-        assert pdf.page_count == 4
+        # page 0 = cover, page 1 = scan, page 2+ = transcription, last = colophon
+        assert pdf.page_count >= 5
         text = pdf.load_page(2).get_text("text").strip()
         assert len(text) > 0
     finally:

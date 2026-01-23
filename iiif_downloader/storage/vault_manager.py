@@ -9,7 +9,10 @@ logger = get_logger(__name__)
 
 
 class VaultManager:
+    """Manages the storage and retrieval of manuscripts and image snippets using SQLite."""
+
     def __init__(self, db_path: str = "data/vault.db"):
+        """Initialize the VaultManager with the given database path."""
         self.db_path = Path(db_path)
         self._ensure_db_dir()
         self._init_db()
@@ -25,16 +28,39 @@ class VaultManager:
         conn = self._get_conn()
         cursor = conn.cursor()
 
+        # Check if table exists and has correct schema
+        force_recreate = False
+        try:
+            cursor.execute("PRAGMA table_info(manuscripts)")
+            columns = {row[1] for row in cursor.fetchall()}
+            required_cols = {"status", "local_path", "updated_at"}
+            if columns and not required_cols.issubset(columns):
+                logger.warning("Old DB schema detected. Recreating 'manuscripts' table (Beta reset).")
+                force_recreate = True
+        except Exception:
+            pass
+
+        if force_recreate:
+            cursor.execute("DROP TABLE IF EXISTS manuscripts")
+
         # Table for manuscripts (simple reference)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS manuscripts (
                 id TEXT PRIMARY KEY,
                 title TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                library TEXT,
+                manifest_url TEXT,
+                local_path TEXT,
+                status TEXT,
+                total_canvases INTEGER DEFAULT 0,
+                downloaded_canvases INTEGER DEFAULT 0,
+                error_log TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
-        # Table for snippets (image crops) - NUOVA VERSIONE
+        # Table for snippets (image crops)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS snippets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +78,112 @@ class VaultManager:
         conn.commit()
         conn.close()
 
+    def upsert_manuscript(self, id: str, **kwargs):
+        """Insert or update a manuscript record."""
+        valid_keys = [
+            "title",
+            "library",
+            "manifest_url",
+            "local_path",
+            "status",
+            "total_canvases",
+            "downloaded_canvases",
+            "error_log",
+        ]
+
+        updates = []
+        params = []
+        for k, v in kwargs.items():
+            if k in valid_keys:
+                updates.append(f"{k} = ?")
+                params.append(v)
+
+        if not updates:
+            # Just ensure existence
+            self.register_manuscript(id)
+            return
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+
+        sql = f"""
+            UPDATE manuscripts SET {", ".join(updates)} WHERE id = ?
+        """
+
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(sql, (*params, id))
+            if cursor.rowcount == 0:
+                # Insert if not exists
+                keys = ["id"] + [k for k in kwargs if k in valid_keys]
+                placeholders = ["?"] * len(keys)
+                vals = [id] + [kwargs[k] for k in kwargs if k in valid_keys]
+                cursor.execute(f"INSERT INTO manuscripts ({', '.join(keys)}) VALUES ({', '.join(placeholders)})", vals)
+            conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"DB Error upserting manuscript {id}: {e}")
+        finally:
+            conn.close()
+
+    def get_all_manuscripts(self):
+        """Returns all manuscripts from the database."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM manuscripts ORDER BY updated_at DESC")
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_manuscript(self, ms_id: str):
+        """Returns a single manuscript by ID."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM manuscripts WHERE id = ?", (ms_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def delete_manuscript(self, ms_id: str):
+        """Deletes a manuscript from the database."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM manuscripts WHERE id = ?", (ms_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
+
+    def search_manuscripts(self, query: str):
+        """Search for manuscripts by ID, label, or library (SQL LIKE)."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            q = f"%{query}%"
+            sql = """
+                SELECT * FROM manuscripts
+                WHERE id LIKE ? OR label LIKE ? OR library LIKE ? OR attribution LIKE ?
+                ORDER BY updated_at DESC
+            """
+            cursor.execute(sql, (q, q, q, q))
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def update_status(self, id: str, status: str, error: str = None):
+        """Update the status of a manuscript, optionally with an error log."""
+        kwargs = {"status": status}
+        if error:
+            kwargs["error_log"] = error
+        self.upsert_manuscript(id, **kwargs)
+
     def register_manuscript(self, manuscript_id: str, title: str = None):
         """Ensures manuscript exists in DB."""
         conn = self._get_conn()
@@ -63,8 +195,7 @@ class VaultManager:
             conn.close()
 
     def extract_image_snippet(self, image_path: str, coordinates: tuple) -> bytes:
-        """
-        Extracts a crop from an image using PyMuPDF (fitz).
+        """Extracts a crop from an image using PyMuPDF (fitz).
         coordinates: (x0, y0, x1, y1) relative to the original image size.
         """
         try:
@@ -93,8 +224,7 @@ class VaultManager:
         notes: str = None,
         coords: list = None,
     ):
-        """
-        Saves the snippet to the database.
+        """Saves the snippet to the database.
 
         Args:
             ms_name: Nome del manoscritto
@@ -123,14 +253,13 @@ class VaultManager:
             conn.commit()
             snippet_id = cursor.lastrowid
             logger.info(f"✅ Snippet ID {snippet_id} salvato: {category} - p.{page_num}")
-            
+
             return snippet_id
         finally:
             conn.close()
 
     def get_snippets(self, ms_name: str, page_num: int = None):
-        """
-        Retrieve snippets for a manuscript, optionally filtered by page.
+        """Retrieve snippets for a manuscript, optionally filtered by page.
 
         Args:
             ms_name: Nome del manoscritto
@@ -148,7 +277,7 @@ class VaultManager:
         try:
             if page_num is not None:
                 query = """
-                    SELECT id, ms_name, page_num, image_path, category, transcription, 
+                    SELECT id, ms_name, page_num, image_path, category, transcription,
                            notes, coords_json, timestamp
                     FROM snippets
                     WHERE ms_name = ? AND page_num = ?
@@ -158,7 +287,7 @@ class VaultManager:
                 cursor.execute(query, params)
             else:
                 query = """
-                    SELECT id, ms_name, page_num, image_path, category, transcription, 
+                    SELECT id, ms_name, page_num, image_path, category, transcription,
                            notes, coords_json, timestamp
                     FROM snippets
                     WHERE ms_name = ?
@@ -191,19 +320,19 @@ class VaultManager:
     def delete_snippet(self, snippet_id: int):
         """Delete a snippet by ID and remove the physical file."""
         import os
-        
+
         conn = self._get_conn()
         cursor = conn.cursor()
         try:
             # Get image path before deleting
             cursor.execute("SELECT image_path FROM snippets WHERE id = ?", (snippet_id,))
             result = cursor.fetchone()
-            
+
             if result and result[0]:
                 image_path = Path(result[0])
                 if image_path.exists():
                     os.remove(image_path)
-            
+
             # Delete from DB
             cursor.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))
             conn.commit()

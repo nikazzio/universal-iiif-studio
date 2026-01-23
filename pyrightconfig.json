@@ -1,0 +1,31 @@
+{
+  "include": [
+    "app.py",
+    "main.py",
+    "iiif_downloader",
+    "tests"
+  ],
+  "exclude": [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "downloads",
+    "logs",
+    "models",
+    "temp_images",
+    "build",
+    "dist"
+  ],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": true,
+  "reportMissingModuleSource": true,
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "venvPath": ".",
+      "venv": ".venv"
+    }
+  ]
+}
