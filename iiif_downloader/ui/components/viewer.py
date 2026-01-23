@@ -170,4 +170,4 @@ def interactive_viewer(image, zoom_percent: int):
     </html>
     """
 
-    components.html(html_code, height=700)
+    components.html(html_code, height=800)

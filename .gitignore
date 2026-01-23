@@ -18,6 +18,8 @@ models/
 .streamlit/
 config.json
 config.yaml
+data/vault.db
+assets/snippets/
 
 # OS
 .DS_Store
@@ -38,6 +40,7 @@ build/
 # --- Databases (Generico) ---
 *.sqlite
 *.db-journal
+repomix-output*
 
 # --- IDE & Editors ---
 .vscode/

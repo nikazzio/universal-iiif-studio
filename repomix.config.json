@@ -1,0 +1,69 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 40000000
+  },
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "compress": true,
+    "headerText": "Universal IIIF Downloader & Studio (v0.5.1) – focus on app.py, main.py, iiif_downloader/, docs/, tests/, and AGENTS.md for workflow context; ignore assets/downloads, vault/log caches, and generated binaries.",
+    "instructionFilePath": "AGENTS.md",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "topFilesLength": 10,
+    "showLineNumbers": true,
+    "truncateBase64": true,
+    "copyToClipboard": false,
+    "includeEmptyDirectories": false,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 100,
+      "includeDiffs": true,
+      "includeLogs": true,
+      "includeLogsCount": 20
+    }
+  },
+  "include": [
+    "app.py",
+    "main.py",
+    "README.md",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "docs/**/*",
+    "iiif_downloader/**/*",
+    "tests/**/*",
+    "pyproject.toml",
+    "requirements*.txt",
+    "pyrightconfig.json",
+    "config.example.json"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDotIgnore": false,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "assets/**",
+      "downloads/**",
+      "models/**",
+      "temp_images/**",
+      "data/**",
+      "logs/**",
+      "config.json",
+      "assets/snippets/**",
+      "AGENTS.md",
+      "repomix-output*",
+      "package-lock.json"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}

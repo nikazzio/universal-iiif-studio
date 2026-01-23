@@ -10,18 +10,18 @@ packaged (e.g., stlite-desktop). It stores user-editable values in a local
 from __future__ import annotations
 
 import json
-import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from iiif_downloader.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-DEFAULT_CONFIG_JSON: Dict[str, Any] = {
+DEFAULT_CONFIG_JSON: dict[str, Any] = {
     "paths": {
         "downloads_dir": "downloads",
         "temp_dir": "temp_images",
@@ -60,6 +60,11 @@ DEFAULT_CONFIG_JSON: Dict[str, Any] = {
         "pdf": {
             "viewer_dpi": 150,
             "ocr_dpi": 300,
+            "cover": {
+                "logo_path": "",
+                "curator": "",
+                "description": "",
+            },
         },
         "thumbnails": {
             "max_long_edge_px": 320,
@@ -89,7 +94,7 @@ DEFAULT_CONFIG_JSON: Dict[str, Any] = {
 }
 
 
-def _deep_merge(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
     for k, v in (src or {}).items():
         if isinstance(v, dict) and isinstance(dst.get(k), dict):
             _deep_merge(dst[k], v)
@@ -116,7 +121,6 @@ def default_config_path() -> Path:
     1) `./config.json` if writable
     2) `~/.universal-iiif-downloader/config.json`
     """
-
     cwd_candidate = Path.cwd() / "config.json"
     if _try_make_parent_writable(cwd_candidate):
         return cwd_candidate
@@ -127,13 +131,16 @@ def default_config_path() -> Path:
 
 @dataclass
 class ConfigManager:
+    """Manages reading and writing the local config.json file.""" ""
+
     path: Path
-    _data: Dict[str, Any]
+    _data: dict[str, Any]
 
     @classmethod
-    def load(cls, path: Optional[Path] = None) -> "ConfigManager":
+    def load(cls, path: Path | None = None) -> ConfigManager:
+        """Load the configuration from disk, creating defaults if necessary."""
         cfg_path = path or default_config_path()
-        data: Dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG_JSON))
+        data: dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG_JSON))
 
         if cfg_path.exists():
             try:
@@ -148,9 +155,7 @@ class ConfigManager:
                 cfg_path.parent.mkdir(parents=True, exist_ok=True)
                 cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             except OSError as exc:
-                logger.warning(
-                    "Unable to create default config.json at %s: %s", cfg_path, exc
-                )
+                logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
         # Back-compat: older configs may have a single `pdf.render_dpi`.
         pdf_cfg = data.get("settings", {}).get("pdf")
@@ -160,39 +165,40 @@ class ConfigManager:
                 pdf_cfg.setdefault("viewer_dpi", legacy)
                 pdf_cfg.setdefault("ocr_dpi", legacy)
                 # Keep the in-memory config clean; it will disappear on next save.
-                try:
+                with suppress(KeyError):
                     del pdf_cfg["render_dpi"]
-                except KeyError:
-                    pass
 
         return cls(path=cfg_path, _data=data)
 
     @property
-    def data(self) -> Dict[str, Any]:
+    def data(self) -> dict[str, Any]:
+        """Get the full config data dictionary."""
         return self._data
 
     def save(self) -> None:
+        """Persist the current config data to disk."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def set_downloads_dir(self, value: str) -> None:
-        self._data.setdefault("paths", {})["downloads_dir"] = (
-            value or "downloads"
-        ).strip()
+        """Set the downloads directory path."""
+        self._data.setdefault("paths", {})["downloads_dir"] = (value or "downloads").strip()
 
     def set_temp_dir(self, value: str) -> None:
-        self._data.setdefault("paths", {})["temp_dir"] = (
-            value or "temp_images"
-        ).strip()
+        """Set the temporary images directory path."""
+        self._data.setdefault("paths", {})["temp_dir"] = (value or "temp_images").strip()
 
     def set_api_key(self, provider: str, value: str) -> None:
+        """Set an API key for a given provider."""
         self._data.setdefault("api_keys", {})[provider] = (value or "").strip()
 
     def get_api_key(self, provider: str, default: str = "") -> str:
+        """Get an API key for a given provider."""
         # Keys come from config.json only (no env fallback)
         return self._data.get("api_keys", {}).get(provider) or default
 
     def resolve_path(self, key: str, default_rel: str) -> Path:
+        """Resolve a path from config, making it absolute."""
         raw = (self._data.get("paths", {}) or {}).get(key) or default_rel
         p = Path(str(raw)).expanduser()
         if p.is_absolute():
@@ -205,7 +211,6 @@ class ConfigManager:
 
         Example: `get_setting("logging.level", "INFO")`.
         """
-
         node: Any = self._data.get("settings", {}) or {}
         for part in (dotted_path or "").split("."):
             if not part:
@@ -217,7 +222,6 @@ class ConfigManager:
 
     def set_setting(self, dotted_path: str, value: Any) -> None:
         """Set a nested value in `settings` using a dotted path."""
-
         if not dotted_path:
             return
 
@@ -227,7 +231,7 @@ class ConfigManager:
             root = self._data["settings"]
 
         parts = [p for p in dotted_path.split(".") if p]
-        node: Dict[str, Any] = root
+        node: dict[str, Any] = root
         for part in parts[:-1]:
             child = node.get(part)
             if not isinstance(child, dict):
@@ -237,15 +241,19 @@ class ConfigManager:
         node[parts[-1]] = value
 
     def get_downloads_dir(self) -> Path:
+        """Get the downloads directory path."""
         return self.resolve_path("downloads_dir", "downloads")
 
     def get_temp_dir(self) -> Path:
+        """Get the temporary images directory path."""
         return self.resolve_path("temp_dir", "temp_images")
 
     def get_models_dir(self) -> Path:
+        """Get the models directory path."""
         return self.resolve_path("models_dir", "models")
 
     def get_logs_dir(self) -> Path:
+        """Get the logs directory path."""
         return self.resolve_path("logs_dir", "logs")
 
 
@@ -255,4 +263,5 @@ class ConfigManager:
 
 @lru_cache(maxsize=1)
 def get_config_manager() -> ConfigManager:
+    """Get the singleton config manager."""
     return ConfigManager.load()

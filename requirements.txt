@@ -1,7 +1,9 @@
 # UI e Framework
+beautifulsoup4
 streamlit
 streamlit-ace
 streamlit-antd-components
+streamlit-cropper
 
 # Gestione Immagini e Dati
 Pillow>=10.0.0

@@ -1,53 +1,39 @@
+"""
+Studio Page - Refactored
+Modern interface with image adjustments and cropping.
+"""
+
 import streamlit as st
 
 from iiif_downloader.ui.state import get_storage
 
 from .canvas import render_main_canvas
-from .ocr_utils import render_ocr_controls
-from .sidebar import render_sidebar_export, render_sidebar_jobs, render_sidebar_metadata
+from .sidebar import render_studio_sidebar
 
 
 def render_studio_page():
+    """Main entry point for Studio page."""
+
     storage = get_storage()
     docs = storage.list_documents()
 
     if not docs:
         st.title("🏛️ Studio")
-        st.info("Nessun documento scaricato. Vai alla sezione 'Discovery' per iniziare.")
+        st.info("📚 Nessun documento scaricato. Vai alla sezione 'Discovery' per iniziare.")
         return
 
-    # --- SIDEBAR: SELECTION ---
-    st.sidebar.subheader("Selezione Documento")
-
-    default_idx = 0
+    # Get current document
     current_stored_id = st.session_state.get("studio_doc_id")
 
-    if current_stored_id:
-        for i, d in enumerate(docs):
-            if d["id"] == current_stored_id:
-                default_idx = i
-                break
+    if not current_stored_id or not any(d["id"] == current_stored_id for d in docs):
+        current_stored_id = docs[0]["id"]
+        st.session_state["studio_doc_id"] = current_stored_id
 
-    doc_labels = [f"{d['library']} / {d['id']}" for d in docs]
-    selected_label = st.sidebar.selectbox("Manoscritto", doc_labels, index=default_idx)
-    selected_doc = next(d for d in docs if f"{d['library']} / {d['id']}" == selected_label)
-
+    selected_doc = next(d for d in docs if d["id"] == current_stored_id)
     doc_id, library = selected_doc["id"], selected_doc["library"]
-    # Ensure current selection is stored
-    st.session_state["studio_doc_id"] = doc_id
     paths = storage.get_document_paths(doc_id, library)
-
-    # --- METADATA PANEL ---
     stats = storage.load_image_stats(doc_id, library)
-    meta = storage.load_metadata(doc_id, library)
 
-    render_sidebar_metadata(meta, stats)
-    render_sidebar_jobs()
-    render_sidebar_export(doc_id, paths)
-
-    # --- OCR CONTROLS ---
-    st.sidebar.markdown("---")
-    ocr_engine, current_model = render_ocr_controls(doc_id, library)
-
-    # --- MAIN CANVAS ---
+    # Render sidebar and canvas
+    ocr_engine, current_model = render_studio_sidebar(docs, doc_id, library, paths)
     render_main_canvas(doc_id, library, paths, stats, ocr_engine, current_model)

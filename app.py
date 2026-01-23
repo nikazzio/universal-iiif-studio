@@ -17,6 +17,7 @@ from iiif_downloader.utils import cleanup_old_files
 
 
 def main():
+    """Main entry point for the Streamlit IIIF Downloader app."""
     # 1. Base Setup
     st.set_page_config(
         layout="wide",

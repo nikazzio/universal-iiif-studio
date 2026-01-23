@@ -1,16 +1,17 @@
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from iiif_downloader.config_manager import get_config_manager
 from iiif_downloader.logger import get_logger
+from iiif_downloader.storage.vault_manager import VaultManager
 from iiif_downloader.utils import ensure_dir, load_json, save_json
 
 logger = get_logger(__name__)
 
 
 class OCRStorage:
-    STORAGE_VERSION = 2  # Incremented to force refresh after directory reorganization
+    STORAGE_VERSION = 3  # Incremented for DB Integration
 
     def __init__(self, base_dir: str = "downloads"):
         # Always use config.json as single source of truth
@@ -22,8 +23,38 @@ class OCRStorage:
         self.base_dir = p
         ensure_dir(self.base_dir)
 
-    def list_documents(self) -> List[Dict[str, str]]:
-        """List all manuscripts across all library subfolders."""
+        self.vault = VaultManager()
+
+    def list_documents(self) -> list[dict[str, str]]:
+        """List all manuscripts from the centralized database."""
+        docs = []
+        try:
+            db_rows = self.vault.get_all_manuscripts()
+            for row in db_rows:
+                # Only show valid entries with a path or explicitly downloaded
+                if row.get("status") in ["complete", "downloading", "pending"]:
+                    path = row.get("local_path")
+                    # If path is missing in DB (legacy), try to construct it
+                    if not path:
+                        path = str(self.base_dir / (row.get("library") or "Unknown") / row["id"])
+
+                    docs.append(
+                        {
+                            "id": row["id"],
+                            "library": row.get("library", "Unknown"),
+                            "path": path,
+                            "label": row.get("label", row["id"]),
+                        }
+                    )
+        except Exception as e:
+            logger.error(f"Failed to list documents from DB: {e}")
+            # Fallback to file system if DB fails
+            return self._list_documents_fs()
+
+        return docs
+
+    def _list_documents_fs(self) -> list[dict[str, str]]:
+        """Legacy file-system scan."""
         docs = []
         for library_dir in self.base_dir.iterdir():
             if not library_dir.is_dir():
@@ -41,21 +72,33 @@ class OCRStorage:
                         )
         return docs
 
-    def get_document_paths(self, doc_id: str, library: str = "Unknown") -> Dict[str, Path]:
-        """Get paths for a specific document, searching if library unknown."""
+    def get_document_paths(self, doc_id: str, library: str = "Unknown") -> dict[str, Path]:
+        """Retrieve authoritative paths for a document from DB or FS fallback."""
         doc_path = None
-        if library and library != "Unknown":
-            doc_path = self.base_dir / library / doc_id
 
-        # Search if not found or library unknown
+        # 1. Try Database First
+        try:
+            m = self.vault.get_manuscript(doc_id)
+            if m and m.get("local_path"):
+                doc_path = Path(m["local_path"])
+        except Exception:
+            pass
+
+        # 2. Fallback: Path Construction
+        if not doc_path or not doc_path.exists():
+            if library and library != "Unknown":
+                doc_path = self.base_dir / library / doc_id
+
+        # 3. Fallback: Search in downloads dir
         if not doc_path or not doc_path.exists():
             for lib in self.base_dir.iterdir():
                 if lib.is_dir() and (lib / doc_id).exists():
                     doc_path = lib / doc_id
                     break
 
+        # 4. Final Fallback for non-existent (new) paths
         if not doc_path:
-            doc_path = self.base_dir / library / doc_id
+            doc_path = self.base_dir / (library or "Unknown") / doc_id
 
         return {
             "root": doc_path,
@@ -72,12 +115,12 @@ class OCRStorage:
             "history": doc_path / "history",
         }
 
-    def load_image_stats(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
+    def load_image_stats(self, doc_id: str, library: str = "Unknown") -> dict[str, Any] | None:
         """Load image statistics."""
         paths = self.get_document_paths(doc_id, library)
         return load_json(paths["stats"])
 
-    def load_metadata(self, doc_id: str, library: str = "Unknown") -> Optional[Dict[str, Any]]:
+    def load_metadata(self, doc_id: str, library: str = "Unknown") -> dict[str, Any] | None:
         """Load metadata for a document."""
         paths = self.get_document_paths(doc_id, library)
         return load_json(paths["metadata"])
@@ -86,7 +129,7 @@ class OCRStorage:
         self,
         doc_id: str,
         page_idx: int,
-        ocr_data: Dict[str, Any],
+        ocr_data: dict[str, Any],
         library: str = "Unknown",
     ):
         """Save OCR result for a specific page in a document."""
@@ -141,7 +184,7 @@ class OCRStorage:
         self,
         doc_id: str,
         page_idx: int,
-        entry: Dict[str, Any],
+        entry: dict[str, Any],
         library: str = "Unknown",
     ):
         """Save a snapshot to the per-page history log."""
@@ -177,7 +220,7 @@ class OCRStorage:
         save_json(history_file, history_data)
         logger.debug("History snapshot saved for page %s", page_idx)
 
-    def load_history(self, doc_id: str, page_idx: int, library: str = "Unknown") -> List[Dict[str, Any]]:
+    def load_history(self, doc_id: str, page_idx: int, library: str = "Unknown") -> list[dict[str, Any]]:
         """Load the history log for a specific page."""
         paths = self.get_document_paths(doc_id, library)
         history_file = paths["history"] / f"p{page_idx:04d}_history.json"
@@ -197,7 +240,7 @@ class OCRStorage:
             return True
         return False
 
-    def load_transcription(self, doc_id: str, page_idx: Optional[int] = None, library: str = "Unknown") -> Any:
+    def load_transcription(self, doc_id: str, page_idx: int | None = None, library: str = "Unknown") -> Any:
         """Load transcription for a document or specific page."""
         paths = self.get_document_paths(doc_id, library)
         data = load_json(paths["transcription"])
@@ -211,7 +254,7 @@ class OCRStorage:
             )
         return data
 
-    def search_manuscript(self, query: str) -> List[Dict[str, Any]]:
+    def search_manuscript(self, query: str) -> list[dict[str, Any]]:
         """Search query across all documents and their transcriptions."""
         results = []
         for doc in self.list_documents():
