@@ -75,3 +75,5 @@ tag_format = "v{version}"
 changelog_file = "CHANGELOG.md"
 upload_to_release = true
 build_command = ""
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+commit_message = "chore(release): {version} [skip ci]"

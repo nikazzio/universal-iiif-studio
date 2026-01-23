@@ -37,6 +37,9 @@
 - **Use GitHub CLI**: Always use `gh` for remote operations.
 - **Push & PR**: To publish changes, run `gh pr create --fill`. This command handles the upload via HTTPS/Token and creates the PR automatically.
 - **Sync**: Use `gh repo sync` to pull changes if `git pull` fails.
+
+## 🌿 Branching Rule (MANDATORY)
+- **Never commit on `main`/`master`**. Always create a feature branch and open a PR.
 # Repository Guidelines (AI Agents)
 
 ## Quick Orientation
@@ -89,3 +92,6 @@
 - Use conventional prefixes (`feat:`, `fix:`, `docs:`, `chore:`) and mention the subsystem when helpful.
 - PRs should include: summary, tests run, related issues, and UI screenshots when applicable.
 
+## 📦 Semantic Release (Automation)
+- Release automation runs on pushes to `main` and requires **Conventional Commits** (or squash-merge with a conventional title).
+- Manual fallback (local): `semantic-release version` then `semantic-release publish`.
