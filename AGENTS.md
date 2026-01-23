@@ -28,14 +28,4 @@
 - Keep `config.example.json` as the single committed template; copy it to `config.json` locally (`cp config.example.json config.json`) and update via the Streamlit settings panel to avoid leaking secrets.
 - Python 3.10+ is required; prefer virtual environments (`.venv` or `venv`).
 
-## Application Overview
-- `app.py` e la UI Streamlit sono la porta principale per l'esperienza studio + snippet + OCR; `main.py` offre la CLI batch con flag `--ocr` per Kraken e i provider configurati in `config.json`.
-- Il package `iiif_downloader/` incapsula orchestrazione download (`logic/downloader.py`), resolver specifici (es. `resolvers/vatican.py`), storage persistenza (`storage/vault_manager.py`), helper OCR (`ocr/storage.py`) e componenti UI (`ui/discovery.py`, `ui/search.py`).
-- `assets/`, `downloads/`, `temp_images/`, `data/vault.db` e `logs/` conservano rispettivamente snippet, manoscritti salvati, cache temporanea, vault SQLite e tracce runtime. La documentazione chiave vive in `docs/` (vedi `docs/ARCHITECTURE.md` per l'architettura aggiornata).
-- `tests/test_*.py` seguono la struttura dei moduli principali e vanno aggiornati quando si tocca la logica di download, snippet o vault.
 
-## Agent Collaboration
-- Tu (sviluppatore) descrivi chiaramente cosa vuoi ottenere; l'agente (Codex) esegue comandi shell, modifica file, applica patch e riferisce i risultati seguendo la policy del repository.
-- Fornisci priorità (es. bug vs feature) e indica eventuali test/tool desiderati (`python -m pytest`, `ruff check .`, `streamlit run app.py`). L'agente non assume nulla: chiedi conferma prima di operazioni distruttive.
-- Quando servono info contestuali (log, contenuti docs, risultati test) specificali, così l'agente può limitare il recupero a quanto necessario.
-- L'agente riporta sempre lo stato finale, suggerisce passi successivi (es. quali test servono) e descrive eventuali limitazioni rilevate.
