@@ -1,4 +1,5 @@
 import base64
+import os
 import time
 import warnings
 from collections.abc import Callable
@@ -16,15 +17,21 @@ logger = get_logger(__name__)
 # pylint: disable=broad-exception-caught
 
 # --- Kraken Setup ---
-try:
-    from kraken import binarization, pageseg, rpred
-    from kraken.lib import models
+KRAKEN_ENABLED = os.getenv("U2K_ENABLE_KRAKEN", "").lower() in {"1", "true", "yes", "on"}
+KRAKEN_AVAILABLE = False
+KRAKEN_IMPORT_ERROR = None
 
-    KRAKEN_AVAILABLE = True
-    KRAKEN_IMPORT_ERROR = None
-except (ImportError, AttributeError, RuntimeError) as e:
-    KRAKEN_AVAILABLE = False
-    KRAKEN_IMPORT_ERROR = str(e)
+if KRAKEN_ENABLED:
+    try:
+        from kraken import binarization, pageseg, rpred
+        from kraken.lib import models
+
+        KRAKEN_AVAILABLE = True
+    except (ImportError, AttributeError, RuntimeError) as e:
+        KRAKEN_AVAILABLE = False
+        KRAKEN_IMPORT_ERROR = str(e)
+else:
+    KRAKEN_IMPORT_ERROR = "Kraken disabled (set U2K_ENABLE_KRAKEN=1 to enable)"
 
 if KRAKEN_AVAILABLE:
     warnings.filterwarnings("ignore", message="Using legacy polygon extractor", category=UserWarning)
@@ -73,6 +80,22 @@ def _image_to_base64(image: Image.Image, quality: int = 95) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def _extract_line_box(line: Any, image: Image.Image) -> list[int] | None:
+    poly = getattr(line, "boundary", None) or getattr(line, "baseline", None)
+    if not poly:
+        return None
+    x_coords = [p[0] for p in poly]
+    y_coords = [p[1] for p in poly]
+    if not x_coords or not y_coords:
+        return None
+    left, top, right, bottom = min(x_coords), min(y_coords), max(x_coords), max(y_coords)
+    left, top = max(0, left), max(0, top)
+    right, bottom = min(image.width, right), min(image.height, bottom)
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right, bottom]
+
+
 # --- Providers Implementation ---
 
 
@@ -89,7 +112,7 @@ class KrakenProvider:
             except Exception as e:
                 self.error = f"Errore caricamento modello: {e}"
         else:
-            self.error = "Kraken non disponibile o modello non specificato"
+            self.error = KRAKEN_IMPORT_ERROR or "Kraken non disponibile o modello non specificato"
 
     def process(self, image: Image.Image, status_callback: Callable[[str], None] | None = None) -> OCRResult:
         """Execute Kraken OCR on the supplied image."""
@@ -198,54 +221,44 @@ class HFInferenceProvider:
             logger.error("Hugging Face Token missing")
             return OCRResult("", [], "Hugging Face", error="Token mancante")
 
-        # Use Kraken for segmentation if available
         if not KRAKEN_AVAILABLE:
-            res = self._query_api(image)
-            if "error" in res:
-                return OCRResult("", [], "Hugging Face", error=res["error"])
-            return OCRResult(res["text"], [OCRLine(res["text"])], "Hugging Face")
+            return self._process_whole_image(image)
 
         try:
-            bw_im = binarization.nlbin(image)
-            seg = pageseg.segment(bw_im)
-            lines_obj = getattr(seg, "lines", [])
-
-            full_text = []
-            lines_data = []
-            for _i, line in enumerate(lines_obj[:100]):  # Max 100 lines
-                poly = getattr(line, "boundary", None) or getattr(line, "baseline", None)
-                if not poly:
-                    continue
-
-                x_coords = [p[0] for p in poly]
-                y_coords = [p[1] for p in poly]
-                if not x_coords or not y_coords:
-                    continue
-                left, top, right, bottom = min(x_coords), min(y_coords), max(x_coords), max(y_coords)
-
-                # Ensure valid crop dimensions
-                left, top = max(0, left), max(0, top)
-                right, bottom = min(image.width, right), min(image.height, bottom)
-                if right <= left or bottom <= top:
-                    continue
-
-                line_crop = image.crop((left, top, right, bottom))
-
-                res = self._query_api(line_crop)
-                text = res.get("text", f"[Error: {res.get('error')}]")
-                full_text.append(text)
-                lines_data.append(OCRLine(text, 1.0, [left, top, right, bottom]))
-
-            if not lines_data:
-                # Fallback to whole image if no lines found
-                res = self._query_api(image)
-                if "error" in res:
-                    return OCRResult("", [], "Hugging Face", error=res["error"])
-                return OCRResult(res["text"], [OCRLine(res["text"])], "Hugging Face")
-
-            return OCRResult("\n".join(full_text), lines_data, f"Hugging Face ({self.model_id})")
+            lines_data, full_text = self._process_with_kraken_lines(image)
         except Exception as e:
             return OCRResult("", [], "Hugging Face", error=str(e))
+
+        if not lines_data:
+            return self._process_whole_image(image)
+
+        return OCRResult("\n".join(full_text), lines_data, f"Hugging Face ({self.model_id})")
+
+    def _process_whole_image(self, image: Image.Image) -> OCRResult:
+        res = self._query_api(image)
+        if "error" in res:
+            return OCRResult("", [], "Hugging Face", error=res["error"])
+        return OCRResult(res["text"], [OCRLine(res["text"])], "Hugging Face")
+
+    def _process_with_kraken_lines(self, image: Image.Image) -> tuple[list[OCRLine], list[str]]:
+        bw_im = binarization.nlbin(image)
+        seg = pageseg.segment(bw_im)
+        lines_obj = getattr(seg, "lines", [])
+
+        full_text: list[str] = []
+        lines_data: list[OCRLine] = []
+        for line in lines_obj[:100]:  # Max 100 lines
+            box = _extract_line_box(line, image)
+            if not box:
+                continue
+            left, top, right, bottom = box
+            line_crop = image.crop((left, top, right, bottom))
+            res = self._query_api(line_crop)
+            text = res.get("text", f"[Error: {res.get('error')}]")
+            full_text.append(text)
+            lines_data.append(OCRLine(text, 1.0, [left, top, right, bottom]))
+
+        return lines_data, full_text
 
     def _query_api(self, image: Image.Image) -> dict[str, str]:
         api_url = f"https://api-inference.huggingface.co/models/{self.model_id}"
@@ -437,6 +450,8 @@ class OCRProcessor:
 
     def _get_kraken(self):
         """Lazy-load or return the cached Kraken provider."""
+        if not KRAKEN_AVAILABLE:
+            return None
         if not self._kraken and self.model_path:
             self._kraken = KrakenProvider(self.model_path)
         return self._kraken
