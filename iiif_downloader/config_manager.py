@@ -57,6 +57,9 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "ocr_quality": 95,
             "tile_stitch_max_ram_gb": 2,
         },
+        "ocr": {
+            "kraken_enabled": False,
+        },
         "pdf": {
             "viewer_dpi": 150,
             "ocr_dpi": 300,
