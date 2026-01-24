@@ -22,29 +22,29 @@ exclude = [
 # 1. REGOLE ATTIVATE (Select)
 # Abbiamo ampliato drasticamente il controllo
 select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # Pyflakes
-    "I",    # Isort (ordinamento import automatico)
-    "N",    # Pep8-naming (nomi classi/funzioni)
-    "UP",   # Pyupgrade (sintassi moderna)
-    "B",    # Bugbear (scova bug logici)
-    "S",    # Bandit (SICUREZZA)
-    "D",    # Pydocstyle (DOCUMENTAZIONE obbligatoria)
-    "SIM",  # Simplify (semplificazione codice)
-    "A",    # Builtins (evita sovrascrittura nomi nativi)
-    "PTH",  # Pathlib (obbliga all'uso di Path invece di os.path)
-    "C90",  # McCabe (complessità ciclica)
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # Pyflakes
+  "I",   # Isort (ordinamento import automatico)
+  "N",   # Pep8-naming (nomi classi/funzioni)
+  "UP",  # Pyupgrade (sintassi moderna)
+  "B",   # Bugbear (scova bug logici)
+  "S",   # Bandit (SICUREZZA)
+  "D",   # Pydocstyle (DOCUMENTAZIONE obbligatoria)
+  "SIM", # Simplify (semplificazione codice)
+  "A",   # Builtins (evita sovrascrittura nomi nativi)
+  "PTH", # Pathlib (obbliga all'uso di Path invece di os.path)
+  "C90", # McCabe (complessità ciclica)
 ]
 
 # 2. REGOLE IGNORATE
 # Utile per non essere troppo bloccati durante lo sviluppo rapido
 ignore = [
-    "D100", # Manca docstring nel modulo
-    "D104", # Manca docstring nel pacchetto (__init__.py)
-    "D203", # Conflitto spaziature docstring
-    "D213", # Conflitto spaziature docstring
-    "S101", # Permette l'uso di assert (fondamentale per i test)
+  "D100", # Manca docstring nel modulo
+  "D104", # Manca docstring nel pacchetto (__init__.py)
+  "D203", # Conflitto spaziature docstring
+  "D213", # Conflitto spaziature docstring
+  "S101", # Permette l'uso di assert (fondamentale per i test)
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -69,11 +69,15 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.semantic_release]
-branch = "main"
-version_variable = "iiif_downloader/__init__.py:__version__"
-tag_format = "v{version}"
+version_variables = ["iiif_downloader/__init__.py:__version__"]
 changelog_file = "CHANGELOG.md"
-upload_to_release = true
-build_command = ""
-commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+assets = []
 commit_message = "chore(release): {version} [skip ci]"
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+tag_format = "v{version}"
+major_on_zero = false
+allow_zero_version = true
+build_command = ""
+
+[tool.semantic_release.branches.main]
+match = "main"

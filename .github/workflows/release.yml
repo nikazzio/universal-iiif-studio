@@ -36,10 +36,11 @@ jobs:
       - name: Install semantic-release
         run: |
           python -m pip install --upgrade pip
-          pip install "python-semantic-release==7.34.6"
+          pip install "python-semantic-release>=9.0.0"
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release publish
+        run: |
+          semantic-release version --push
+          semantic-release publish
