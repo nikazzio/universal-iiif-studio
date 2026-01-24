@@ -188,6 +188,59 @@ class ModelManager:
         r.raise_for_status()
         return r.json()
 
+    def _extract_mlmodel_files(self, record: dict, record_id: str) -> tuple[list[dict], str | None]:
+        files = record.get("files") or []
+        if not files:
+            return [], f"Zenodo record {record_id} has no downloadable files."
+
+        ml_files = [f for f in files if str(f.get("key", "")).lower().endswith(".mlmodel")]
+        if not ml_files:
+            keys = ", ".join([str(f.get("key")) for f in files])
+            return [], f"No .mlmodel found in Zenodo record {record_id}. Files: {keys}"
+        return ml_files, None
+
+    def _choose_mlmodel_file(self, ml_files: list[dict], model_key: str) -> dict:
+        if len(ml_files) == 1:
+            return ml_files[0]
+        safe_key = _safe_filename(model_key).lower()
+        for f in ml_files:
+            fkey = str(f.get("key", "")).lower()
+            if safe_key and safe_key in fkey:
+                return f
+        return ml_files[0]
+
+    def _resolve_download_url(self, file_info: dict, record_id: str) -> tuple[str | None, str | None]:
+        links = file_info.get("links") or {}
+        download_url = links.get("self") or links.get("download")
+        if not download_url:
+            return None, f"Zenodo record {record_id} file has no download link."
+        return download_url, None
+
+    def _build_model_dest(self, model_key: str, record_id: str, file_key: str) -> Path:
+        local_name = f"{_safe_filename(model_key)}__{record_id}__{_safe_filename(file_key)}"
+        if not local_name.lower().endswith(".mlmodel"):
+            local_name += ".mlmodel"
+        return self.models_dir / local_name
+
+    def _download_file(self, download_url: str, dest: Path) -> tuple[bool, str]:
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        try:
+            with requests.get(download_url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                with tmp.open("wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            tmp.replace(dest)
+        except (RequestException, OSError) as e:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
+            return False, f"Download failed: {e}"
+        return True, f"Downloaded model to: {dest.name}"
+
     def download_model(
         self,
         model_key: str,
@@ -207,63 +260,18 @@ class ModelManager:
         except RequestException as e:
             return False, f"Failed to fetch Zenodo record {record_id}: {e}"
 
-        files = record.get("files") or []
-        if not files:
-            return (
-                False,
-                f"Zenodo record {record_id} has no downloadable files.",
-            )
+        ml_files, error = self._extract_mlmodel_files(record, record_id)
+        if error:
+            return False, error
 
-        ml_files = [f for f in files if str(f.get("key", "")).lower().endswith(".mlmodel")]
-        if not ml_files:
-            keys = ", ".join([str(f.get("key")) for f in files])
-            return (
-                False,
-                (f"No .mlmodel found in Zenodo record {record_id}. Files: {keys}"),
-            )
-
-        # If there are multiple, try to find one that matches the key or has 'best'/'final'
-        chosen = ml_files[0]
-        if len(ml_files) > 1:
-            for f in ml_files:
-                fkey = str(f.get("key", "")).lower()
-                if _safe_filename(model_key).lower() in fkey:
-                    chosen = f
-                    break
-
+        chosen = self._choose_mlmodel_file(ml_files, model_key)
         file_key = str(chosen.get("key"))
-        links = chosen.get("links") or {}
-        download_url = links.get("self") or links.get("download")
-        if not download_url:
-            return (
-                False,
-                f"Zenodo record {record_id} file has no download link.",
-            )
+        download_url, error = self._resolve_download_url(chosen, record_id)
+        if error:
+            return False, error
 
-        # Use a stable, conflict-resistant local filename.
-        local_name = f"{_safe_filename(model_key)}__{record_id}__{_safe_filename(file_key)}"
-        if not local_name.lower().endswith(".mlmodel"):
-            local_name += ".mlmodel"
-
-        dest = self.models_dir / local_name
+        dest = self._build_model_dest(model_key, record_id, file_key)
         if dest.exists() and not force:
             return True, f"Model already installed: {dest.name}"
 
-        tmp = dest.with_suffix(dest.suffix + ".part")
-        try:
-            with requests.get(download_url, stream=True, timeout=60) as r:
-                r.raise_for_status()
-                with tmp.open("wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
-            tmp.replace(dest)
-        except (RequestException, OSError) as e:
-            try:
-                if tmp.exists():
-                    tmp.unlink()
-            except OSError:
-                pass
-            return False, f"Download failed: {e}"
-
-        return True, f"Downloaded model to: {dest.name}"
+        return self._download_file(download_url, dest)

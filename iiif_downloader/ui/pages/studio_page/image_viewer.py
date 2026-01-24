@@ -21,51 +21,30 @@ from .studio_state import StudioState
 logger = get_logger(__name__)
 
 
-def render_image_viewer(
-    doc_id: str, library: str, paths: dict, current_page: int, stats: dict = None, total_pages: int = 1
-) -> tuple[PILImage.Image | None, dict]:
-    """Render the image viewer with adjustments and cropping tools.
-
-    Args:
-        doc_id: Document ID
-        library: Library name
-        paths: Dictionary with paths (scans, pdf, root, etc.)
-        current_page: Current page number (1-indexed)
-        stats: Optional statistics dictionary
-        total_pages: Page count used to calculate progress percentage
-
-    Returns:
-        Tuple of (original_image, page_stats)
-    """
-    # Load the original image
+def _load_page_image(paths: dict, current_page: int) -> tuple[PILImage.Image | None, dict | None]:
     page_img_path = Path(paths["scans"]) / f"pag_{current_page - 1:04d}.jpg"
-    img_obj = None
-    pdf_error = None
-
     if page_img_path.exists():
-        img_obj = ImageProcessor.load_image(page_img_path)
-    elif Path(paths.get("pdf", "")).exists():
+        return ImageProcessor.load_image(page_img_path), None
+    if Path(paths.get("pdf", "")).exists():
         pdf_dpi = int(get_config_manager().get_setting("pdf.viewer_dpi", 150))
-        img_obj, pdf_error = load_pdf_page(paths["pdf"], current_page, dpi=pdf_dpi, return_error=True)
-        if pdf_error:
-            st.warning(pdf_error)
+        return load_pdf_page(paths["pdf"], current_page, dpi=pdf_dpi, return_error=True)
+    return None, None
 
-    # Calculate page statistics
+
+def _get_page_stats(page_img_path: Path, img_obj: PILImage.Image | None, stats: dict | None, current_page: int):
     p_stat = None
     if img_obj and stats:
         p_stat = next((p for p in stats.get("pages", []) if p.get("page_index") == current_page - 1), None)
-
     if not p_stat and img_obj:
         w, h = img_obj.size
         file_size = page_img_path.stat().st_size if page_img_path.exists() else 0
         p_stat = {"width": w, "height": h, "size_bytes": file_size}
+    return p_stat
 
-    # Header with stats
+
+def _render_header(current_page: int, total_pages: int, p_stat: dict | None) -> None:
     progress_pct = int((current_page - 1) * 100 / max(total_pages - 1, 1))
-    mb_size = 0.0
-    if p_stat:
-        mb_size = p_stat["size_bytes"] / (1024 * 1024)
-
+    mb_size = (p_stat["size_bytes"] / (1024 * 1024)) if p_stat else 0.0
     header_html = (
         '<div>'
         '<h3 style="font-size: 1.4rem; font-weight: 800; color: #FF4B4B; line-height: 1; margin-left: 10px;">'
@@ -78,27 +57,17 @@ def render_image_viewer(
     )
     st.markdown(header_html, unsafe_allow_html=True)
 
-    if not img_obj:
-        st.error("❌ Immagine non trovata.")
-        return None, p_stat or {}
 
-    # Get current adjustments
+def _render_adjustments_toolbar(doc_id: str, current_page: int) -> tuple[float, float, bool]:
     adjustments = StudioState.get_image_adjustments(doc_id, current_page)
-
-    # Check if in crop mode
     crop_mode = StudioState.get(StudioState.CROP_MODE, False)
-
-    # TOOLBAR CLASSICA sopra l'immagine (compatta)
     toolbar_cols = st.columns([1, 1, 3, 1, 3, 4], gap="small")
 
-    # Callback per reset che aggiorna direttamente i widget
     def reset_adjustments_callback():
         StudioState.reset_image_adjustments(doc_id, current_page)
-        # Forza gli slider a aggiornarsi
         st.session_state[f"brightness_{doc_id}_{current_page}"] = 1.0
         st.session_state[f"contrast_{doc_id}_{current_page}"] = 1.0
 
-    # Pulsante Reset
     with toolbar_cols[0]:
         st.button(
             "🔄",
@@ -106,25 +75,23 @@ def render_image_viewer(
             help="Ripristina valori originali",
             use_container_width=True,
             type="secondary",
-            on_click=reset_adjustments_callback
+            on_click=reset_adjustments_callback,
         )
 
     with toolbar_cols[1]:
         st.markdown("☀️", help="Luminosità")
 
     with toolbar_cols[2]:
-        # Inizializza slider se non esiste
         brightness_key = f"brightness_{doc_id}_{current_page}"
         if brightness_key not in st.session_state:
             st.session_state[brightness_key] = adjustments["brightness"]
-
         brightness = st.slider(
             "Luminosità",
             min_value=0.0,
             max_value=2.0,
             step=0.1,
             key=brightness_key,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
         )
         StudioState.set_image_adjustments(doc_id, current_page, brightness, adjustments["contrast"])
 
@@ -132,18 +99,16 @@ def render_image_viewer(
         st.markdown("🎭", help="Contrasto")
 
     with toolbar_cols[4]:
-        # Inizializza slider se non esiste
         contrast_key = f"contrast_{doc_id}_{current_page}"
         if contrast_key not in st.session_state:
             st.session_state[contrast_key] = adjustments["contrast"]
-
         contrast = st.slider(
             "Contrasto",
             min_value=0.0,
             max_value=2.0,
             step=0.1,
             key=contrast_key,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
         )
         StudioState.set_image_adjustments(doc_id, current_page, adjustments["brightness"], contrast)
 
@@ -157,21 +122,35 @@ def render_image_viewer(
                 StudioState.set(StudioState.CROP_MODE, False)
                 st.rerun()
 
-    # Apply adjustments
-    display_img = ImageProcessor.apply_adjustments(
-        img_obj.copy(), brightness=brightness, contrast=contrast
-    )
+    return brightness, contrast, crop_mode
 
-    # Visualizzazione immagine
+
+def render_image_viewer(
+    doc_id: str, library: str, paths: dict, current_page: int, stats: dict = None, total_pages: int = 1
+) -> tuple[PILImage.Image | None, dict]:
+    """Render the image viewer with adjustments and cropping tools."""
+    page_img_path = Path(paths["scans"]) / f"pag_{current_page - 1:04d}.jpg"
+    img_obj, pdf_error = _load_page_image(paths, current_page)
+    if pdf_error:
+        st.warning(pdf_error)
+
+    p_stat = _get_page_stats(page_img_path, img_obj, stats, current_page)
+    if p_stat:
+        _render_header(current_page, total_pages, p_stat)
+
+    if not img_obj:
+        st.error("❌ Immagine non trovata.")
+        return None, p_stat or {}
+
+    brightness, contrast, crop_mode = _render_adjustments_toolbar(doc_id, current_page)
+    display_img = ImageProcessor.apply_adjustments(img_obj.copy(), brightness=brightness, contrast=contrast)
+
     if crop_mode:
         _render_crop_interface(display_img, doc_id, library, current_page, paths)
     else:
-        # Normal viewer
         interactive_viewer(display_img, zoom_percent=100)
 
-    # NAVIGAZIONE CONSOLIDATA (Top-Right) con Timeline integrata
     _render_consolidated_navigation(doc_id, current_page, total_pages)
-
     return img_obj, p_stat or {}
 
 

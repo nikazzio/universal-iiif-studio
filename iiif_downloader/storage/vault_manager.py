@@ -81,7 +81,7 @@ class VaultManager:
 
     def upsert_manuscript(self, manuscript_id: str, **kwargs):
         """Insert or update a manuscript record."""
-        valid_keys = [
+        valid_keys = (
             "title",
             "library",
             "manifest_url",
@@ -90,36 +90,52 @@ class VaultManager:
             "total_canvases",
             "downloaded_canvases",
             "error_log",
-        ]
-
-        updates = []
-        params = []
-        for k, v in kwargs.items():
-            if k in valid_keys:
-                updates.append(f"{k} = ?")
-                params.append(v)
-
+        )
+        updates = {k: v for k, v in kwargs.items() if k in valid_keys}
         if not updates:
-            # Just ensure existence
             self.register_manuscript(manuscript_id)
             return
-
-        updates.append("updated_at = CURRENT_TIMESTAMP")
-
-        sql = "UPDATE manuscripts SET " + ", ".join(updates) + " WHERE id = ?"
 
         conn = self._get_conn()
         cursor = conn.cursor()
         try:
-            cursor.execute(sql, (*params, manuscript_id))
-            if cursor.rowcount == 0:
-                # Insert if not exists
-                keys = ["id"] + [k for k in kwargs if k in valid_keys]
-                placeholders = ["?"] * len(keys)
-                vals = [manuscript_id] + [kwargs[k] for k in kwargs if k in valid_keys]
+            cursor.execute("SELECT * FROM manuscripts WHERE id = ?", (manuscript_id,))
+            existing = cursor.fetchone()
+            if existing is None:
+                values = [manuscript_id] + [updates.get(k) for k in valid_keys]
                 cursor.execute(
-                    "INSERT INTO manuscripts (" + ", ".join(keys) + ") VALUES (" + ", ".join(placeholders) + ")",
-                    vals,
+                    """
+                    INSERT INTO manuscripts (
+                        id,
+                        title,
+                        library,
+                        manifest_url,
+                        local_path,
+                        status,
+                        total_canvases,
+                        downloaded_canvases,
+                        error_log
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    values,
+                )
+            else:
+                values = [updates.get(k, existing[idx + 1]) for idx, k in enumerate(valid_keys)]
+                cursor.execute(
+                    """
+                    UPDATE manuscripts
+                    SET title = ?,
+                        library = ?,
+                        manifest_url = ?,
+                        local_path = ?,
+                        status = ?,
+                        total_canvases = ?,
+                        downloaded_canvases = ?,
+                        error_log = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (*values, manuscript_id),
                 )
             conn.commit()
         except sqlite3.Error as e:

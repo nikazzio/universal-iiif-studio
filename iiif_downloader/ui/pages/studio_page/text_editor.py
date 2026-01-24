@@ -84,39 +84,49 @@ def _render_transcription_tab(
     ocr_engine: str, current_model: str, storage
 ) -> str:
     """Render the main transcription editor tab."""
-    # Metadata
+    _render_transcription_meta(trans)
+    _handle_ocr_triggers(doc_id, library, current_page, ocr_engine, current_model, storage)
+
+    edit_key = StudioState.get_editor_key(doc_id, current_page)
+    markdown_content = _resolve_markdown_content(trans, doc_id, current_page)
+
+    _render_editor_styles()
+    return _render_editor_section(
+        doc_id=doc_id,
+        library=library,
+        current_page=current_page,
+        trans=trans,
+        current_status=current_status,
+        storage=storage,
+        markdown_content=markdown_content,
+        edit_key=edit_key,
+        ocr_engine=ocr_engine,
+    )
+
+
+def _render_transcription_meta(trans: dict | None) -> None:
     if trans:
         is_manual = trans.get("is_manual", False)
-        engine = trans.get('engine', 'N/A')
-        conf = trans.get('average_confidence', 'N/A')
-        timestamp = trans.get('timestamp', '-')
+        engine = trans.get("engine", "N/A")
+        conf = trans.get("average_confidence", "N/A")
+        timestamp = trans.get("timestamp", "-")
 
         meta_parts = [f"Engine: {engine}", f"Conf: {conf}", f"🕒 {timestamp}"]
         if is_manual:
             meta_parts.append("✍️ Modificato Manualmente")
 
         st.caption(" | ".join(meta_parts))
-
-    if not trans:
+    else:
         st.caption("Nessuna trascrizione. Scrivi e salva per creare.")
 
-    # Handle OCR triggers
-    _handle_ocr_triggers(doc_id, library, current_page, ocr_engine, current_model, storage)
 
-    # Editor key
-    edit_key = StudioState.get_editor_key(doc_id, current_page)
-
-    # Check for pending updates (from history restore or OCR)
+def _resolve_markdown_content(trans: dict | None, doc_id: str, current_page: int) -> str:
     pending_text = StudioState.get_pending_update(doc_id, current_page)
-
-    # Prepare markdown content (convert from rich_text if present)
     markdown_content = trans.get("full_text", "") if trans else ""
+    return pending_text if pending_text else markdown_content
 
-    # If there's a pending text update, use that instead
-    if pending_text:
-        markdown_content = pending_text
 
-    # Custom CSS for the editor + floating helper (DARK MODE)
+def _render_editor_styles() -> None:
     st.markdown("""
         <style>
         /* Streamlit ACE Editor Customization - DARK MODE */
@@ -292,13 +302,40 @@ def _render_transcription_tab(
         </style>
     """, unsafe_allow_html=True)
 
-    # Toggle Preview in header con helper inline (compatto, senza wrapper div)
-    col_toggle, col_help = st.columns([10, 1])
 
+
+def _render_editor_section(
+    *,
+    doc_id: str,
+    library: str,
+    current_page: int,
+    trans: dict | None,
+    current_status: str,
+    storage,
+    markdown_content: str,
+    edit_key: str,
+    ocr_engine: str,
+) -> str:
+    preview_mode = _render_preview_toggle(doc_id, current_page)
+    text_val = _render_editor_body(markdown_content, edit_key, preview_mode)
+    _render_save_and_actions(
+        text_val=text_val,
+        doc_id=doc_id,
+        library=library,
+        current_page=current_page,
+        trans=trans,
+        current_status=current_status,
+        storage=storage,
+        ocr_engine=ocr_engine,
+    )
+    return text_val
+
+
+def _render_preview_toggle(doc_id: str, current_page: int) -> bool:
+    col_toggle, col_help = st.columns([10, 1])
     with col_toggle:
         preview_mode = st.toggle("👁️ Anteprima Markdown", key=f"preview_{doc_id}_{current_page}", value=False)
     with col_help:
-        # Helper inline con tooltip che non sposta nulla
         st.markdown("""
             <div class="md-help-tooltip">
                 <span style="font-size: 20px; cursor: help;">ℹ️</span>
@@ -316,89 +353,89 @@ def _render_transcription_tab(
                 </div>
             </div>
         """, unsafe_allow_html=True)
+    return preview_mode
 
-    # Mostra Editor o Preview in base al toggle
+
+def _render_editor_body(markdown_content: str, edit_key: str, preview_mode: bool) -> str:
     editor_container = st.container()
-
     with editor_container:
         if preview_mode:
-            # PREVIEW MODE: Conversione veloce e leggera
-            if markdown_content and markdown_content.strip():
-                # Conversione markdown basilare e veloce senza librerie esterne
-                html_lines = []
-                for line in markdown_content.split('\n'):
-                    line = line.strip()
-                    if not line:
-                        html_lines.append('<br>')
-                    elif line.startswith('### '):
-                        html_lines.append(f'<h3>{html.escape(line[4:])}</h3>')
-                    elif line.startswith('## '):
-                        html_lines.append(f'<h2>{html.escape(line[3:])}</h2>')
-                    elif line.startswith('# '):
-                        html_lines.append(f'<h1>{html.escape(line[2:])}</h1>')
-                    elif line.startswith('- '):
-                        html_lines.append(f'<li>{html.escape(line[2:])}</li>')
-                    elif line.startswith('> '):
-                        html_lines.append(f'<blockquote>{html.escape(line[2:])}</blockquote>')
-                    elif line == '---':
-                        html_lines.append('<hr>')
-                    else:
-                        # Formattazione inline semplice
-                        escaped = html.escape(line)
-                        escaped = escaped.replace('**', '<b>').replace('*', '<i>')
-                        html_lines.append(f'<p>{escaped}</p>')
-                html_content = ''.join(html_lines)
-            else:
-                html_content = (
-                    "<p style='color: #858585; text-align: center; padding-top: 2rem;'>"
-                    "📄 Nessun contenuto da visualizzare</p>"
-                )
-
-            # Renderizza tutto dentro il div con altezza fissa come l'editor
+            html_content = _render_preview_content(markdown_content)
             st.markdown(f'<div class="markdown-preview">{html_content}</div>', unsafe_allow_html=True)
+            return markdown_content
+        return st_ace(
+            value=markdown_content,
+            placeholder="Inizia a scrivere la trascrizione...",
+            language="markdown",
+            theme="monokai",
+            keybinding="vscode",
+            height=800,
+            font_size=15,
+            tab_size=2,
+            wrap=True,
+            auto_update=True,
+            readonly=False,
+            show_gutter=True,
+            show_print_margin=False,
+            key=edit_key,
+        )
 
-            # Mantieni l'ultimo valore dall'editor
-            text_val = markdown_content
-        else:
-            # EDITOR MODE: ACE Editor
-            text_val = st_ace(
-                value=markdown_content,
-                placeholder="Inizia a scrivere la trascrizione...",
-                language="markdown",
-                theme="monokai",  # Dark theme per ACE
-                keybinding="vscode",
-                height=800,
-                font_size=15,
-                tab_size=2,
-                wrap=True,
-                auto_update=True,
-                readonly=False,
-                show_gutter=True,
-                show_print_margin=False,
-                key=edit_key,
-            )
 
-    # Pulsante Salva FUORI dal form
+def _render_preview_content(markdown_content: str) -> str:
+    if markdown_content and markdown_content.strip():
+        html_lines = []
+        for line in markdown_content.split("\n"):
+            line = line.strip()
+            if not line:
+                html_lines.append("<br>")
+            elif line.startswith("### "):
+                html_lines.append(f"<h3>{html.escape(line[4:])}</h3>")
+            elif line.startswith("## "):
+                html_lines.append(f"<h2>{html.escape(line[3:])}</h2>")
+            elif line.startswith("# "):
+                html_lines.append(f"<h1>{html.escape(line[2:])}</h1>")
+            elif line.startswith("- "):
+                html_lines.append(f"<li>{html.escape(line[2:])}</li>")
+            elif line.startswith("> "):
+                html_lines.append(f"<blockquote>{html.escape(line[2:])}</blockquote>")
+            elif line == "---":
+                html_lines.append("<hr>")
+            else:
+                escaped = html.escape(line)
+                escaped = escaped.replace("**", "<b>").replace("*", "<i>")
+                html_lines.append(f"<p>{escaped}</p>")
+        return "".join(html_lines)
+    return (
+        "<p style='color: #858585; text-align: center; padding-top: 2rem;'>"
+        "📄 Nessun contenuto da visualizzare</p>"
+    )
+
+
+def _render_save_and_actions(
+    *,
+    text_val: str,
+    doc_id: str,
+    library: str,
+    current_page: int,
+    trans: dict | None,
+    current_status: str,
+    storage,
+    ocr_engine: str,
+) -> None:
     save_btn = st.button(
         "💾 Salva Modifiche",
         use_container_width=True,
         type="primary",
-        key=f"save_trans_{doc_id}_{current_page}"
+        key=f"save_trans_{doc_id}_{current_page}",
     )
-
     if save_btn:
         _save_transcription(text_val, doc_id, library, current_page, trans, current_status, storage)
 
-    # Pulsanti Verifica e OCR FUORI dal form (come bottoni indipendenti)
     btn_col2, btn_col3 = st.columns(2)
-
     with btn_col2:
         _render_verification_button(doc_id, library, current_page, current_status, trans, storage)
-
     with btn_col3:
         _render_ocr_button(doc_id, library, current_page, ocr_engine, storage)
-
-    return text_val
 
 
 def _render_snippets_tab(doc_id: str, current_page: int):

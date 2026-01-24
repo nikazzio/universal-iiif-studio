@@ -31,6 +31,41 @@ DEFAULT_HEADERS = {
 }
 
 
+def _sleep_backoff(attempt: int) -> None:
+    time.sleep(2**attempt)
+
+
+def _fetch_json_once(url: str, headers: dict) -> tuple[dict | None, requests.Response | None]:
+    resp = requests.get(url, headers=headers, timeout=15)
+    if resp.status_code == 429:
+        return None, resp
+    resp.raise_for_status()
+    return resp.json(), resp
+
+
+def _log_request_exception(url: str, exc: RequestException) -> None:
+    logger.error("Failed to fetch JSON from %s: %s", url, exc)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status_code = getattr(response, "status_code", None)
+        if status_code is not None:
+            logger.error("HTTP Status: %s", status_code)
+        response_text = getattr(response, "text", None)
+        if response_text:
+            logger.debug("Response preview: %s", response_text[:200])
+
+
+def _log_json_error(url: str, resp: requests.Response | None, exc: ValueError) -> None:
+    logger.error("JSON parsing error from %s: %s", url, exc)
+    if resp is None:
+        return
+    try:
+        preview = resp.text[:200]
+        logger.debug("Response preview: %s", preview)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.debug("Failed to read response preview", exc_info=True)
+
+
 def get_json(url, headers=None, retries=3):
     """Fetches JSON from a URL with retry logic."""
     if headers is None:
@@ -40,54 +75,20 @@ def get_json(url, headers=None, retries=3):
 
     for attempt in range(retries):
         try:
-            resp = requests.get(url, headers=headers, timeout=15)
-
-            # If rate limited, wait longer
-            if resp.status_code == 429:
-                wait_time = (2**attempt) * 2
-                logger.warning(
-                    "Rate limited (429) on %s, waiting %ss",
-                    url,
-                    wait_time,
-                )
-                time.sleep(wait_time)
-                continue
-
-            resp.raise_for_status()
-            return resp.json()
+            data, resp = _fetch_json_once(url, headers)
+            if data is not None:
+                return data
+            wait_time = (2**attempt) * 2
+            logger.warning("Rate limited (429) on %s, waiting %ss", url, wait_time)
+            time.sleep(wait_time)
         except RequestException as e:
             if attempt == retries - 1:
-                logger.error("Failed to fetch JSON from %s: %s", url, e)
-
-                response = getattr(e, "response", None)
-                if response is not None:
-                    status_code = getattr(response, "status_code", None)
-                    if status_code is not None:
-                        logger.error("HTTP Status: %s", status_code)
-                    response_text = getattr(response, "text", None)
-                    if response_text:
-                        logger.debug(
-                            "Response preview: %s",
-                            response_text[:200],
-                        )
+                _log_request_exception(url, e)
                 raise
-
-            logger.warning(
-                "Attempt %s/%s failed for %s, retrying...",
-                attempt + 1,
-                retries,
-                url,
-            )
-            wait_time = 2**attempt
-            time.sleep(wait_time)
+            logger.warning("Attempt %s/%s failed for %s, retrying...", attempt + 1, retries, url)
+            _sleep_backoff(attempt)
         except ValueError as e:
-            # This happens if resp.json() fails
-            logger.error("JSON parsing error from %s: %s", url, e)
-            try:
-                preview = resp.text[:200]
-                logger.debug("Response preview: %s", preview)
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug("Failed to read response preview", exc_info=True)
+            _log_json_error(url, resp if "resp" in locals() else None, e)
             raise
 
     return None

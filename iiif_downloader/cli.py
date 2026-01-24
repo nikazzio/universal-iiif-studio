@@ -48,9 +48,7 @@ def wizard_mode():
     return url, out_name, ocr_model
 
 
-def main():
-    """CLI entry point."""
-    setup_logging()
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Universal IIIF Downloader")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
@@ -93,142 +91,163 @@ def main():
     parser.add_argument(
         "--set-status", nargs=2, metavar=("ID", "STATUS"), help="Force update status (e.g. 'complete', 'error')"
     )
+    return parser
 
-    args = parser.parse_args()
 
-    # Wizard Mode if no URL
+def _render_library_table(mss, temp_dir):
+    from pathlib import Path
+
+    print(f"\n📚 Library Database ({len(mss)} items)\n" + "=" * 80)
+    print(f"{'ID':<25} | {'Status':<12} | {'Progress':<12} | {'Library'}")
+    print("-" * 80)
+
+    for m in mss:
+        ms_id = m["id"]
+        status = m.get("status") or "unknown"
+        total = m.get("total_canvases") or 0
+        current = m.get("downloaded_canvases") or 0
+
+        if status in {"downloading", "pending"}:
+            t_path = temp_dir / ms_id
+            current = len(list(t_path.glob("pag_*.jpg"))) if t_path.exists() else 0
+        elif current == 0 and m.get("local_path"):
+            l_path = Path(m["local_path"]) / "scans"
+            if l_path.exists():
+                current = len(list(l_path.glob("pag_*.jpg")))
+
+        prog_str = f"{current}/{total}"
+        icon = _status_icon(status)
+        print(f"{icon} {ms_id:<22} | {status:<12} | {prog_str:<12} | {m.get('library', 'Unknown')}")
+
+    print("\n")
+
+
+def _status_icon(status: str) -> str:
+    if status == "complete":
+        return "✅"
+    if status == "downloading":
+        return "⏳"
+    if status == "error":
+        return "❌"
+    return "⚪"
+
+
+def _handle_list() -> None:
+    from iiif_downloader.config_manager import get_config_manager
+    from iiif_downloader.storage.vault_manager import VaultManager
+
+    vault = VaultManager()
+    cm = get_config_manager()
+    temp_dir = cm.get_temp_dir()
+    mss = vault.get_all_manuscripts()
+    _render_library_table(mss, temp_dir)
+
+
+def _handle_info(ms_id: str) -> None:
+    from iiif_downloader.storage.vault_manager import VaultManager
+
+    vault = VaultManager()
+    m = vault.get_manuscript(ms_id)
+    if not m:
+        print(f"❌ Manuscript not found: {ms_id}")
+        sys.exit(1)
+
+    print(f"\n📖 Manuscript Details: {ms_id}\n" + "=" * 50)
+    for k, v in m.items():
+        print(f"{k:<20}: {v}")
+    print("\n")
+
+
+def _handle_delete(ms_id: str) -> None:
+    from iiif_downloader.storage.vault_manager import VaultManager
+
+    vault = VaultManager()
+    if vault.delete_manuscript(ms_id):
+        print(f"🗑️  Deleted manuscript record: {ms_id}")
+    else:
+        print(f"⚠️  Manuscript not found: {ms_id}")
+
+
+def _handle_set_status(ms_id: str, new_status: str) -> None:
+    from iiif_downloader.storage.vault_manager import VaultManager
+
+    vault = VaultManager()
+    if not vault.get_manuscript(ms_id):
+        print(f"❌ Manuscript not found: {ms_id}")
+        sys.exit(1)
+
+    valid_statuses = ["pending", "downloading", "complete", "error"]
+    if new_status not in valid_statuses:
+        print(f"⚠️  Warning: '{new_status}' is not a standard status ({', '.join(valid_statuses)})")
+
+    vault.update_status(ms_id, new_status)
+    print(f"✅ Updated {ms_id} status to: {new_status}")
+
+
+def _handle_db_commands(args: argparse.Namespace) -> bool:
     if args.list:
-        from pathlib import Path
-
-        from iiif_downloader.config_manager import get_config_manager
-        from iiif_downloader.storage.vault_manager import VaultManager
-
-        vault = VaultManager()
-        cm = get_config_manager()
-        temp_dir = cm.get_temp_dir()
-
-        mss = vault.get_all_manuscripts()
-
-        print(f"\n📚 Library Database ({len(mss)} items)\n" + "=" * 80)
-        print(f"{'ID':<25} | {'Status':<12} | {'Progress':<12} | {'Library'}")
-        print("-" * 80)
-
-        for m in mss:
-            ms_id = m["id"]
-            status = m.get("status") or "unknown"
-            total = m.get("total_canvases") or 0
-
-            # Determine real progress
-            if status == "downloading" or status == "pending":
-                # Check temp dir for active downloads
-                t_path = temp_dir / ms_id
-                current = len(list(t_path.glob("pag_*.jpg"))) if t_path.exists() else 0
-            else:
-                # For complete/error, trust DB or check final path
-                current = m.get("downloaded_canvases") or 0
-                if current == 0 and m.get("local_path"):
-                    # Fallback check if DB wasn't updated correctly
-                    l_path = Path(m["local_path"]) / "scans"
-                    if l_path.exists():
-                        current = len(list(l_path.glob("pag_*.jpg")))
-
-            prog_str = f"{current}/{total}"
-
-            # Visual status
-            icon = (
-                "✅"
-                if status == "complete"
-                else "⏳"
-                if status == "downloading"
-                else "❌"
-                if status == "error"
-                else "⚪"
-            )
-
-            print(f"{icon} {ms_id:<22} | {status:<12} | {prog_str:<12} | {m.get('library', 'Unknown')}")
-
-        print("\n")
-        sys.exit(0)
-
+        _handle_list()
+        return True
     if args.info:
-        from iiif_downloader.storage.vault_manager import VaultManager
-
-        ms_id = args.info
-        vault = VaultManager()
-        m = vault.get_manuscript(ms_id)
-        if not m:
-            print(f"❌ Manuscript not found: {ms_id}")
-            sys.exit(1)
-
-        print(f"\n📖 Manuscript Details: {ms_id}\n" + "=" * 50)
-        for k, v in m.items():
-            print(f"{k:<20}: {v}")
-        print("\n")
-        sys.exit(0)
-
+        _handle_info(args.info)
+        return True
     if args.delete:
-        from iiif_downloader.storage.vault_manager import VaultManager
-
-        ms_id = args.delete
-        vault = VaultManager()
-        if vault.delete_manuscript(ms_id):
-            print(f"🗑️  Deleted manuscript record: {ms_id}")
-        else:
-            print(f"⚠️  Manuscript not found: {ms_id}")
-        sys.exit(0)
-
+        _handle_delete(args.delete)
+        return True
     if args.set_status:
-        from iiif_downloader.storage.vault_manager import VaultManager
-
         ms_id, new_status = args.set_status
-        vault = VaultManager()
-        if not vault.get_manuscript(ms_id):
-            print(f"❌ Manuscript not found: {ms_id}")
-            sys.exit(1)
+        _handle_set_status(ms_id, new_status)
+        return True
+    return False
 
-        valid_statuses = ["pending", "downloading", "complete", "error"]
-        if new_status not in valid_statuses:
-            print(f"⚠️  Warning: '{new_status}' is not a standard status ({', '.join(valid_statuses)})")
 
-        vault.update_status(ms_id, new_status)
-        print(f"✅ Updated {ms_id} status to: {new_status}")
-        sys.exit(0)
-
+def _resolve_download_args(args: argparse.Namespace):
     if not args.url:
         url, out_name, ocr_model = wizard_mode()
-        workers = 4
-        clean = False
-        prefer_images = False
-        create_pdf = False
-    else:
-        url = args.url
-        out_name = args.output
-        workers = args.workers
-        clean = args.clean_cache
-        prefer_images = args.prefer_images
-        ocr_model = args.ocr
-        create_pdf = args.create_pdf
+        return url, out_name, 4, False, False, ocr_model, False
+    return (
+        args.url,
+        args.output,
+        args.workers,
+        args.clean_cache,
+        args.prefer_images,
+        args.ocr,
+        args.create_pdf,
+    )
 
-    # Resolve
+
+def _resolve_manifest(url: str):
+    manifest_url, suggested_id, library = resolve_url(url)
+    if manifest_url:
+        return manifest_url, suggested_id, library
+
+    if not url.startswith(("http://", "https://")):
+        print(f"❌ Error: Invalid URL or ID '{url}'.")
+        print("   Please provide a full URL (starting with http/https) or a supported Library ID.")
+        print("   Supported IDs example: 'Vat.lat.3225' (Vaticana), 'btv1b...' (Gallica), or UUID (Oxford).")
+        sys.exit(1)
+
+    return url, None, "Unknown"
+
+
+def main():
+    """CLI entry point."""
+    setup_logging()
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if _handle_db_commands(args):
+        sys.exit(0)
+
+    url, out_name, workers, clean, prefer_images, ocr_model, create_pdf = _resolve_download_args(args)
+
     try:
-        manifest_url, suggested_id, library = resolve_url(url)
-        if not manifest_url:
-            # If no specific resolver worked, treat input as manifest URL
-            if not url.startswith(("http://", "https://")):
-                print(f"❌ Error: Invalid URL or ID '{url}'.")
-                print("   Please provide a full URL (starting with http/https) or a supported Library ID.")
-                print("   Supported IDs example: 'Vat.lat.3225' (Vaticana), 'btv1b...' (Gallica), or UUID (Oxford).")
-                sys.exit(1)
-            manifest_url = url
-            suggested_id = None
-            library = "Unknown"
-
+        manifest_url, suggested_id, library = _resolve_manifest(url)
         print(f"✅ Target Manifest: {manifest_url}")
         print(f"🏛️  Library: {library}")
         if suggested_id:
             print(f"🆔 Suggested ID: {suggested_id}")
 
-        # Downloader
         downloader = IIIFDownloader(
             manifest_url=manifest_url,
             output_name=out_name,
@@ -239,10 +258,8 @@ def main():
             library=library,
         )
         downloader.run()
-
         if create_pdf:
             downloader.create_pdf()
-
     except Exception as e:
         logger.exception("Fatal error during CLI execution")
         print(f"\n❌ Error: {e}")
