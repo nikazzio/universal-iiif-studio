@@ -1,5 +1,4 @@
 import base64
-import os
 import time
 import warnings
 from collections.abc import Callable
@@ -17,24 +16,48 @@ logger = get_logger(__name__)
 # pylint: disable=broad-exception-caught
 
 # --- Kraken Setup ---
-KRAKEN_ENABLED = os.getenv("U2K_ENABLE_KRAKEN", "").lower() in {"1", "true", "yes", "on"}
 KRAKEN_AVAILABLE = False
-KRAKEN_IMPORT_ERROR = None
+KRAKEN_IMPORT_ERROR = "Kraken disabled in config"
+KRAKEN_IMPORTED = False
+binarization = None
+pageseg = None
+rpred = None
+models = None
 
-if KRAKEN_ENABLED:
+
+def _kraken_enabled() -> bool:
+    try:
+        from iiif_downloader.config_manager import get_config_manager
+
+        return bool(get_config_manager().get_setting("ocr.kraken_enabled", False))
+    except Exception:
+        return False
+
+
+def _ensure_kraken_imported() -> None:
+    global KRAKEN_AVAILABLE, KRAKEN_IMPORT_ERROR, KRAKEN_IMPORTED
+    if KRAKEN_IMPORTED:
+        return
+    KRAKEN_IMPORTED = True
+
+    if not _kraken_enabled():
+        KRAKEN_AVAILABLE = False
+        KRAKEN_IMPORT_ERROR = "Kraken disabled in config"
+        return
+
     try:
         from kraken import binarization, pageseg, rpred
         from kraken.lib import models
 
+        globals()["binarization"] = binarization
+        globals()["pageseg"] = pageseg
+        globals()["rpred"] = rpred
+        globals()["models"] = models
         KRAKEN_AVAILABLE = True
+        warnings.filterwarnings("ignore", message="Using legacy polygon extractor", category=UserWarning)
     except (ImportError, AttributeError, RuntimeError) as e:
         KRAKEN_AVAILABLE = False
         KRAKEN_IMPORT_ERROR = str(e)
-else:
-    KRAKEN_IMPORT_ERROR = "Kraken disabled (set U2K_ENABLE_KRAKEN=1 to enable)"
-
-if KRAKEN_AVAILABLE:
-    warnings.filterwarnings("ignore", message="Using legacy polygon extractor", category=UserWarning)
 
 # --- Data Models ---
 
@@ -106,6 +129,7 @@ class KrakenProvider:
         """Prepare Kraken by loading the requested model."""
         self.model_path = model_path
         self.model = None
+        _ensure_kraken_imported()
         if KRAKEN_AVAILABLE and model_path:
             try:
                 self.model = models.load_any(model_path)
@@ -221,6 +245,7 @@ class HFInferenceProvider:
             logger.error("Hugging Face Token missing")
             return OCRResult("", [], "Hugging Face", error="Token mancante")
 
+        _ensure_kraken_imported()
         if not KRAKEN_AVAILABLE:
             return self._process_whole_image(image)
 
@@ -450,6 +475,7 @@ class OCRProcessor:
 
     def _get_kraken(self):
         """Lazy-load or return the cached Kraken provider."""
+        _ensure_kraken_imported()
         if not KRAKEN_AVAILABLE:
             return None
         if not self._kraken and self.model_path:
