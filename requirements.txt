@@ -1,5 +1,8 @@
 # UI e Framework
-beautifulsoup4
+python-fasthtml
+uvicorn
+python-multipart
+python-dotenv
 streamlit
 streamlit-ace
 streamlit-antd-components
@@ -18,7 +21,3 @@ PyMuPDF
 img2pdf>=0.5.1
 openai
 anthropic
-
-# --- Librerie Disabilitate (Mantieni i commenti se il codice le riferisce ancora) ---
-# cattrs==23.2.3
-# kraken

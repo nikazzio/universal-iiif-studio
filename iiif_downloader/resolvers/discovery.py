@@ -17,7 +17,7 @@ def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | N
     s = shelfmark.strip()
     logger.debug("Resolving shelfmark for %s: %r", library, s)
 
-    if library == "Vaticana (BAV)":
+    if library == "Vaticana":
         # Handle full URL if pasted accidentally
         if "digi.vatlib.it" in s:
             ms_id = s.strip("/").split("/")[-1]

@@ -18,8 +18,9 @@
             "request_timeout": 30
         },
         "defaults": {
+            "default_library": "Vaticana",
             "preferred_ocr_engine": "openai",
-            "auto_generate_pdf": true
+            "auto_generate_pdf": false
         },
         "ui": {
             "theme_color": "#FF4B4B",
@@ -38,6 +39,7 @@
             "tile_stitch_max_ram_gb": 2
         },
         "ocr": {
+            "ocr_engine": "openai",
             "kraken_enabled": false
         },
         "pdf": {

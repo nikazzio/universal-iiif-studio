@@ -9,7 +9,7 @@ from typing import Any, Protocol
 import requests
 from PIL import Image
 
-from iiif_downloader.logger import get_logger
+from iiif_downloader.logger import get_logger, summarize_for_debug
 
 logger = get_logger(__name__)
 
@@ -311,7 +311,7 @@ class HFInferenceProvider:
 class OpenAIProvider:
     """OpenAI-based OCR assistant encouraging precise transcription."""
 
-    def __init__(self, api_key: str, model: str = "gpt-5"):
+    def __init__(self, api_key: str, model: str = "o3-mini"):
         """Store transfer credentials and preferred model."""
         self.api_key = api_key
         self.model = model
@@ -353,33 +353,46 @@ class OpenAIProvider:
             logger.info("Calling OpenAI chat.completions.create with model=%s", self.model)
 
             start_time = time.time()
+            # 2026 Reasoning/Frontier models use the 'developer' role for instructions
+            use_developer_role = self.model.startswith("o") or "gpt-5" in self.model
+
+            # 2026: Official guidance: Instructions in developer role, Data in user role
+            messages = []
+            if use_developer_role:
+                messages.append({"role": "developer", "content": prompt})
+                messages.append({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"},
+                        },
+                    ],
+                })
+            else:
+                messages.append({
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"},
+                        },
+                    ],
+                })
+
+            # 2026: Explicit timeouts to prevent hanging calls
             response = client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"},
-                            },
-                        ],
-                    }
-                ],
+                messages=messages,
                 max_completion_tokens=4096 if is_reasoning else 16384,
+                timeout=60.0,
             )
             elapsed = time.time() - start_time
             logger.info("OpenAI API response received in %.2fs", elapsed)
 
             text = response.choices[0].message.content
-            # Estimate tokens used
-            chars = len(text) if text else 0
-            logger.info(
-                "Response received. Content length: %s characters (~%s tokens)",
-                chars,
-                chars // 4,
-            )
+            logger.debug("Raw OpenAI Response Content: %s", summarize_for_debug(text))
 
             if status_callback:
                 status_callback("Elaborazione risposta OpenAI...")
@@ -439,6 +452,7 @@ class AnthropicProvider:
                         ],
                     }
                 ],
+                timeout=60.0,
             )
 
             # Extract content correctly from the response
@@ -448,7 +462,10 @@ class AnthropicProvider:
                 if hasattr(block, "text"):
                     text += block.text
 
+            logger.debug("Raw Anthropic Response Content: %s", summarize_for_debug(text))
+
             lines = [OCRLine(line_text.strip()) for line_text in text.split("\n") if line_text.strip()]
+
             return OCRResult(text, lines, f"Anthropic ({self.model})")
         except Exception as e:
             return OCRResult("", [], "Anthropic", error=str(e))
@@ -470,8 +487,56 @@ class OCRProcessor:
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
 
-        # Internal provider cache if needed, but usually we recreate based on task
+        # Internal provider cache
         self._kraken = None
+
+    @staticmethod
+    def get_available_models(engine: str) -> list[tuple[str, str]]:
+        """Return a list of (label, value) for the given OCR engine."""
+        engine_models = {
+            "openai": [
+                ("OpenAI GPT-5.2 (Flagship)", "gpt-5.2"),
+                ("OpenAI GPT-5.2 Pro", "gpt-5.2-pro"),
+                ("OpenAI GPT-5 Mini", "gpt-5-mini"),
+                ("OpenAI o3-mini (Reasoning)", "o3-mini"),
+            ],
+            "anthropic": [
+                ("Claude 4.5 Opus", "claude-4.5-opus"),
+                ("Claude 4.5 Sonnet", "claude-4.5-sonnet"),
+                ("Claude 4.5 Haiku", "claude-4.5-haiku"),
+            ],
+            "google": [
+                ("Google Vision (Production)", "google-vision"),
+            ],
+            "gemini": [
+                ("Gemini 3 Pro", "gemini-3-pro"),
+                ("Gemini 3 Flash", "gemini-3-flash"),
+            ],
+            "huggingface": [
+                ("Historical HTR (Tridis v2)", "magistermilitum/tridis_v2_HTR_historical_manuscripts"),
+            ],
+            "tesseract": [
+                ("Tesseract (Auto)", "auto"),
+            ],
+            "kraken": [
+                ("Kraken (Default)", "default"),
+            ],
+        }
+        return engine_models.get(engine, [])
+
+    def is_provider_ready(self, engine: str) -> bool:
+        """Check if the required API key for the engine is presence."""
+        if engine == "openai":
+            return bool(self.openai_api_key)
+        elif engine == "anthropic":
+            return bool(self.anthropic_api_key)
+        elif engine == "google":
+            return bool(self.google_api_key)
+        elif engine == "huggingface":
+            return bool(self.hf_token)
+        elif engine == "kraken":
+            return True
+        return False
 
     def _get_kraken(self):
         """Lazy-load or return the cached Kraken provider."""
@@ -512,7 +577,7 @@ class OCRProcessor:
         return HFInferenceProvider(self.hf_token, model_id).process(im, status_callback=status_callback).to_dict()
 
     def process_image_openai(
-        self, image_input: str | Any | Image.Image, model="gpt-5", status_callback=None
+        self, image_input: str | Any | Image.Image, model="o3-mini", status_callback=None
     ) -> dict[str, Any]:
         """Ask OpenAI for the transcription output."""
         im = self._load_im(image_input)

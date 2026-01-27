@@ -1,3 +1,4 @@
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -87,9 +88,26 @@ class OCRStorage:
         except Exception as exc:
             logger.debug("Vault lookup failed for %s: %s", doc_id, exc)
 
-        # 2. Fallback: Path Construction
+        # 2. Fallback: Path Construction with Tolerance
         if (not doc_path or not doc_path.exists()) and library and library != "Unknown":
-            doc_path = self.base_dir / library / doc_id
+            # Try exact match
+            candidate = self.base_dir / library / doc_id
+            if candidate.exists():
+                doc_path = candidate
+            else:
+                # Try alternatives for backward compatibility
+                aliases = {
+                    "Vaticana": "Vaticana (BAV)",
+                    "Vaticana (BAV)": "Vaticana"
+                }
+                if library in aliases:
+                    candidate_alias = self.base_dir / aliases[library] / doc_id
+                    if candidate_alias.exists():
+                        doc_path = candidate_alias
+
+            # If still not found, default to the requested library (will be created if downloading)
+            if not doc_path:
+                doc_path = self.base_dir / library / doc_id
 
         # 3. Fallback: Search in downloads dir
         if not doc_path or not doc_path.exists():
@@ -98,7 +116,7 @@ class OCRStorage:
                     doc_path = lib / doc_id
                     break
 
-        # 4. Final Fallback for non-existent (new) paths
+        # 4. Final Fallback
         if not doc_path:
             doc_path = self.base_dir / (library or "Unknown") / doc_id
 
@@ -200,9 +218,9 @@ class OCRStorage:
         # Deduplication: Don't save if the text is identical to the last version
         if history_data:
             last_entry = history_data[-1]
-            if last_entry.get("full_text") == entry.get("full_text") and last_entry.get("status") == entry.get(
-                "status"
-            ):
+            if (last_entry.get("full_text") == entry.get("full_text") and 
+                last_entry.get("status") == entry.get("status") and
+                last_entry.get("engine") == entry.get("engine")):
                 logger.debug(
                     "Skipping duplicate history snapshot for page %s",
                     page_idx,
@@ -278,3 +296,26 @@ class OCRStorage:
                     }
                 )
         return results
+
+    def delete_document(self, doc_id: str, library: str = "Unknown"):
+        """Completely remove a document from database and disk."""
+        logger.info("🗑️ Deleting document: %s (%s)", doc_id, library)
+        
+        # 1. Database Cleanup (Manuscripts + Snippets)
+        self.vault.delete_manuscript(doc_id)
+        
+        # 2. Physical File Cleanup
+        paths = self.get_document_paths(doc_id, library)
+        root_dir = paths.get("root")
+        
+        if root_dir and root_dir.exists():
+            try:
+                shutil.rmtree(root_dir)
+                logger.info("✅ Physical files removed: %s", root_dir)
+                return True
+            except Exception as e:
+                logger.error("❌ Failed to remove physical files: %s", e)
+                return False
+        
+        logger.warning("⚠️ Root directory not found or already deleted: %s", root_dir)
+        return True

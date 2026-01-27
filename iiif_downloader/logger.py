@@ -44,9 +44,7 @@ FILE_FORMAT = logging.Formatter(
 
 # The primary application logger
 app_logger = logging.getLogger("iiif_downloader")
-
-# Internal state to avoid re-initializing handlers on every get_logger() call.
-_STATE: dict[str, object] = {"initialized": False, "last_level": None}
+app_logger.propagate = True
 
 
 def setup_logging():
@@ -54,46 +52,44 @@ def setup_logging():
     log_level = _get_configured_log_level()
     effective_level = getattr(logging, log_level, logging.INFO)
 
-    # Check existence of handlers to detect prior initialization
-    # (Checking _STATE is insufficient if module is reloaded in Streamlit)
+    # Ensure DIR exists again just in case
+    LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
+
     if app_logger.hasHandlers():
-        # Only update if level actually changed
         if app_logger.level != effective_level:
             app_logger.setLevel(effective_level)
             for h in app_logger.handlers:
-                with suppress(TypeError, ValueError, AttributeError):
-                    h.setLevel(effective_level)
-            app_logger.info("Logging level updated (Level: %s)", log_level)
-
-        _STATE["initialized"] = True
-        _STATE["last_level"] = log_level
+                h.setLevel(effective_level)
         return
 
-    # First-time configuration.
     app_logger.setLevel(effective_level)
-    app_logger.propagate = False
 
+    # Handlers
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(effective_level)
     console_handler.setFormatter(CONSOLE_FORMAT)
+    console_handler.setLevel(effective_level)  # Ensure handler level is set
     app_logger.addHandler(console_handler)
 
     log_file = LOG_BASE_DIR / "app.log"
-    file_handler = TimedRotatingFileHandler(
-        log_file,
-        when="midnight",
-        interval=1,
-        backupCount=30,
-        encoding="utf-8",
-    )
-    file_handler.suffix = "%Y-%m-%d"
-    file_handler.setLevel(effective_level)
-    file_handler.setFormatter(FILE_FORMAT)
-    app_logger.addHandler(file_handler)
+    try:
+        file_handler = TimedRotatingFileHandler(
+            log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8"
+        )
+        file_handler.setFormatter(FILE_FORMAT)
+        file_handler.setLevel(effective_level)  # Ensure handler level is set
+        app_logger.addHandler(file_handler)
+    except Exception as e:
+        print(f"FAILED TO SETUP FILE LOGGING: {e}")
 
-    _STATE["initialized"] = True
-    _STATE["last_level"] = log_level
-    app_logger.info("Localized logging system initialized (Level: %s)", log_level)
+    app_logger.info("Localized logging system initialized (Level: %s) -> %s", log_level, log_file)
+
+
+def summarize_for_debug(data: str, max_chars: int = 200) -> str:
+    """Summarize a large string for debug logs."""
+    if not data or len(data) <= max_chars:
+        return data
+    return f"{data[:max_chars]}... [TRUNCATED, total {len(data)} chars]"
+
 
 
 def get_logger(name: str):

@@ -92,6 +92,11 @@ class VaultManager:
             "error_log",
         )
         updates = {k: v for k, v in kwargs.items() if k in valid_keys}
+
+        # Enforce library name standardization
+        if updates.get("library") == "Vaticana (BAV)":
+            updates["library"] = "Vaticana"
+
         if not updates:
             self.register_manuscript(manuscript_id)
             return
@@ -167,10 +172,24 @@ class VaultManager:
             conn.close()
 
     def delete_manuscript(self, ms_id: str):
-        """Deletes a manuscript from the database."""
+        """Deletes a manuscript and all associated snippets from the database and disk."""
         conn = self._get_conn()
         cursor = conn.cursor()
         try:
+            # 1. Get all snippet paths for this manuscript
+            cursor.execute("SELECT id, image_path FROM snippets WHERE ms_name = ?", (ms_id,))
+            snippets = cursor.fetchall()
+            
+            # 2. Delete snippets physical files and DB entries
+            for s_id, path in snippets:
+                if path:
+                    p = Path(path)
+                    if p.exists():
+                        with suppress(OSError):
+                            p.unlink()
+                cursor.execute("DELETE FROM snippets WHERE id = ?", (s_id,))
+
+            # 3. Delete the manuscript entry
             cursor.execute("DELETE FROM manuscripts WHERE id = ?", (ms_id,))
             deleted = cursor.rowcount > 0
             conn.commit()
