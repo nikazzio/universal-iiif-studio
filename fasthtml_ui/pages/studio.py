@@ -7,6 +7,7 @@ from fasthtml.common import H2, H3, A, Button, Div, P, Script, Span
 
 from fasthtml_ui.components.studio.tabs import render_studio_tabs
 from fasthtml_ui.components.viewer import mirador_viewer
+from fasthtml_ui.ocr_state import is_ocr_job_running
 from iiif_downloader.ocr.storage import OCRStorage
 
 
@@ -85,9 +86,9 @@ def studio_layout(title, library, doc_id, page, manifest_url, initial_canvas, ma
                     Div(
                         Div(
                             Div(
-                                H2(title, cls="text-2xl font-black text-slate-900 dark:text-white tracking-tight"),
+                                H2(title, cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight"),
                                 Div(
-                                    Span(library, cls="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider"),
+                                    Span(library, cls="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold px-3 py-1 rounded uppercase tracking-wider"),
                                     Span(doc_id, cls="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded"),
                                     cls="flex gap-2 mt-1",
                                 ),
@@ -99,7 +100,14 @@ def studio_layout(title, library, doc_id, page, manifest_url, initial_canvas, ma
                     ),
                     # HTMX Target for Tab Content
                     Div(
-                        render_studio_tabs(doc_id, library, int(page), manifest_json, total_pages),
+                        render_studio_tabs(
+                            doc_id,
+                            library,
+                            int(page),
+                            manifest_json,
+                            total_pages,
+                            is_ocr_loading=is_ocr_job_running(doc_id, int(page))
+                        ),
                         id="studio-right-panel",
                         cls="flex-1 overflow-hidden h-full",
                     ),

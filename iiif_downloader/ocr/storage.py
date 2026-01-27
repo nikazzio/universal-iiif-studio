@@ -218,7 +218,7 @@ class OCRStorage:
         # Deduplication: Don't save if the text is identical to the last version
         if history_data:
             last_entry = history_data[-1]
-            if (last_entry.get("full_text") == entry.get("full_text") and 
+            if (last_entry.get("full_text") == entry.get("full_text") and
                 last_entry.get("status") == entry.get("status") and
                 last_entry.get("engine") == entry.get("engine")):
                 logger.debug(
@@ -300,14 +300,14 @@ class OCRStorage:
     def delete_document(self, doc_id: str, library: str = "Unknown"):
         """Completely remove a document from database and disk."""
         logger.info("🗑️ Deleting document: %s (%s)", doc_id, library)
-        
+
         # 1. Database Cleanup (Manuscripts + Snippets)
         self.vault.delete_manuscript(doc_id)
-        
+
         # 2. Physical File Cleanup
         paths = self.get_document_paths(doc_id, library)
         root_dir = paths.get("root")
-        
+
         if root_dir and root_dir.exists():
             try:
                 shutil.rmtree(root_dir)
@@ -316,6 +316,6 @@ class OCRStorage:
             except Exception as e:
                 logger.error("❌ Failed to remove physical files: %s", e)
                 return False
-        
+
         logger.warning("⚠️ Root directory not found or already deleted: %s", root_dir)
         return True

@@ -1,6 +1,5 @@
 import logging
 import sys
-from contextlib import suppress
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 

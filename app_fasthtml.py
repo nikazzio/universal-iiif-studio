@@ -1,7 +1,9 @@
 from pathlib import Path
+
 from fasthtml.common import fast_app, serve
-from starlette.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.staticfiles import StaticFiles
+
 from fasthtml_ui.routes.api import setup_api_routes
 from fasthtml_ui.routes.discovery import setup_discovery_routes
 from fasthtml_ui.routes.studio import setup_studio_routes

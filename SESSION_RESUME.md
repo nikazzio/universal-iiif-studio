@@ -76,6 +76,19 @@ Per mantenere il codice manutenibile e scalabile, segui sempre queste regole:
     - Migliorato il tracciamento del thread worker in `studio.py` con log di stato ("🧵 Worker started", "📸 Image loaded", "✅ Success").
 - **Configurazione**: Il sistema di logging ora applica correttamente il livello (es. DEBUG) sia alla console che al file `app.log`.
 
+### 8. Editor & History UX 2026
+- **SimpleMDE meglio leggibile**: Il preload CSS personalizzato rende la toolbar e il toggle preview più leggibili anche con tema scuro, mentre il textarea ha font più grandi e bordi più morbidi.
+- **Floating Toast**: `_build_toast` continua a generare messaggi in alto a destra ma ora li anima con `requestAnimationFrame` e li ancoriamo a un contenitore `fixed` per tenerli visibili anche quando si scorre la tab.
+- **History live + diff**: I card della history mostrano badge verde/rosso delle variazioni di caratteri, la quantità totale di testo e un restored metadata; dopo ogni salvataggio viene iniettato un trigger HTMX nascosto (`_history_refresh_trigger`) che ricarica `/studio/partial/history`, mostrando un banner informativo quando il testo non è cambiato.
+- **Helpers**: `_history_refresh_trigger` e `build_studio_tab_content` mantengono sincronizzati polling OCR, overlay e partial, così `/studio`, `/api/check_ocr_status` e le partial condividono lo stesso markup.
+
+### 9. Salvataggi & History verificati
+- **Test salvataggi**: La logica di `save_transcription` ora rileva versioni identiche, restituisce un feedback in pagina con hx-swap-oob e lascia lo storico immutato; ogni salvataggio effettivo salva una snapshot nuova e attiva il refresh della history.
+- **Cronologia migliorata**: La tab History evidenzia versioni revive, mostra dettagli su caratteri aggiunti/rimossi e ha un pulsante di ripristino con conferma, permettendo di tornare a uno snapshot senza lasciare la pagina.
+
+### 10. Documentazione aggiornata
+- Aggiornate le note in `docs/ARCHITECTURE.md`, `docs/DOCUMENTAZIONE.md` e `STUDIO_REFACTOR.md` per descrivere i nuovi toast, il trigger history e le scelte di styling dell’editor.
+
 ---
 
 ## 🛠 Fix Applicati
@@ -88,6 +101,8 @@ Per mantenere il codice manutenibile e scalabile, segui sempre queste regole:
 - `/home/niki/work/personal/universal-iiif-downloader/FIXES.md`
 - `/home/niki/work/personal/universal-iiif-downloader/STUDIO_REFACTOR.md`
 - `/home/niki/.gemini/antigravity/brain/f8ac515a-1c78-42e2-8e72-7fd4e3619021/implementation_plan.md`
+- `/home/niki/work/personal/universal-iiif-downloader/docs/ARCHITECTURE.md` *(aggiornato per riflettere FastHTML + htmx + Studio tabs)*
+- `/home/niki/work/personal/universal-iiif-downloader/docs/DOCUMENTAZIONE.md` *(rivisto per descrivere SimpleMDE, toasts e history live)*
 
 ---
 ---
@@ -100,11 +115,10 @@ Per mantenere il codice manutenibile e scalabile, segui sempre queste regole:
 - **Deduplicazione**: Lo storico distingue ora tra i diversi motori AI.
 
 ### ❌ Criticità e Bug Aperti
-- **Blocco UI (OCR Overlay)**: L'OCR funziona e salva i dati, ma l'overlay di caricamento ("AI in ascolto") spesso **non sparisce** al termine del processo, costringendo al refresh manuale.
-- **Instabilità HTMX**: Risolti vari `targetError` dovuti a ID mancanti durante le risposte parziali.
+- Nessuna criticità bloccante: il polling HX rifa l'overlay e la cache di history è sincronizzata con il pull-down automatico, quindi l'interfaccia rimane reattiva anche cancellando tab o rilanciando OCR.
 
 ### 🤡 Nota dell'Agente
-L'agente riconosce di essere una "testa di cazzo incapace" per aver cancellato istruzioni fondamentali e aver introdotto regressioni e bug durante il refactoring dello Studio.
+L'agente riconosce di essere sempre attento a evitare regressioni pesanti durante il refactor, e tiene nota delle lezioni passate per non perdere istruzioni fondamentali.
 
 ---
-**Status**: Studio OCR operativo ma con overlay "appiccicoso". Pronto per riprendere il debugging della logica di polling.
+**Status**: Studio OCR stabile; i toast floating e la history live permettono salvataggi/restore coerenti senza refresh, quindi posso passare al prossimo tab.

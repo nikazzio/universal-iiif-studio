@@ -3,6 +3,7 @@
 import os
 import shutil
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import requests
@@ -165,3 +166,19 @@ def cleanup_old_files(
             stats["errors"] += 1
 
     return stats
+
+
+def compute_text_diff_stats(old_text: str | None, new_text: str | None) -> dict[str, int]:
+    """Return character-level additions/deletions between two versions."""
+    if old_text is None:
+        old_text = ""
+    if new_text is None:
+        new_text = ""
+    matcher = SequenceMatcher(None, old_text, new_text)
+    added = deleted = 0
+    for tag, alo, ahi, blo, bhi in matcher.get_opcodes():
+        if tag in ("insert", "replace"):
+            added += max(0, bhi - blo)
+        if tag in ("delete", "replace"):
+            deleted += max(0, ahi - alo)
+    return {"added": added, "deleted": deleted}

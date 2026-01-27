@@ -131,6 +131,12 @@ function switchTab(tabName) {
 - ❌ Error → Mostra errore inline
 - ⏳ Processing → Spinner
 
+### 5. UI/UX Refinements
+- **Editor markdown**: SimpleMDE è ora armato con CSS inline che mette in evidenza pulsanti, toggle preview e la status bar scrivendo font chiari su toolbar leggermente desaturate, quindi l’editor è più leggibile anche con il tema scuro.
+- **Toasts flottanti**: `_build_toast` genera messaggi fissi in alto a destra con `requestAnimationFrame` che li anima dentro e poi li dissolve; il contenitore `#studio-toast-holder` è `fixed` per rimanere visibile anche quando si scorre.
+- **History live**: La tab storica mostra badge di aggiunte/cancellazioni verdi/rosse, la quantità totale di caratteri e un pulsante di ripristino con conferma; dopo ogni salvataggio viene inserito un trigger HTMX nascosto che ricarica `/studio/partial/history` e può mostrare un banner informativo se il testo non è cambiato.
+- **Route helper**: `_history_refresh_trigger` e `build_studio_tab_content` mantengono sincronizzati i polling OCR e i pannelli tab senza script inline dispersivi, potendo così riutilizzare `/studio` e le partials con lo stesso layout.
+
 ## Next Steps
 
 Se Mirador ancora non si vede:

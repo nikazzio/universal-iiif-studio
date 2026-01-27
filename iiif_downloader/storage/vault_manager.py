@@ -179,7 +179,7 @@ class VaultManager:
             # 1. Get all snippet paths for this manuscript
             cursor.execute("SELECT id, image_path FROM snippets WHERE ms_name = ?", (ms_id,))
             snippets = cursor.fetchall()
-            
+
             # 2. Delete snippets physical files and DB entries
             for s_id, path in snippets:
                 if path:

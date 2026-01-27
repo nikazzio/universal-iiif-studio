@@ -1,88 +1,51 @@
-# 📘 Universal IIIF Downloader & Studio - Guida Completa
+# 📘 Universal IIIF Downloader & Studio – Guida Completa
 
 ## 1. Introduzione
 
-Universal IIIF Downloader & Studio è una piattaforma per Digital Humanities che combina la capacità di scaricare manoscritti ad alta risoluzione (via IIIF) con un ambiente di studio ("Studio") per trascrizione e analisi.
-
-Questa guida approfondisce le funzionalità descritte nel README e fornisce dettagli operativi.
+Universal IIIF Downloader & Studio ora espone una SPA-like experience costruita con FastHTML/htmx: `/studio` serve la UI con Mirador a sinistra e i tab (Trascrizione, Snippets, History, Visual, Info) a destra; ogni tab è gestita come un componente HTML ri-renderizzabile tramite HTMX, mantenendo la logica core (download, OCR, storage) nel modulo `iiif_downloader`.
 
 ## 2. Configurazione Dettagliata (`config.json`)
 
-Mentre `config.example.json` fornisce i default, ecco il significato delle chiavi principali nel tuo `config.json` personale:
-
 ### ⚙️ Sistema e Performance
-*   `settings.system.download_workers`: Numero di thread paralleli per il download delle immagini (default: 4-8).
-*   `settings.images.tile_stitch_max_ram_gb`: Limite RAM (es. 1.0 GB) per l'assemblaggio di immagini enormi. Se superato, il sistema usa la memoria su disco (mmap).
+* `settings.system.download_workers`: thread per download paralleli (4-8).
+* `settings.images.tile_stitch_max_ram_gb`: controllo RAM per il tile stitching.
 
 ### 🤖 Motori OCR
-Le chiavi API devono essere inserite qui. Non committare mai questo file!
-*   `api_keys.openai`: Per GPT-4o ("gpt-4o", "gpt-4-turbo").
-*   `api_keys.anthropic`: Per Claude 3.5 Sonnet (eccellente per paleografia).
-*   `api_keys.google_vision`: Richiede il JSON del service account path o la stringa JSON.
+API key settate in `api_keys`: `openai`, `anthropic`, `google_vision`, `huggingface`. Il modulo `ocr.processor` decide il provider in base a `settings.ocr.ocr_engine`.
 
 ### 🎨 Preferenze UI
-*   `settings.ui.theme_color`: Colore accento Streamlit (default `#FF4B4B`).
-*   `settings.ui.toast_duration`: Durata notifiche (ms).
+* `settings.ui.theme_color`: colore d’accento usato per bottoni e badge nello Studio.
+* `settings.ui.toast_duration`: durata (ms) dei toast floating, usata da `_build_toast` per mostrare salvataggi/errore.
 
 ## 3. Funzionalità Studio
 
-### 🖼️ Viewer Interattivo
-Il viewer supporta deep zoom e pan.
-*   **Controlli**: Rotella mouse per zoom, clic e trascina per pan.
-*   **Reset**: Doppio click o pulsante reset.
+### 🖼️ Viewer e layout
+* Mirador occupa il 55% sinistro, con configurazione minimale (toolbar disattivata, workspace controls off).
+* La parte destra usa tab HTMX per caricare i contenuti senza ricaricare tutta la pagina (`/studio/partial/tabs` + `/studio/partial/history`).
 
-### ✂️ Sistema Snippet (Ritagli)
-Nuova funzionalità v0.5+. Permette di creare un database di dettagli visivi.
-1.  **Attiva Ritaglio**: Clicca la checkbox omonima nella sidebar.
-2.  **Seleziona**: Disegna un rettangolo sull'immagine.
-3.  **Salva**: Appare un pannello sotto la canvas.
-    *   **Categoria**: Scegli tra Capolettera, Glossa, Decorazione, ecc.
-    *   **Trascrizione**: Campo rapido per il contenuto del ritaglio.
-    *   **Note**: Annotazioni paleografiche o stilistiche.
-4.  **Galleria**: I ritagli salvati appaiono sotto l'editor di testo, filtrabili per pagina.
+### ✍️ Trascrizione & OCR
+* L’editor principale ora usa SimpleMDE: tema scuro, toolbar personalizzate, `forceSync` e `text-area` in readOnly quando OCR è in corso.
+* `hx-post="/api/run_ocr_async"` avvia un worker Python; `/api/check_ocr_status` mantiene l’overlay (“AI in ascolto”) visibile fino a esito.
+* I toast flottanti (`#studio-toast-holder`) mostrano messaggi success/info/error tramite `_build_toast` e si auto-dismettono dopo qualche secondo.
+* `/api/save_transcription` verifica se il testo è cambiato (solo salva se diverso), invia un toast flottante e include un trigger HTMX nascosto che rifà il GET a `/studio/partial/history` (con messaggio informativo quando non serve salvare) per mantenere la scheda History aggiornato senza refresh manuale.
 
-### 📝 Editor e OCR
-*   **Editor**: WYSIWYG (Rich Text). Salva automaticamente in un formato duale (HTML per visualizzazione, Text per ricerca).
-*   **OCR**:
-    *   **Singola Pagina**: Pulsante nella sidebar. Aggiorna l'editor in tempo reale.
-    *   **Batch**: "Esegui OCR su tutto il manoscritto" lancia un job in background. Segui il progresso nella sidebar "Jobs".
+### 📜 History
+* I record mostrano badge engine/status, timestamp formattato e snippet di 220 caratteri con diff di caratteri aggiunti/rimossi (+ verde, – rosso).
+* Ogni entry ha un pulsante `↺ Ripristina versione` che chiama `/api/restore_transcription`; un history-message/banner conferma l’operazione.
 
-## 4. Importazione PDF (Local Library)
-Puoi creare una collezione "Locale" dai tuoi PDF.
-1.  Vai in **Discovery** -> **Importa PDF**.
-2.  Carica il file.
-3.  Il sistema crea una cartella in `downloads/Local/NomeFile/`.
-4.  Opzionalmente estrae le immagini (`scans/`) per abilitare lo Studio completo.
+## 4. Snippets e utilities
 
-## 5. Struttura Dati Avanzata
+* La creazione di snippet salva metadata + ritaglio nel vault SQLite e permette di ritrovarli rapidamente nella tab Snippets.
+* Lo storage mantiene `transcription.json`, `history/` e `vault.db` per auditing e ripristino.
 
-### Il Vault (`data/vault.db`)
-Database SQLite centrale.
-*   Non modificare manualmente a meno che tu non sappia usare SQL.
-*   Contiene tutti i metadati degli snippet e l'indice dei manoscritti.
-*   Backup consigliato: copia periodica del file `data/vault.db`.
+## 5. Troubleshooting
 
-### Cartelle Manoscritto
-Ogni cartella in `downloads/` è autoconsistente.
-*   **`history/`**: Contiene il backup incrementale delle trascrizioni. Utile per recuperare lavoro perso.
-*   **`data/transcription.json`**: Il "master file" delle tue trascrizioni. Può essere letto da script esterni per analisi testuale.
+* **Overlay “AI in ascolto” non sparisce**: controlla i log `fasthtml_ui/routes/studio.py` e la console browser per eventuali errori HTMX; l’overlay si disfa quando `/api/check_ocr_status` risponde con la trascrizione aggiornata.
+* **Toast non appaiono**: verifica che `hx-swap-oob` riceva il `Div` con `id="studio-toast-stack"` e che HTMX non filtrino gli script; eventuali errori di script vengono loggati nella console del browser.
+* **History non aggiornata**: il trigger nascosto dopo il salvataggio fa una request GET a `/studio/partial/history`; se la tab non cambia, controllare `logs/app.log` per errori o per `info_message` malformato.
 
-## 6. Troubleshooting
+## 6. Developer Notes
 
-### ⚠️ "Memory Error" durante il download
-Il server IIIF sta inviando immagini troppo grandi per la RAM.
-*   **Soluzione**: Riduci `settings.system.download_workers` a 1 o 2.
-*   Il sistema di *tiling* dovrebbe subentrare automaticamente. Verificare i log.
-
-### ⚠️ OCR fallito / Risultati vuoti
-*   Verifica la API Key in `config.json`.
-*   Controlla i log in `logs/app.log` per messaggi di errore specifici dal provider.
-
-### ⚠️ "Streamlit Session Warning"
-Se vedi warning su ID duplicati, è solitamente un glitch benigno durante il ricaricamento a caldo dello sviluppo. Un refresh della pagina risolve.
-
-## 7. Developer Notes
-
-Vedi [ARCHITECTURE.md](ARCHITECTURE.md) per i dettagli interni.
-*   Per aggiungere una libreria: `iiif_downloader/resolvers/`.
-*   Per modificare il DB: `iiif_downloader/storage/vault_manager.py`.
+* Per comprare la guida Architettura aggiornata, leggi `docs/ARCHITECTURE.md`.
+* Per aggiungere nuovi tool all’editor, aggiorna `fasthtml_ui/components/studio/transcription.py` (SimpleMDE) e considera di esporre ulteriori toolbar/shortcuts qui.
+* Il core OCR resta in `iiif_downloader/ocr`; tutto ciò che riguarda la UI (toasts, overlay, htmx) è in `fasthtml_ui/`.
