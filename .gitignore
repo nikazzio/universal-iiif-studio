@@ -39,6 +39,7 @@ htmlcov/
 dist/
 build/
 *.spec
+*.egg-info/
 
 # --- Databases (Generico) ---
 *.sqlite
