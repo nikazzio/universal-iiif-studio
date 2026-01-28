@@ -20,7 +20,7 @@ Il progetto ha adottato un **Modern Package Layout (SRC Layout)**. La logica è 
 ### 📂 Layout SRC
 
 - **Source Code**: Tutto il codice sorgente deve risiedere in `src/`.
-- **Root Clean Policy**: Nessun file Python è ammesso nella root, ad eccezione di `studio_app.py`.
+- **Root Clean Policy**: NRoot Clean Policy: Nessun file Python è ammesso nella root. Tutto il codice, inclusi gli entry point dell'applicazione (`studio_app.py`), deve risiedere esclusivamente dentro la cartella `src/`.
 - **No Legacy**: Il file `main.py` nella root è eliminato. La CLI vive in `src/universal_iiif_cli/`.
 
 ### 📦 Dependency & Config
@@ -40,7 +40,7 @@ Il progetto ha adottato un **Modern Package Layout (SRC Layout)**. La logica è 
 ## 🗺️ Orientation
 
 - **CLI Entry Point**: `src/universal_iiif_cli/cli.py` (funzione `main()`).
-- **Web Entry Point**: `studio_app.py` (funzione `main()`).
+- **Web Entry Point**: `src/studio_app.py` (funzione `main()`).
 - **Core Logic**: `src/universal_iiif_core/`.
 - **UI & Routes**: `src/studio_ui/`.
 

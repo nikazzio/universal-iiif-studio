@@ -30,7 +30,7 @@ app, rt = fast_app(
 )
 
 # Setup static file serving
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 static_dir = BASE_DIR / "static"
 assets_dir = BASE_DIR / "assets"
 downloads_path = config.get_downloads_dir()
@@ -100,7 +100,7 @@ def main():
     # Nota: passiamo "studio_app:app" come stringa a serve() per
     # permettere il corretto funzionamento del reload automatico.
     serve(
-        app="studio_app:app",
+        # app="studio_app:app",
         port=8000,
         reload=True,
         reload_includes=["*.py", "*.html"],
