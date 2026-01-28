@@ -1,9 +1,46 @@
 """Rendering helpers for the Discovery routes.
 
-Keeping UI rendering separate makes the route handlers small and testable.
+Gestisce la grafica della pagina di ricerca, le card di anteprima,
+i messaggi di errore e la barra di avanzamento del download.
 """
 
-from fasthtml.common import H2, H3, Button, Div, Form, Input, Label, Option, P, Select, Span, Table, Tbody, Td, Th, Tr
+from fasthtml.common import (
+    H2,
+    H3,
+    A,
+    Button,
+    Div,
+    Form,
+    Input,
+    Label,
+    Option,
+    P,
+    Select,
+    Span,
+    Table,
+    Tbody,
+    Td,
+    Th,
+    Tr,
+)
+
+
+def render_error_message(title: str, details: str = "") -> Div:
+    """Renderizza un messaggio di errore user-friendly (Rosso)."""
+    return Div(
+        Div(
+            Span("⚠️", cls="text-2xl mr-3"),
+            Div(
+                P(title, cls="font-bold text-red-800 dark:text-red-200"),
+                P(details, cls="text-sm text-red-600 dark:text-red-300 mt-1") if details else "",
+            ),
+            cls="flex items-start",
+        ),
+        cls=(
+            "bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 p-4 rounded "
+            "shadow-sm mt-6 animate-in fade-in slide-in-from-top-2"
+        ),
+    )
 
 
 def discovery_form() -> Div:
@@ -52,7 +89,7 @@ def discovery_form() -> Div:
                         placeholder="es. Urb.lat.1779 o btv1b10033406t",
                         cls=(
                             "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white "
-                            "dark:bg-gray-800 dark:text-white shadow-sm",
+                            "dark:bg-gray-800 dark:text-white shadow-sm"
                         ),
                     ),
                     cls="w-2/3",
@@ -64,7 +101,7 @@ def discovery_form() -> Div:
                 type="submit",
                 cls=(
                     "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded "
-                    "transition-all shadow-md active:scale-95",
+                    "transition-all shadow-md active:scale-95"
                 ),
             ),
             hx_post="/api/resolve_manifest",
@@ -93,6 +130,18 @@ def discovery_content() -> Div:
 
 def render_preview(data: dict) -> Div:
     """Render preview block for a manifest."""
+    # Warning se ci sono troppe pagine
+    pages = int(data.get("pages", 0))
+    warning = ""
+    if pages > 500:
+        warning = Div(
+            f"⚠️ Questo manoscritto contiene molte pagine ({pages}). Il download richiederà tempo.",
+            cls=(
+                "text-xs text-amber-800 dark:text-amber-200 mb-4 bg-amber-50 "
+                "dark:bg-amber-900/30 p-3 rounded border border-amber-200"
+            ),
+        )
+
     return Div(
         H3(
             f"📖 {data['label']}",
@@ -127,6 +176,7 @@ def render_preview(data: dict) -> Div:
                 ),
                 cls="w-full mb-6",
             ),
+            warning,
             Form(
                 Input(type="hidden", name="manifest_url", value=data["url"]),
                 Input(type="hidden", name="doc_id", value=data["id"]),
@@ -137,7 +187,7 @@ def render_preview(data: dict) -> Div:
                     cls=(
                         "w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg "
                         "transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center "
-                        "justify-center gap-2",
+                        "justify-center gap-2"
                     ),
                 ),
                 hx_post="/api/start_download",
@@ -146,26 +196,87 @@ def render_preview(data: dict) -> Div:
             ),
             cls=(
                 "bg-gray-50 dark:bg-gray-900 p-6 rounded-lg border-2 border-dashed "
-                "border-indigo-200 dark:border-indigo-900",
+                "border-indigo-200 dark:border-indigo-900"
             ),
         ),
         cls="animate-in fade-in slide-in-from-top-4 duration-300",
     )
 
 
-def render_download_status(download_id: str, doc_id: str) -> Div:
-    """Render the initial download status fragment (polling placeholder)."""
+def render_download_status(download_id: str, doc_id: str, library: str, status_data: dict) -> Div:
+    """Render the download status (Progress Bar or Success Card)."""
+    percent = status_data.get("percent", 0)
+    status = status_data.get("status", "running")
+    current = status_data.get("current", 0)
+    total = status_data.get("total", 0)
+    error = status_data.get("error")
+
+    # 1. Caso Errore
+    if "error" in status or error:
+        return render_error_message("Errore durante il download", str(error or status))
+
+    # 2. Caso Completato (Mostra bottone per lo Studio)
+    if percent >= 100 or status == "completed":
+        from urllib.parse import quote
+
+        encoded_lib = quote(library)
+        encoded_doc = quote(doc_id)
+
+        return Div(
+            Div(
+                Span("✅", cls="text-4xl mb-4 block"),
+                H3("Download Completato!", cls="text-xl font-bold text-green-700 dark:text-green-300 mb-2"),
+                P(
+                    f"Il manoscritto '{doc_id}' è stato salvato correttamente.",
+                    cls="text-gray-600 dark:text-gray-400 mb-6",
+                ),
+                A(
+                    Button(
+                        "📖 Apri nello Studio",
+                        cls=(
+                            "bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md "
+                            "transition-transform hover:scale-105"
+                        ),
+                    ),
+                    href=f"/studio?library={encoded_lib}&doc_id={encoded_doc}",
+                    cls="inline-block",
+                ),
+                cls="text-center",
+            ),
+            cls=(
+                "bg-green-50 dark:bg-green-900/20 border border-green-200 "
+                "dark:border-green-800 p-8 rounded-lg shadow-sm animate-in zoom-in "
+                "duration-300"
+            ),
+        )
+
+    # 3. Caso In Corso (Barra di progresso + Polling)
+    # Importante: passiamo doc_id e library nel polling per non perderli
     return Div(
         Div(
-            Span("🚀", cls="text-2xl mr-2"),
-            Span(f"Download di '{doc_id}' avviato...", cls="font-bold"),
-            cls="flex items-center text-indigo-600 dark:text-indigo-400 mb-2",
+            Div(
+                P(
+                    f"Scaricamento pagina {current} di {total}...",
+                    cls="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1",
+                ),
+                P(f"{percent}%", cls="text-xs text-gray-500"),
+                cls="flex justify-between",
+            ),
+            Div(
+                Div(
+                    cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out",
+                    style=f"width: {percent}%",
+                ),
+                cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-4",
+            ),
+            P(
+                "Ottimizzazione immagini e salvataggio nel database...",
+                cls="text-xs text-gray-400 italic animate-pulse",
+            ),
         ),
-        Div(
-            "Inizializzazione worker...",
-            hx_get=f"/api/download_status/{download_id}",
-            hx_trigger="every 1s",
-            hx_swap="outerHTML",
-        ),
-        cls=("bg-indigo-50 dark:bg-indigo-950 p-6 rounded-lg border border-indigo-200 dark:border-indigo-800"),
+        # Polling continuo ogni 1 secondo
+        hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
+        hx_trigger="every 1s",
+        hx_swap="outerHTML",
+        cls="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm",
     )

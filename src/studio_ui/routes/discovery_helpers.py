@@ -4,9 +4,9 @@ These keep the request handlers small and focused so ruff's
 complexity checks remain satisfied.
 """
 
-import threading
 from typing import Any
 
+from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.logic import IIIFDownloader
 from universal_iiif_core.utils import get_json
@@ -82,6 +82,9 @@ def start_downloader_thread(
             logger.error("Download thread error: %s", exc)
             progress_store[download_id]["status"] = f"error: {str(exc)}"
 
-    thread = threading.Thread(target=run_downloader, daemon=True)
-    thread.start()
+    def _download_task(progress_callback=None):
+        run_downloader()
+        return None
+
+    job_manager.submit_job(_download_task, job_type="download")
     return download_id
