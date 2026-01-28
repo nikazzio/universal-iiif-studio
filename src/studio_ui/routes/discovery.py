@@ -28,10 +28,9 @@ from fasthtml.common import (
 
 from studio_ui.components.layout import base_layout
 from studio_ui.config import get_setting
+from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloader_thread
 from universal_iiif_core.logger import get_logger
-from universal_iiif_core.logic import IIIFDownloader
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark
-from universal_iiif_core.utils import get_json
 
 logger = get_logger(__name__)
 
@@ -68,35 +67,23 @@ def setup_discovery_routes(app):
                 return Div(
                     Span("⚠️", cls="text-xl mr-2"),
                     Span(doc_id_hint or "ID non risolvibile", cls="font-medium"),
-                    cls="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-600 text-yellow-700 dark:text-yellow-200 px-4 py-3 rounded mt-4",
+                    cls=(
+                        "bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 "
+                        "dark:border-yellow-600 text-yellow-700 dark:text-yellow-200 "
+                        "px-4 py-3 rounded mt-4"
+                    ),
                 )
 
             # Analyze manifest
-            m = get_json(manifest_url)
-            label = m.get("label", "Senza Titolo")
-            if isinstance(label, list):
-                label = label[0]
-            if isinstance(label, dict):
-                label = label.get("it", label.get("en", list(label.values())[0]))
-
-            desc = m.get("description", "")
-            if isinstance(desc, list):
-                desc = desc[0]
-
-            # Count pages
-            canvases = []
-            if "sequences" in m:
-                canvases = m["sequences"][0].get("canvases", [])
-            elif "items" in m:
-                canvases = m["items"]
+            manifest_info = analyze_manifest(manifest_url)
 
             preview_data = {
                 "url": manifest_url,
                 "id": doc_id_hint,
-                "label": str(label),
+                "label": manifest_info["label"],
                 "library": library,
-                "description": str(desc)[:500],
-                "pages": len(canvases),
+                "description": manifest_info["description"][:500],
+                "pages": manifest_info["pages"],
             }
 
             return _render_preview(preview_data)
@@ -106,7 +93,11 @@ def setup_discovery_routes(app):
             return Div(
                 Span("❌", cls="text-xl mr-2"),
                 Span(f"Errore: {str(e)}", cls="font-medium"),
-                cls="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 px-4 py-3 rounded mt-4",
+                cls=(
+                    "bg-red-100 dark:bg-red-900 border border-red-400 "
+                    "dark:border-red-600 text-red-700 dark:text-red-200 "
+                    "px-4 py-3 rounded mt-4"
+                ),
             )
 
     @app.post("/api/start_download")
@@ -123,30 +114,14 @@ def setup_discovery_routes(app):
             logger.info(f"🚀 Starting download: {doc_id} from {library}")
 
             # Track progress (simple shared state)
-            download_id = f"{library}_{doc_id}"
-            download_progress[download_id] = {"current": 0, "total": 0, "status": "initializing"}
-
-            def progress_hook(curr, total):
-                download_progress[download_id] = {"current": curr, "total": total, "status": "downloading"}
-
-            def run_downloader():
-                try:
-                    downloader = IIIFDownloader(
-                        manifest_url=manifest_url,
-                        output_name=doc_id,
-                        library=library,
-                        progress_callback=progress_hook,
-                        workers=int(get_setting("system.download_workers", 4)),
-                    )
-                    downloader.run()
-                    download_progress[download_id]["status"] = "complete"
-                except Exception as e:
-                    logger.error(f"Download thread error: {e}")
-                    download_progress[download_id]["status"] = f"error: {str(e)}"
-
-            # Start in thread
-            thread = threading.Thread(target=run_downloader, daemon=True)
-            thread.start()
+            # Start a background downloader thread (helper handles progress updates)
+            download_id = start_downloader_thread(
+                manifest_url=manifest_url,
+                doc_id=doc_id,
+                library=library,
+                progress_store=download_progress,
+                workers=int(get_setting("system.download_workers", 4)),
+            )
 
             # Return progress UI with polling
             return _render_download_status(download_id, doc_id)
@@ -236,7 +211,11 @@ def _discovery_form() -> Div:
                         *[Option(label, value=value) for label, value in libraries],
                         id="lib-select",
                         name="library",
-                        cls="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 dark:text-white",
+                        cls=(
+                            "w-full px-3 py-2 border border-gray-300 "
+                            "dark:border-gray-600 rounded bg-white dark:bg-gray-800 "
+                            "dark:text-white"
+                        ),
                     ),
                     cls="w-1/3",
                 ),
@@ -252,7 +231,10 @@ def _discovery_form() -> Div:
                         id="shelf-input",
                         name="shelfmark",
                         placeholder="es. Urb.lat.1779 o btv1b10033406t",
-                        cls="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 dark:text-white shadow-sm",
+                        cls=(
+                            "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white "
+                            "dark:bg-gray-800 dark:text-white shadow-sm",
+                        ),
                     ),
                     cls="w-2/3",
                 ),
@@ -261,7 +243,10 @@ def _discovery_form() -> Div:
             Button(
                 "🔍 Analizza Documento",
                 type="submit",
-                cls="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded transition-all shadow-md active:scale-95",
+                cls=(
+                    "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded "
+                    "transition-all shadow-md active:scale-95",
+                ),
             ),
             hx_post="/api/resolve_manifest",
             hx_target="#discovery-preview",
@@ -322,13 +307,19 @@ def _render_preview(data: dict) -> Div:
                 Button(
                     Span("🚀 Avvia Download", cls="font-bold"),
                     type="submit",
-                    cls="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2",
+                    cls=(
+                        "w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all "
+                        "shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2",
+                    ),
                 ),
                 hx_post="/api/start_download",
                 hx_target="#discovery-preview",
                 hx_swap="innerHTML",
             ),
-            cls="bg-gray-50 dark:bg-gray-900 p-6 rounded-lg border-2 border-dashed border-indigo-200 dark:border-indigo-900",
+            cls=(
+                "bg-gray-50 dark:bg-gray-900 p-6 rounded-lg border-2 border-dashed "
+                "border-indigo-200 dark:border-indigo-900",
+            ),
         ),
         cls="animate-in fade-in slide-in-from-top-4 duration-300",
     )
