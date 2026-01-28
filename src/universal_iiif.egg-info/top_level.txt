@@ -1,3 +1,0 @@
-studio_ui
-universal_iiif_cli
-universal_iiif_core

@@ -5,6 +5,8 @@ Shell HTML con sidebar, headers per Tailwind/HTMX/Mirador, tema chiaro/scuro, e 
 
 from fasthtml.common import A, Body, Button, Div, Head, Html, Img, Link, Main, Meta, Nav, Script, Title
 
+from universal_iiif_core import __version__
+
 
 def base_layout(title: str, content, active_page: str = "") -> Html:
     """Generate base page layout with sidebar, dark mode toggle, and headers."""
@@ -138,7 +140,7 @@ def _sidebar(active_page: str = "") -> Nav:
         ),
 
         Div(
-            Div("v0.6.0 → FastHTML", cls="text-xs text-gray-500"),
+            Div(f"v{__version__} → FastHTML", cls="text-xs text-gray-500"),
             cls="pt-4 border-t border-gray-700 sidebar-footer"
         ),
 

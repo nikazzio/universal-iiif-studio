@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "universal-iiif"
-version = "0.6.0"
+version = "0.7.0"
 description = "Universal IIIF Downloader & Studio for working with IIIF manuscripts."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -119,7 +119,10 @@ reportMissingTypeStubs = "none"
 reportMissingImports = true
 
 [tool.semantic_release]
-version_variables = ["src/universal_iiif_core/__init__.py:__version__"]
+version_variables = [
+  "pyproject.toml:project.version",
+  "src/universal_iiif_core/__init__.py:__version__",
+]
 changelog_file = "CHANGELOG.md"
 assets = []
 commit_message = "chore(release): {version} [skip ci]"
