@@ -7,12 +7,17 @@ very small and satisfy ruff's complexity check.
 from typing import Any
 from urllib.parse import unquote
 
-from fasthtml.common import Button, Div, P, Request, Span
+from fasthtml.common import Request
 
+# Importiamo i nuovi componenti grafici
+from studio_ui.components.discovery import (
+    discovery_content,
+    render_download_status,
+    render_error_message,
+    render_preview,
+)
 from studio_ui.components.layout import base_layout
-from studio_ui.config import get_setting
 from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloader_thread
-from studio_ui.routes.discovery_render import discovery_content, render_download_status, render_preview
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark
 
@@ -23,58 +28,67 @@ download_progress: dict[str, Any] = {}
 
 
 def discovery_page(request: Request):
-    """Render the Discovery page.
-
-    Returns just the content for HTMX requests, otherwise uses the
-    application's base layout.
-    """
+    """Render the Discovery page."""
     content = discovery_content()
-    if request.headers.get("HX-Request") == "true":
+    is_hx = request.headers.get("HX-Request") == "true"
+    if is_hx:
         return content
-    return base_layout("Discovery & Download", content, active_page="discovery")
+    return base_layout("Discovery", content, active_page="discovery")
 
 
 def resolve_manifest(library: str, shelfmark: str):
     """Resolve a shelfmark or URL and return a preview fragment."""
     try:
-        logger.info(f"🔍 Resolving: {library} / {shelfmark}")
-        manifest_url, doc_id_hint = resolve_shelfmark(library, shelfmark)
+        # Controllo Input Vuoto
+        if not shelfmark or not shelfmark.strip():
+            return render_error_message("Input mancante", "Inserisci una segnatura (es. Urb.lat.1779) o un URL valido.")
+
+        logger.info("Resolving: lib=%s shelf=%s", library, shelfmark)
+
+        # 1. Risoluzione URL
+        try:
+            manifest_url, doc_id = resolve_shelfmark(library, shelfmark)
+        except Exception as e:
+            logger.error(f"Resolver error: {e}")
+            return render_error_message("Errore nel Resolver", str(e))
 
         if not manifest_url:
-            return Div(
-                Span("⚠️", cls="text-xl mr-2"),
-                Span(doc_id_hint or "ID non risolvibile", cls="font-medium"),
-                cls=(
-                    "bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 "
-                    "dark:border-yellow-600 text-yellow-700 dark:text-yellow-200 "
-                    "px-4 py-3 rounded mt-4"
-                ),
+            # Suggerimenti specifici in base alla biblioteca
+            hint = "Verifica che la segnatura sia corretta."
+            if library == "Vaticana":
+                hint += " Prova formati come 'Urb.lat.1779' o 'Vat.gr.123'."
+            elif library == "Gallica":
+                hint += " Inserisci un ID ARK o cerca per titolo."
+
+            return render_error_message(
+                "Manoscritto non trovato", f"Impossibile risolvere '{shelfmark}' per la biblioteca {library}. {hint}"
             )
 
-        manifest_info = analyze_manifest(manifest_url)
+        # 2. Analisi del Manifest (Download leggero)
+        try:
+            manifest_info = analyze_manifest(manifest_url)
+        except Exception as e:
+            logger.error(f"Manifest analysis error: {e}")
+            return render_error_message(
+                "Errore lettura Manifest",
+                "Il documento esiste ma il file Manifest IIIF sembra corrotto o irraggiungibile.",
+            )
 
+        # 3. Preparazione Dati Anteprima
         preview_data = {
-            "url": manifest_url,
-            "id": doc_id_hint,
-            "label": manifest_info["label"],
+            "id": doc_id or manifest_info.get("label", "Unknown"),
             "library": library,
-            "description": manifest_info["description"][:500],
-            "pages": manifest_info["pages"],
+            "url": manifest_url,
+            "label": manifest_info.get("label", "Senza Titolo"),
+            "description": manifest_info.get("description", "Nessuna descrizione disponibile."),
+            "pages": manifest_info.get("canvases", 0),
         }
 
         return render_preview(preview_data)
 
-    except Exception as exc:
-        logger.exception("❌ Resolution error: %s", exc)
-        return Div(
-            Span("❌", cls="text-xl mr-2"),
-            Span(f"Errore: {str(exc)}", cls="font-medium"),
-            cls=(
-                "bg-red-100 dark:bg-red-900 border border-red-400 "
-                "dark:border-red-600 text-red-700 dark:text-red-200 "
-                "px-4 py-3 rounded mt-4"
-            ),
-        )
+    except Exception as e:
+        logger.exception("Unexpected error in resolve_manifest")
+        return render_error_message("Errore di Sistema Imprevisto", str(e))
 
 
 def start_download(manifest_url: str, doc_id: str, library: str):
@@ -84,77 +98,28 @@ def start_download(manifest_url: str, doc_id: str, library: str):
         doc_id = unquote(doc_id)
         library = unquote(library)
 
-        logger.info(f"🚀 Starting download: {doc_id} from {library}")
+        download_id = start_downloader_thread(manifest_url, doc_id, library, download_progress)
 
-        download_id = start_downloader_thread(
-            manifest_url=manifest_url,
-            doc_id=doc_id,
-            library=library,
-            progress_store=download_progress,
-            workers=int(get_setting("system.download_workers", 4)),
-        )
+        # Ritorna subito il primo stato (0%) per avviare il polling
+        initial_status = {"status": "starting", "current": 0, "total": 0, "percent": 0}
+        return render_download_status(download_id, doc_id, library, initial_status)
 
-        return render_download_status(download_id, doc_id)
-
-    except Exception as exc:
-        logger.exception("❌ Start download error: %s", exc)
-        return Div(f"Errore: {str(exc)}", cls="text-red-600")
+    except Exception as e:
+        logger.exception("Download start failed")
+        return render_error_message("Impossibile avviare il download", str(e))
 
 
-def get_download_status(download_id: str):
+def get_download_status(download_id: str, doc_id: str = "", library: str = ""):
     """Return current download status for polling (HTMX endpoint)."""
-    status_data = download_progress.get(download_id, {"status": "unknown"})
-
-    if status_data["status"] == "complete":
-        return Div(
-            Div(
-                Span("🎉", cls="text-2xl mr-2"),
-                Span("Download Completato!", cls="font-bold"),
-                cls=("flex items-center text-green-600 dark:text-green-400 mb-2"),
-            ),
-            P(f"Il documento '{download_id.split('_')[-1]}' è pronto nello Studio."),
-            Button(
-                "Vai allo Studio →",
-                hx_get=(f"/studio?library={download_id.split('_')[0]}&doc_id={download_id.split('_')[-1]}"),
-                hx_target="#app-main",
-                hx_swap="innerHTML",
-                hx_push_url="true",
-                cls=("bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded mt-4 transition"),
-            ),
-            cls=("bg-green-100 dark:bg-green-900/30 p-4 rounded border border-green-400"),
-        )
-
-    if "error" in status_data["status"]:
-        return Div(
-            Span("❌", cls="text-2xl mr-2"),
-            Span(
-                f"Errore Download: {status_data['status'].replace('error: ', '')}",
-                cls="font-bold text-red-600",
-            ),
-            cls=("bg-red-100 dark:bg-red-900/30 p-4 rounded border border-red-400"),
-        )
+    status_data = download_progress.get(download_id, {"status": "starting"})
 
     curr = status_data.get("current", 0)
     total = status_data.get("total", 0)
+
+    # Calcolo percentuale sicuro
     percent = int((curr / total * 100) if total > 0 else 0)
 
-    return Div(
-        Div(
-            Span("⏳", cls="animate-spin-slow text-xl mr-2"),
-            Span(
-                f"Scaricamento in corso: {curr}/{total}",
-                cls=("font-medium text-indigo-600 dark:text-indigo-400"),
-            ),
-            cls="flex items-center mb-2",
-        ),
-        Div(
-            Div(
-                style=f"width: {percent}%",
-                cls="h-full bg-indigo-600 transition-all duration-300",
-            ),
-            cls=("w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"),
-        ),
-        hx_get=f"/api/download_status/{download_id}",
-        hx_trigger="every 1.5s",
-        hx_swap="outerHTML",
-    )
+    # Aggiorniamo i dati per il render
+    status_data["percent"] = percent
+
+    return render_download_status(download_id, doc_id, library, status_data)
