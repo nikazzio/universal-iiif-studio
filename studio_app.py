@@ -34,6 +34,7 @@ BASE_DIR = Path(__file__).resolve().parent
 static_dir = BASE_DIR / "static"
 assets_dir = BASE_DIR / "assets"
 downloads_path = config.get_downloads_dir()
+snippets_path = config.get_snippets_dir()
 
 for d in [static_dir, assets_dir]:
     if not d.exists():
@@ -41,6 +42,9 @@ for d in [static_dir, assets_dir]:
 
 app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Mount snippets directory under the assets path so user-created snippets
+# (stored in runtime `data/local/snippets`) are served at `/assets/snippets/...`.
+app.mount("/assets/snippets", StaticFiles(directory=str(snippets_path)), name="assets_snippets")
 
 if downloads_path.exists():
     app.mount("/downloads", StaticFiles(directory=str(downloads_path)), name="downloads")

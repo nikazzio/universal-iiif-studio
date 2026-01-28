@@ -23,11 +23,11 @@ logger = get_logger(__name__)
 
 DEFAULT_CONFIG_JSON: dict[str, Any] = {
     "paths": {
-        "downloads_dir": "var/downloads",
-        "temp_dir": "var/temp_images",
-        "models_dir": "var/models",
-        "logs_dir": "var/logs",
-        "snippets_dir": "var/snippets",
+        "downloads_dir": "data/local/downloads",
+        "temp_dir": "data/local/temp_images",
+        "models_dir": "data/local/models",
+        "logs_dir": "data/local/logs",
+        "snippets_dir": "data/local/snippets",
     },
     "api_keys": {
         "openai": "",
@@ -231,23 +231,23 @@ class ConfigManager:
 
     def set_downloads_dir(self, value: str) -> None:
         """Set the downloads directory path."""
-        self._data.setdefault("paths", {})["downloads_dir"] = (value or "var/downloads").strip()
+        self._data.setdefault("paths", {})["downloads_dir"] = (value or "data/local/downloads").strip()
 
     def set_temp_dir(self, value: str) -> None:
         """Set the temporary images directory path."""
-        self._data.setdefault("paths", {})["temp_dir"] = (value or "var/temp_images").strip()
+        self._data.setdefault("paths", {})["temp_dir"] = (value or "data/local/temp_images").strip()
 
     def set_models_dir(self, value: str) -> None:
         """Set the models directory path."""
-        self._data.setdefault("paths", {})["models_dir"] = (value or "var/models").strip()
+        self._data.setdefault("paths", {})["models_dir"] = (value or "data/local/models").strip()
 
     def set_logs_dir(self, value: str) -> None:
         """Set the logs directory path."""
-        self._data.setdefault("paths", {})["logs_dir"] = (value or "var/logs").strip()
+        self._data.setdefault("paths", {})["logs_dir"] = (value or "data/local/logs").strip()
 
     def set_snippets_dir(self, value: str) -> None:
         """Set the snippets directory path."""
-        self._data.setdefault("paths", {})["snippets_dir"] = (value or "var/snippets").strip()
+        self._data.setdefault("paths", {})["snippets_dir"] = (value or "data/local/snippets").strip()
 
     def set_api_key(self, provider: str, value: str) -> None:
         """Set an API key for a given provider."""
@@ -307,23 +307,23 @@ class ConfigManager:
 
     def get_downloads_dir(self) -> Path:
         """Get the downloads directory path."""
-        return self._ensure_dir(self.resolve_path("downloads_dir", "var/downloads"))
+        return self._ensure_dir(self.resolve_path("downloads_dir", "data/local/downloads"))
 
     def get_temp_dir(self) -> Path:
         """Get the temporary images directory path."""
-        return self._ensure_dir(self.resolve_path("temp_dir", "var/temp_images"))
+        return self._ensure_dir(self.resolve_path("temp_dir", "data/local/temp_images"))
 
     def get_models_dir(self) -> Path:
         """Get the models directory path."""
-        return self._ensure_dir(self.resolve_path("models_dir", "var/models"))
+        return self._ensure_dir(self.resolve_path("models_dir", "data/local/models"))
 
     def get_logs_dir(self) -> Path:
         """Get the logs directory path."""
-        return self._ensure_dir(self.resolve_path("logs_dir", "var/logs"))
+        return self._ensure_dir(self.resolve_path("logs_dir", "data/local/logs"))
 
     def get_snippets_dir(self) -> Path:
         """Get the snippets directory path."""
-        return self._ensure_dir(self.resolve_path("snippets_dir", "var/snippets"))
+        return self._ensure_dir(self.resolve_path("snippets_dir", "data/local/snippets"))
 
 
 # NOTE: apply_to_env() and env var mapping intentionally removed.

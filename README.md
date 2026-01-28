@@ -53,6 +53,8 @@ pip install -e .
 ```
 
 Per linting e testing automatizzati puoi installare anche le dipendenze di sviluppo:
+Se hai bisogno di condividere estratti o dataset con altri contributori, esportali in una cartella separata
+con istruzioni e metadata, invece di committare i file grezzi in `data/local/`.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -145,12 +147,21 @@ python -m universal_iiif_cli.cli "Urb.lat.1779" --ocr kraken
 ## 📁 Struttura Cartelle
 
 ```text
-var/downloads/      # Archivio Manoscritti (Immagini, JSON, PDF)
-assets/snippets/    # Ritagli salvati
+data/local/         # Runtime data: downloads/, snippets/, models/, logs/, temp_images/ (NON versionato)
+data/local/downloads/      # Archivio Manoscritti (Immagini, JSON, PDF)
+data/local/snippets/       # Ritagli locali per analisi (salvati localmente, non committare)
+data/local/models/         # Modelli OCR Kraken (scaricati/allenati localmente)
+data/local/temp_images/    # Immagini temporanee di lavoro
+data/local/logs/           # Log runtime
+assets/snippets/    # (legacy) snippet assets - preferire data/local/snippets
 data/vault.db       # Database SQLite
-models/             # Modelli OCR Kraken
 config.json         # Configurazione locale (non committare!)
 ```
+
+Nota: la directory `data/local/` contiene dati generati e scaricati a runtime (immagini, modelli, log, ritagli).
+Per motivi di privacy e pulizia del repository, `data/local/` è inclusa in `.gitignore` e NON deve essere committata.
+Se hai bisogno di condividere estratti o dataset con altri contributori, esportali in una cartella separata
+con istruzioni e metadata, invece di committare i file grezzi in `data/local/`.
 
 ## 🤝 Contribuire
 

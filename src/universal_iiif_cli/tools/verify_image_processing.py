@@ -7,6 +7,7 @@ import io
 from pathlib import Path
 
 from PIL import Image
+
 from universal_iiif_core.config_manager import get_config_manager
 
 
@@ -36,7 +37,7 @@ def main() -> None:
 
     image_path = args.image if args.image else _default_image_path(args.library, args.doc, args.page)
 
-    print(f"Testing image:", image_path)
+    print("Testing image:", image_path)
     if not image_path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
 

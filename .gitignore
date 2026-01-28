@@ -19,6 +19,10 @@ config.json
 config.yaml
 data/vault.db
 assets/snippets/
+# Runtime data (user downloads, models, logs, snippets)
+# This directory is generated at runtime and must NOT be committed.
+# Use `data/local/` for runtime data to keep `data/` for committed datasets like `data/vault.db`.
+data/local/
 
 # OS
 .DS_Store

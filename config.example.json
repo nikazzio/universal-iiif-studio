@@ -1,9 +1,10 @@
 {
     "paths": {
-        "downloads_dir": "var/downloads",
-        "temp_dir": "temp_images",
-        "models_dir": "models",
-        "logs_dir": "logs"
+        "downloads_dir": "data/local/downloads",
+        "temp_dir": "data/local/temp_images",
+        "models_dir": "data/local/models",
+        "logs_dir": "data/local/logs",
+        "snippets_dir": "data/local/snippets"
     },
     "api_keys": {
         "openai": "",

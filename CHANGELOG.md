@@ -8,6 +8,10 @@ Tutte le modifiche notevoli a questo progetto saranno documentate in questo file
 
 - Feat snippet sqlite (#6)
 
+### Fixed
+
+- Move runtime data directory from `var/` to `data/local/` and serve snippets from `/assets/snippets/` (chore/docs) (#15)
+
 ## [v0.5.0] - 2026-01-19
 
 ### Added
