@@ -114,6 +114,7 @@ class JobManager:
         return False
 
     def is_cancel_requested(self, job_id: str) -> bool:
+        """Check if cancellation has been requested for a given job_id."""
         with self._lock:
             return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
 

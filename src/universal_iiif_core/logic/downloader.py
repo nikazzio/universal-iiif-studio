@@ -6,7 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from secrets import SystemRandom
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 from PIL import Image
@@ -42,7 +42,7 @@ class IIIFDownloader:
     def __init__(
         self,
         manifest_url: str,
-        output_dir: Union[str, Path, None] = None,
+        output_dir: str | Path | None = None,
         output_name: str | None = None,
         workers: int = 4,
         clean_cache: bool = False,
@@ -319,7 +319,11 @@ class IIIFDownloader:
                 max_ram_gb = float(cm.get_setting("images.tile_stitch_max_ram_gb", 2) or 2)
             except (TypeError, ValueError):
                 max_ram_gb = 2.0
-            max_ram_gb = max(1.0, min(max_ram_gb, 64.0))
+            # Allow small RAM caps for testing/low-memory environments while
+            # still preventing absurd values. Lower bound relaxed from 1.0GB
+            # to 0.1GB so users can request e.g. 0.5GB and trigger disk-backed
+            # stitching behavior instead of forcing a larger in-memory canvas.
+            max_ram_gb = max(0.1, min(max_ram_gb, 64.0))
             max_ram_bytes = int(max_ram_gb * (1024**3))
 
             dims = stitch_iiif_tiles_to_jpeg(
@@ -443,8 +447,8 @@ class IIIFDownloader:
 
     def run(
         self,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-        should_cancel: Optional[Callable[[], bool]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ):
         """Execute the download workflow for the manifest.
 
@@ -452,6 +456,9 @@ class IIIFDownloader:
             progress_callback: Optional callable that receives (current, total)
                 and will be invoked as pages are downloaded. If provided it
                 overrides any instance-level `progress_callback` set at init.
+            should_cancel: Optional callable returning True to request cancellation.
+                It is polled during the run; when True, the method should abort
+                further processing and perform any necessary cleanup.
         """
         self.extract_metadata()
         canvases = self.get_canvases()
@@ -498,8 +505,8 @@ class IIIFDownloader:
     def _download_canvases(
         self,
         canvases: list[dict[str, Any]],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-        should_cancel: Optional[Callable[[], bool]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ):
         downloaded: list[str | None] = [None] * len(canvases)
         page_stats = []

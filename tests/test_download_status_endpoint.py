@@ -21,4 +21,4 @@ def test_download_status_endpoint_shows_progress():
         text = resp.text
 
         # Should contain the Italian progress substring used in the template
-        assert f"Scaricamento pagina 2 di 5" in text or "40%" in text
+        assert "Scaricamento pagina 2 di 5" in text or "40%" in text

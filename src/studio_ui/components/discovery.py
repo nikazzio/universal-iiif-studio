@@ -287,7 +287,10 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
             H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
             Span(
                 library,
-                cls="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 px-2 py-1 rounded ml-2",
+                cls=(
+                    "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
+                    " dark:text-indigo-300 px-2 py-1 rounded ml-2"
+                ),
             ),
             cls="flex items-center justify-between",
         ),

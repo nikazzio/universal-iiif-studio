@@ -578,7 +578,9 @@ class VaultManager:
             cursor.execute(
                 """
                 UPDATE download_jobs
-                SET status = ?, error_message = COALESCE(error_message, ?) || ' (server restart)', updated_at = CURRENT_TIMESTAMP
+                SET status = ?,
+                    error_message = COALESCE(error_message, ?) || ' (server restart)',
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE status IN ('pending', 'running')
             """,
                 (mark, message),
