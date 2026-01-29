@@ -69,7 +69,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Dispatch the request and log the response."""
-        logger.info(f"🌐 [{request.method}] {request.url.path}")
+        # Reduce noise: HTMX polling for download status is frequent; log at DEBUG.
+        try:
+            path = request.url.path or ""
+        except Exception:
+            path = ""
+
+        if path.startswith("/api/download_status/") and request.method.upper() == "GET":
+            logger.debug(f"Polling: [{request.method}] {path}")
+        else:
+            logger.info(f"🌐 [{request.method}] {path}")
+
         return await call_next(request)
 
 

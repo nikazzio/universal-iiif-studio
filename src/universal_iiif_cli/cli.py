@@ -246,8 +246,14 @@ def main():
         if suggested_id:
             print(f"🆔 Suggested ID: {suggested_id}")
 
+        from universal_iiif_core.config_manager import get_config_manager
+
+        cm = get_config_manager()
+        downloads_dir = cm.get_downloads_dir()
+
         downloader = IIIFDownloader(
             manifest_url=manifest_url,
+            output_dir=downloads_dir,
             output_name=out_name,
             workers=workers,
             clean_cache=clean,

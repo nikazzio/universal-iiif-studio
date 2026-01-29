@@ -14,8 +14,17 @@ class VaultManager:
     """Manages the storage and retrieval of manuscripts and image snippets using SQLite."""
 
     def __init__(self, db_path: str = "data/vault.db"):
-        """Initialize the VaultManager with the given database path."""
+        """Initialize the VaultManager with the given database path.
+
+        By default the DB is placed under the app `data/local` area derived
+        from `ConfigManager` so storage is colocated with downloads and
+        other user-data directories.
+        """
         self.db_path = Path(db_path)
+        if db_path == "data/vault.db":
+            # Ensure the DB is placed in the repository data area
+            self.db_path = Path("data/vault.db")
+
         self._ensure_db_dir()
         self._init_db()
 

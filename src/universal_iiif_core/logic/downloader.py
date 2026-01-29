@@ -6,7 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from secrets import SystemRandom
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import requests
 from PIL import Image
@@ -42,7 +42,7 @@ class IIIFDownloader:
     def __init__(
         self,
         manifest_url: str,
-        output_dir: str = "downloads",
+        output_dir: Union[str, Path, None] = None,
         output_name: str | None = None,
         workers: int = 4,
         clean_cache: bool = False,
@@ -72,9 +72,16 @@ class IIIFDownloader:
         )
         self.logger = get_download_logger(self.ms_id)
 
-        out_base = Path(output_dir).expanduser()
-        if not out_base.is_absolute():
-            out_base = (Path.cwd() / out_base).resolve()
+        # Resolve output base directory. Prefer explicit param; otherwise use config manager.
+        cm = get_config_manager()
+        if output_dir is None:
+            out_base = cm.get_downloads_dir()
+        else:
+            out_base = Path(output_dir).expanduser()
+            if not out_base.is_absolute():
+                out_base = (Path.cwd() / out_base).resolve()
+            # Ensure we have an absolute, resolved path
+            out_base = out_base.resolve()
 
         lib_dir = out_base / self.library
         ensure_dir(lib_dir)

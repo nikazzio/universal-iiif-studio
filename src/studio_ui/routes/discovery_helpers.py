@@ -85,8 +85,15 @@ def start_downloader_thread(
                 logger.debug("Failed to update download job in DB", exc_info=True)
 
         try:
+            # Explicitly use configured downloads dir
+            from universal_iiif_core.config_manager import get_config_manager
+
+            cm = get_config_manager()
+            downloads_dir = cm.get_downloads_dir()
+
             downloader = IIIFDownloader(
                 manifest_url=manifest_url,
+                output_dir=downloads_dir,
                 output_name=doc_id,
                 library=library,
                 workers=int(workers),
