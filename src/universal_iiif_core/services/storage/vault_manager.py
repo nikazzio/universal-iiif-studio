@@ -590,3 +590,58 @@ class VaultManager:
             return count
         finally:
             conn.close()
+
+    def cleanup_stale_data(self, retention_hours: int = 24) -> int:
+        """Remove download job records older than `retention_hours` and prune their temp folders.
+
+        Returns the number of jobs removed.
+        """
+        from ...config_manager import get_config_manager
+
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+            if not cursor.fetchone():
+                return 0
+
+            cursor.execute(
+                "SELECT job_id, doc_id FROM download_jobs WHERE created_at < datetime('now', ?)",
+                (f"-{int(retention_hours)} hours",),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return 0
+
+            job_ids = [r[0] for r in rows]
+            doc_ids = [r[1] for r in rows if r[1]]
+
+            # Delete DB records
+            placeholders = ",".join("?" for _ in job_ids)
+            sql = f"DELETE FROM download_jobs WHERE job_id IN ({placeholders})"  # noqa: S608
+            cursor.execute(sql, tuple(job_ids))
+            conn.commit()
+
+            # Prune temp dirs for associated doc_ids
+            try:
+                cm = get_config_manager()
+                base_temp = cm.get_temp_dir()
+                for did in set(doc_ids):
+                    if not did:
+                        continue
+                    p = base_temp / str(did)
+                    if p.exists() and p.is_dir():
+                        try:
+                            # Use shutil.rmtree to remove contents
+                            import shutil
+
+                            shutil.rmtree(p)
+                            logger.info("Pruned stale temp folder: %s", p)
+                        except Exception:
+                            logger.debug("Failed to remove temp folder %s", p, exc_info=True)
+            except Exception:
+                logger.debug("Failed to cleanup temp dirs for stale jobs", exc_info=True)
+
+            return len(job_ids)
+        finally:
+            conn.close()

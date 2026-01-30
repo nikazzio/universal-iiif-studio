@@ -1,4 +1,6 @@
+import threading
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fasthtml.common import RedirectResponse, fast_app, serve
@@ -22,6 +24,7 @@ logger = get_logger(__name__)
 # Initialize configuration
 config = get_config_manager()
 
+
 # On startup, reset any stale download jobs left as pending/running by previous process.
 try:
     from universal_iiif_core.services.storage.vault_manager import VaultManager
@@ -33,12 +36,44 @@ try:
 except Exception:
     logger.debug("Failed to reset stale download jobs on startup", exc_info=True)
 
+
+@asynccontextmanager
+async def lifespan(app):
+    """Gestione del ciclo di vita dell'app FastHTML."""
+    # Startup: reset any stale DB jobs and kick off housekeeping in background
+    try:
+        from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+        def _housekeeping():
+            try:
+                vm2 = VaultManager()
+                removed = vm2.cleanup_stale_data(retention_hours=24)
+                if removed:
+                    logger.info(f"Cleaned up {removed} stale download job(s) and temp data")
+            except Exception:
+                logger.debug("Housekeeping cleanup failed", exc_info=True)
+
+        try:
+            t = threading.Thread(target=_housekeeping, daemon=True)
+            t.start()
+        except Exception:
+            logger.debug("Failed to schedule housekeeping thread", exc_info=True)
+    except Exception:
+        logger.debug("Housekeeping startup skipped (VaultManager unavailable)", exc_info=True)
+
+    yield
+
+    # Shutdown: nothing special to clean up for now
+    return
+
+
 # Create FastHTML app
 app, rt = fast_app(
     pico=False,  # Don't use PicoCSS
     hdrs=(
         # Additional headers if needed
     ),
+    lifespan=lifespan,
 )
 
 # Setup static file serving

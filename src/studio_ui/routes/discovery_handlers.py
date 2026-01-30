@@ -201,7 +201,8 @@ def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
     curr = job.get("current", 0)
     total = job.get("total", 0)
     try:
-        vault.update_download_job(download_id, current=curr, total=total, status="error", error="Cancelled by user")
+        # Mark as cancelling first so UI shows immediate feedback
+        vault.update_download_job(download_id, current=curr, total=total, status="cancelling", error="Cancelling")
     except Exception:
         logger.debug("Failed to mark job cancelled", exc_info=True)
 
@@ -214,10 +215,10 @@ def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
         logger.debug("Failed to request job cancellation from JobManager", exc_info=True)
 
     status_data = {
-        "status": "error",
+        "status": "cancelling",
         "current": curr,
         "total": total,
         "percent": int((curr / total * 100) if total else 0),
-        "error": "Cancelled by user",
+        "error": "Cancelling",
     }
     return render_download_status(download_id, doc_id, library, status_data)

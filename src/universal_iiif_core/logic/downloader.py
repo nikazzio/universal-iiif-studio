@@ -510,11 +510,37 @@ class IIIFDownloader:
     ):
         downloaded: list[str | None] = [None] * len(canvases)
         page_stats = []
+        # Pre-scan temp_dir for resumable files so progress can reflect existing data
+        to_download = []
+        for i, canvas in enumerate(canvases):
+            filename = Path(self.temp_dir) / f"pag_{i:04d}.jpg"
+            resumed = None
+            try:
+                resumed = self._resume_existing_scan(filename, self._resolve_canvas_base_url(canvas) or "", canvas, i)
+            except Exception:
+                resumed = None
+            if resumed:
+                fname, stats = resumed
+                downloaded[i] = fname
+                if stats:
+                    page_stats.append(stats)
+            else:
+                to_download.append((i, canvas))
+
+        # Initial progress reflecting pre-existing files
+        if progress_callback:
+            try:
+                completed = sum(1 for f in downloaded if f)
+                progress_callback(completed, len(canvases))
+            except Exception:
+                self.logger.debug("Initial progress callback failed", exc_info=True)
+
+        # Submit only missing pages to the executor
         with ThreadPoolExecutor(max_workers=self.workers) as executor:
             future_to_index = {
-                executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in enumerate(canvases)
+                executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in to_download
             }
-            for future in tqdm(as_completed(future_to_index), total=len(canvases)):
+            for future in tqdm(as_completed(future_to_index), total=len(to_download) if to_download else 0):
                 idx = future_to_index[future]
                 result = future.result()
                 if result:

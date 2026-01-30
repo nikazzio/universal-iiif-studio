@@ -86,6 +86,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list", action="store_true", help="List all manuscripts in the database")
     parser.add_argument("--info", metavar="ID", help="Show detailed info for a manuscript")
     parser.add_argument("--delete", metavar="ID", help="Delete a manuscript from the database by ID")
+    parser.add_argument("--delete-job", metavar="JOB_ID", help="Delete a download job record from the DB by job_id")
     parser.add_argument(
         "--set-status", nargs=2, metavar=("ID", "STATUS"), help="Force update status (e.g. 'complete', 'error')"
     )
@@ -192,11 +193,38 @@ def _handle_db_commands(args: argparse.Namespace) -> bool:
     if args.delete:
         _handle_delete(args.delete)
         return True
+    if getattr(args, "delete_job", None):
+        _handle_delete_job(args.delete_job)
+        return True
     if args.set_status:
         ms_id, new_status = args.set_status
         _handle_set_status(ms_id, new_status)
         return True
     return False
+
+
+def _handle_delete_job(job_id: str) -> None:
+    """Remove a download job record from the internal download_jobs table.
+
+    This is useful during development to remove stray test jobs.
+    """
+    from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+    vm = VaultManager()
+    try:
+        conn = vm._get_conn()
+        c = conn.cursor()
+        c.execute("DELETE FROM download_jobs WHERE job_id = ?", (job_id,))
+        conn.commit()
+        print(f"🗑️  Deleted download job: {job_id}")
+    except Exception as e:
+        print(f"⚠️  Failed to delete download job {job_id}: {e}")
+    finally:
+        from contextlib import suppress
+
+        if "conn" in locals() and conn:
+            with suppress(Exception):
+                conn.close()
 
 
 def _resolve_download_args(args: argparse.Namespace):

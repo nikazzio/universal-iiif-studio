@@ -230,6 +230,55 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
     error = status_data.get("error")
     title = status_data.get("title") or doc_id
 
+    # 1.b Cancelling state: show immediate feedback but keep polling
+    if status == "cancelling":
+        header = Div(
+            Div(
+                H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
+                Span(
+                    library,
+                    cls=(
+                        "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
+                        " dark:text-indigo-300 px-2 py-1 rounded ml-2"
+                    ),
+                ),
+                cls="flex items-center justify-between",
+            ),
+            P(f"{current}/{total} pagine", cls="text-sm text-gray-500 mt-1"),
+            cls="mb-4",
+        )
+
+        percent_block = Div(
+            Div(f"{percent}%", cls="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300"),
+            P("Cancelling…", cls="text-sm text-red-600"),
+            cls="flex items-center gap-4 mb-4",
+        )
+
+        progress_bar = Div(
+            Div(
+                Div(
+                    cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out",
+                    style=f"width: {percent}%",
+                ),
+                cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2",
+            )
+        )
+
+        body = Div(
+            header, percent_block, progress_bar, P("Annullamento in corso...", cls="text-xs text-gray-400 italic")
+        )
+
+        return Div(
+            body,
+            hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
+            hx_trigger="every 1s",
+            hx_swap="outerHTML",
+            cls=(
+                "bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 "
+                "dark:border-gray-700 shadow-sm space-y-3"
+            ),
+        )
+
     # 1. Caso Errore
     if "error" in status or error:
         return render_error_message("Errore durante il download", str(error or status))
