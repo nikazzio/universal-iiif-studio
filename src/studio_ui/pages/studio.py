@@ -17,70 +17,99 @@ def document_picker():
     if not docs:
         return Div(H2("Nessun documento trovato nel Vault.", cls="text-center p-20 text-gray-400 font-light"))
 
-    # Enforce standardization in UI
+    # Enforce standardization in UI and annotate download state
     clean_docs = []
     for doc in docs:
         lib = doc.get("library", "Unknown")
         if lib == "Vaticana (BAV)":
             lib = "Vaticana"
         doc["library"] = lib
+        # Default status if missing
+        doc.setdefault("status", "complete")
         clean_docs.append(doc)
+
+    # Build cards with conditional interactivity
+    cards = []
+    for doc in clean_docs:
+        is_downloading = doc.get("status") in {"downloading", "pending"}
+
+        # Left content
+        left = Div(
+            H3(doc.get("label", doc["id"]), cls="font-bold text-lg text-slate-900 dark:text-white"),
+            P(doc["library"], cls="text-sm text-indigo-600 dark:text-indigo-400 font-medium"),
+            cls="flex-1",
+        )
+
+        # Right controls
+        open_control = (
+            A(
+                "Apri Studio",
+                href=f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
+                hx_get=f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
+                hx_target="#app-main",
+                hx_swap="innerHTML",
+                hx_push_url="true",
+                onclick="event.stopPropagation();",
+                cls=(
+                    "bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-500 "
+                    "dark:hover:bg-indigo-600 px-6 py-2 rounded-lg font-bold shadow-sm transition mr-3"
+                ),
+            )
+            if not is_downloading
+            else Div(
+                "⏳ In download",
+                cls=(
+                    "bg-amber-50 text-amber-700 px-3 py-1 rounded-lg font-medium text-sm mr-3 border border-amber-200"
+                ),
+            )
+        )
+
+        delete_btn = Button(
+            "🗑️ Cancella",
+            hx_delete=f"/studio/delete?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
+            hx_confirm=(
+                "Sei sicuro di voler eliminare DEFINITIVAMENTE '"
+                + doc.get("label", doc["id"])
+                + "'? Questa operazione non può essere annullata."
+            ),
+            hx_target="closest .p-10",
+            cls=(
+                "bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 "
+                "dark:hover:bg-red-900/30 dark:text-red-400 px-4 py-2 rounded-lg font-medium transition"
+            ),
+            onclick="event.stopPropagation();",
+        )
+
+        right = Div(open_control, delete_btn, cls="flex items-center")
+
+        card_classes = (
+            "bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 "
+            "dark:border-gray-700 mb-4 shadow-sm transition-all"
+        )
+        if not is_downloading:
+            card_classes += " hover:shadow-lg transform hover:-translate-y-1 cursor-pointer"
+        else:
+            card_classes += " opacity-85 cursor-not-allowed"
+
+        # Build the card with conditional hx attributes
+        card_kwargs = {
+            "cls": card_classes,
+        }
+        if not is_downloading:
+            card_kwargs.update(
+                {
+                    "hx_get": f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
+                    "hx_target": "#app-main",
+                    "hx_swap": "innerHTML",
+                    "hx_push_url": "true",
+                }
+            )
+
+        cards.append(Div(Div(left, right, cls="flex justify-between items-center"), **card_kwargs))
 
     return Div(
         H2("Documenti Disponibili", cls="text-2xl font-bold text-slate-800 dark:text-white mb-8"),
-        Div(
-            *[
-                Div(
-                    Div(
-                        Div(
-                            H3(doc.get("label", doc["id"]), cls="font-bold text-lg text-slate-900 dark:text-white"),
-                            P(doc["library"], cls="text-sm text-indigo-600 dark:text-indigo-400 font-medium"),
-                            cls="flex-1",
-                        ),
-                        Div(
-                            A(
-                                "Apri Studio",
-                                href=f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
-                                hx_get=f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
-                                hx_target="#app-main",
-                                hx_swap="innerHTML",
-                                hx_push_url="true",
-                                onclick="event.stopPropagation();",
-                                cls="bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-500 "
-                                "dark:hover:bg-indigo-600 px-6 py-2 rounded-lg font-bold shadow-sm transition mr-3",
-                            ),
-                            Button(
-                                "🗑️ Cancella",
-                                hx_delete=f"/studio/delete?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
-                                hx_confirm=(
-                                    "Sei sicuro di voler eliminare DEFINITIVAMENTE '"
-                                    + doc.get("label", doc["id"])
-                                    + "'? Questa operazione non può essere annullata."
-                                ),
-                                hx_target="closest .p-10",  # Target the whole picker container to refresh the list
-                                cls=(
-                                    "bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 "
-                                    "dark:hover:bg-red-900/30 dark:text-red-400 px-4 py-2 rounded-lg font-medium "
-                                    "transition"
-                                ),
-                                onclick="event.stopPropagation();",  # Prevent card click from opening studio
-                            ),
-                            cls="flex items-center",
-                        ),
-                        cls="flex justify-between items-center",
-                    ),
-                    cls="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 "
-                    "dark:border-gray-700 mb-4 shadow-sm hover:shadow-lg transition-all "
-                    "transform hover:-translate-y-1 cursor-pointer",
-                    hx_get=f"/studio?doc_id={quote(doc['id'])}&library={quote(doc['library'])}",
-                    hx_target="#app-main",
-                    hx_swap="innerHTML",
-                    hx_push_url="true",
-                )
-                for doc in clean_docs
-            ],
-            cls="max-w-4xl mx-auto",
-        ),
+        Div(*cards, cls="max-w-4xl mx-auto"),
         cls="p-10 bg-slate-50 dark:bg-slate-900 min-h-screen",
     )
 

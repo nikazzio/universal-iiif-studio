@@ -48,6 +48,7 @@ class OCRStorage:
                             "library": row.get("library", "Unknown"),
                             "path": path,
                             "label": row.get("label", row["id"]),
+                            "status": row.get("status", "unknown"),
                         }
                     )
         except Exception as e:

@@ -118,12 +118,30 @@ def discovery_form() -> Div:
     )
 
 
-def discovery_content() -> Div:
-    """Top-level content block for the discovery page."""
+def discovery_content(initial_preview=None, active_download_fragment=None) -> Div:
+    """Top-level content block for the discovery page.
+
+    Args:
+        initial_preview: Optional fragment to render inside the preview area
+            (replaces the default empty `#discovery-preview` div).
+        active_download_fragment: Optional fragment to render in the dedicated
+            downloads area (separate from search preview/result area).
+    """
+    preview_block = initial_preview if initial_preview is not None else Div(id="discovery-preview", cls="mt-8")
+    downloads_block = (
+        active_download_fragment if active_download_fragment is not None else Div(id="download-status-area", cls="mb-6")
+    )
+
     return Div(
         H2("🛰️ Discovery & Download", cls="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"),
         discovery_form(),
-        Div(id="discovery-preview", cls="mt-8"),
+        # Downloads area separate from search preview
+        Div(
+            H3("Download in corso", cls="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2"),
+            downloads_block,
+            cls="mb-8",
+        ),
+        preview_block,
         cls="p-6 max-w-5xl mx-auto",
     )
 
@@ -210,6 +228,56 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
     current = status_data.get("current", 0)
     total = status_data.get("total", 0)
     error = status_data.get("error")
+    title = status_data.get("title") or doc_id
+
+    # 1.b Cancelling state: show immediate feedback but keep polling
+    if status == "cancelling":
+        header = Div(
+            Div(
+                H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
+                Span(
+                    library,
+                    cls=(
+                        "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
+                        " dark:text-indigo-300 px-2 py-1 rounded ml-2"
+                    ),
+                ),
+                cls="flex items-center justify-between",
+            ),
+            P(f"{current}/{total} pagine", cls="text-sm text-gray-500 mt-1"),
+            cls="mb-4",
+        )
+
+        percent_block = Div(
+            Div(f"{percent}%", cls="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300"),
+            P("Cancelling…", cls="text-sm text-red-600"),
+            cls="flex items-center gap-4 mb-4",
+        )
+
+        progress_bar = Div(
+            Div(
+                Div(
+                    cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out",
+                    style=f"width: {percent}%",
+                ),
+                cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2",
+            )
+        )
+
+        body = Div(
+            header, percent_block, progress_bar, P("Annullamento in corso...", cls="text-xs text-gray-400 italic")
+        )
+
+        return Div(
+            body,
+            hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
+            hx_trigger="every 1s",
+            hx_swap="outerHTML",
+            cls=(
+                "bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 "
+                "dark:border-gray-700 shadow-sm space-y-3"
+            ),
+        )
 
     # 1. Caso Errore
     if "error" in status or error:
@@ -252,31 +320,64 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
 
     # 3. Caso In Corso (Barra di progresso + Polling)
     # Importante: passiamo doc_id e library nel polling per non perderli
-    return Div(
+    controls = Div(
+        Button(
+            "⛔ Annulla Download",
+            cls=("bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg shadow-sm transition-all"),
+            hx_post=f"/api/cancel_download/{download_id}?doc_id={doc_id}&library={library}",
+            hx_target="#discovery-preview",
+            hx_swap="outerHTML",
+        ),
+        cls="mt-4 flex justify-end",
+    )
+    # Enhanced header with title and library badge
+    header = Div(
+        Div(
+            H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
+            Span(
+                library,
+                cls=(
+                    "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
+                    " dark:text-indigo-300 px-2 py-1 rounded ml-2"
+                ),
+            ),
+            cls="flex items-center justify-between",
+        ),
+        P(f"{current}/{total} pagine", cls="text-sm text-gray-500 mt-1"),
+        cls="mb-4",
+    )
+
+    # Large percent display
+    percent_block = Div(
+        Div(f"{percent}%", cls="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300"),
+        P("Processing…", cls="text-sm text-gray-500"),
+        cls="flex items-center gap-4 mb-4",
+    )
+
+    progress_bar = Div(
         Div(
             Div(
-                P(
-                    f"Scaricamento pagina {current} di {total}...",
-                    cls="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1",
-                ),
-                P(f"{percent}%", cls="text-xs text-gray-500"),
-                cls="flex justify-between",
+                cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out", style=f"width: {percent}%"
             ),
-            Div(
-                Div(
-                    cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out",
-                    style=f"width: {percent}%",
-                ),
-                cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-4",
-            ),
-            P(
-                "Ottimizzazione immagini e salvataggio nel database...",
-                cls="text-xs text-gray-400 italic animate-pulse",
-            ),
-        ),
-        # Polling continuo ogni 1 secondo
+            cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2",
+        )
+    )
+
+    body = Div(
+        header,
+        percent_block,
+        progress_bar,
+        P("Ottimizzazione immagini e salvataggio nel database...", cls="text-xs text-gray-400 italic animate-pulse"),
+    )
+
+    # Polling continuo ogni 1 secondo (omit when completed/error by returning different fragment)
+    return Div(
+        body,
+        controls,
         hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
         hx_trigger="every 1s",
         hx_swap="outerHTML",
-        cls="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm",
+        cls=(
+            "bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-3"
+        ),
     )

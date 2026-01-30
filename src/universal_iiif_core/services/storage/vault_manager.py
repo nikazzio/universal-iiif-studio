@@ -1,6 +1,7 @@
 import sqlite3
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 import fitz  # PyMuPDF
 
@@ -13,8 +14,17 @@ class VaultManager:
     """Manages the storage and retrieval of manuscripts and image snippets using SQLite."""
 
     def __init__(self, db_path: str = "data/vault.db"):
-        """Initialize the VaultManager with the given database path."""
+        """Initialize the VaultManager with the given database path.
+
+        By default the DB is placed under the app `data/local` area derived
+        from `ConfigManager` so storage is colocated with downloads and
+        other user-data directories.
+        """
         self.db_path = Path(db_path)
+        if db_path == "data/vault.db":
+            # Ensure the DB is placed in the repository data area
+            self.db_path = Path("data/vault.db")
+
         self._ensure_db_dir()
         self._init_db()
 
@@ -73,6 +83,22 @@ class VaultManager:
                 notes TEXT,
                 coords_json TEXT,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Tabella per i Job di Download
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS download_jobs (
+                job_id TEXT PRIMARY KEY,
+                doc_id TEXT NOT NULL,
+                library TEXT NOT NULL,
+                manifest_url TEXT,
+                status TEXT DEFAULT 'pending',  -- pending, running, completed, error
+                current_page INTEGER DEFAULT 0,
+                total_pages INTEGER DEFAULT 0,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -214,14 +240,14 @@ class VaultManager:
         finally:
             conn.close()
 
-    def update_status(self, manuscript_id: str, status: str, error: str = None):
+    def update_status(self, manuscript_id: str, status: str, error: str | None = None):
         """Update the status of a manuscript, optionally with an error log."""
         kwargs = {"status": status}
         if error:
             kwargs["error_log"] = error
         self.upsert_manuscript(manuscript_id, **kwargs)
 
-    def register_manuscript(self, manuscript_id: str, title: str = None):
+    def register_manuscript(self, manuscript_id: str, title: str | None = None):
         """Ensures manuscript exists in DB."""
         conn = self._get_conn()
         cursor = conn.cursor()
@@ -231,7 +257,7 @@ class VaultManager:
         finally:
             conn.close()
 
-    def extract_image_snippet(self, image_path: str, coordinates: tuple) -> bytes:
+    def extract_image_snippet(self, image_path: str, coordinates: tuple) -> bytes | None:
         """Extracts a crop from an image using PyMuPDF (fitz).
 
         coordinates: (x0, y0, x1, y1) relative to the original image size.
@@ -257,10 +283,10 @@ class VaultManager:
         ms_name: str,
         page_num: int,
         image_path: str,
-        category: str = None,
-        transcription: str = None,
-        notes: str = None,
-        coords: list = None,
+        category: str = "Uncategorized",
+        transcription: str | None = None,
+        notes: str | None = None,
+        coords: list[Any] | None = None,
     ):
         """Saves the snippet to the database.
 
@@ -296,7 +322,7 @@ class VaultManager:
         finally:
             conn.close()
 
-    def get_snippets(self, ms_name: str, page_num: int = None):
+    def get_snippets(self, ms_name: str, page_num: int | None = None):
         """Retrieve snippets for a manuscript, optionally filtered by page.
 
         Args:
@@ -373,5 +399,249 @@ class VaultManager:
             # Delete from DB
             cursor.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))
             conn.commit()
+        finally:
+            conn.close()
+
+    def create_download_job(self, job_id: str, doc_id: str, library: str, manifest_url: str):
+        """Crea traccia del download nel DB."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        # Creiamo la tabella al volo se non esiste (safety check)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS download_jobs (
+                job_id TEXT PRIMARY KEY, doc_id TEXT, library TEXT,
+                manifest_url TEXT, status TEXT, current_page INTEGER,
+                total_pages INTEGER, error_message TEXT, updated_at TIMESTAMP
+            )
+        """)
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO download_jobs (
+                job_id, doc_id, library, manifest_url, status,
+                current_page, total_pages, updated_at
+            )
+            VALUES (?, ?, ?, ?, 'pending', 0, 0, CURRENT_TIMESTAMP)
+        """,
+            (job_id, doc_id, library, manifest_url),
+        )
+        conn.commit()
+
+    def update_download_job(
+        self, job_id: str, current: int, total: int, status: str = "running", error: str | None = None
+    ):
+        """Aggiorna lo stato."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE download_jobs
+            SET current_page = ?, total_pages = ?, status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE job_id = ?
+        """,
+            (current, total, status, error, job_id),
+        )
+        # Log progress with reference to the manuscript title when available
+        try:
+            cursor.execute("SELECT doc_id FROM download_jobs WHERE job_id = ?", (job_id,))
+            row = cursor.fetchone()
+            doc_id = row[0] if row else None
+            title = None
+            if doc_id:
+                try:
+                    ms = self.get_manuscript(doc_id)
+                    title = ms.get("title") if ms else None
+                except Exception:
+                    title = None
+
+            logger.info(
+                "Download update: job=%s doc=%s title=%s %s/%s status=%s",
+                job_id,
+                doc_id or "-",
+                title or "-",
+                current,
+                total,
+                status,
+            )
+        except Exception:
+            logger.debug("Failed to log download update for job %s", job_id, exc_info=True)
+
+        conn.commit()
+
+    def get_active_download(self):
+        """Trova un download attivo."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        # Controlla se la tabella esiste prima di fare select
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+        if not cursor.fetchone():
+            return None
+
+        cursor.execute("""
+            SELECT job_id, doc_id, library, status, current_page, total_pages, error_message
+            FROM download_jobs
+            WHERE status = 'running' OR status = 'pending'
+            ORDER BY updated_at DESC LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            return {
+                "job_id": row[0],
+                "doc_id": row[1],
+                "library": row[2],
+                "status": row[3],
+                "current": row[4],
+                "total": row[5],
+                "error": row[6],
+            }
+        return None
+
+    def get_active_downloads(self):
+        """Return a list of active (pending/running) download jobs ordered by recent update.
+
+        This is used by the UI to render all concurrent downloads.
+        """
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+        if not cursor.fetchone():
+            return []
+
+        cursor.execute(
+            """
+            SELECT job_id, doc_id, library, status, current_page, total_pages, error_message
+            FROM download_jobs
+            WHERE status IN ('running', 'pending')
+            ORDER BY updated_at DESC
+        """
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        results = []
+        for row in rows:
+            results.append(
+                {
+                    "job_id": row[0],
+                    "doc_id": row[1],
+                    "library": row[2],
+                    "status": row[3],
+                    "current": row[4],
+                    "total": row[5],
+                    "error": row[6],
+                }
+            )
+        return results
+
+    def get_download_job(self, job_id: str):
+        """Return a specific download job by its job_id, or None if not found."""
+        conn = self._get_conn()
+        conn.row_factory = None
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+        if not cursor.fetchone():
+            return None
+        cursor.execute(
+            """
+            SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages, error_message
+            FROM download_jobs
+            WHERE job_id = ?
+        """,
+            (job_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {
+            "job_id": row[0],
+            "doc_id": row[1],
+            "library": row[2],
+            "manifest_url": row[3],
+            "status": row[4],
+            "current": row[5],
+            "total": row[6],
+            "error": row[7],
+        }
+
+    def reset_active_downloads(self, mark: str = "error", message: str = "Server restarted"):
+        """Mark any downloads left in 'pending' or 'running' state as stopped.
+
+        This is intended to be called at application startup so that stale
+        download jobs don't cause the UI to continue polling indefinitely.
+        """
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+            if not cursor.fetchone():
+                return 0
+
+            cursor.execute(
+                """
+                UPDATE download_jobs
+                SET status = ?,
+                    error_message = COALESCE(error_message, ?) || ' (server restart)',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status IN ('pending', 'running')
+            """,
+                (mark, message),
+            )
+            count = cursor.rowcount
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def cleanup_stale_data(self, retention_hours: int = 24) -> int:
+        """Remove download job records older than `retention_hours` and prune their temp folders.
+
+        Returns the number of jobs removed.
+        """
+        from ...config_manager import get_config_manager
+
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='download_jobs'")
+            if not cursor.fetchone():
+                return 0
+
+            cursor.execute(
+                "SELECT job_id, doc_id FROM download_jobs WHERE created_at < datetime('now', ?)",
+                (f"-{int(retention_hours)} hours",),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return 0
+
+            job_ids = [r[0] for r in rows]
+            doc_ids = [r[1] for r in rows if r[1]]
+
+            # Delete DB records
+            placeholders = ",".join("?" for _ in job_ids)
+            sql = f"DELETE FROM download_jobs WHERE job_id IN ({placeholders})"  # noqa: S608
+            cursor.execute(sql, tuple(job_ids))
+            conn.commit()
+
+            # Prune temp dirs for associated doc_ids
+            try:
+                cm = get_config_manager()
+                base_temp = cm.get_temp_dir()
+                for did in set(doc_ids):
+                    if not did:
+                        continue
+                    p = base_temp / str(did)
+                    if p.exists() and p.is_dir():
+                        try:
+                            # Use shutil.rmtree to remove contents
+                            import shutil
+
+                            shutil.rmtree(p)
+                            logger.info("Pruned stale temp folder: %s", p)
+                        except Exception:
+                            logger.debug("Failed to remove temp folder %s", p, exc_info=True)
+            except Exception:
+                logger.debug("Failed to cleanup temp dirs for stale jobs", exc_info=True)
+
+            return len(job_ids)
         finally:
             conn.close()

@@ -194,6 +194,59 @@ def _sidebar(active_page: str = "") -> Nav:
                 syncActiveNav(window.location.pathname);
             });
         """),
+        # Global settings tabs initializer (works for swapped fragments)
+        Script("""
+            // Initialize tab UI for settings pages. This function is global so
+            // it can be invoked after HTMX swaps content into #app-main.
+            (function(){
+                const paneSelector = '[data_pane],[data-pane]';
+                const tabSelector = '[data_tab],[data-tab]';
+
+                function activateTabByName(name, root=document) {
+                    root.querySelectorAll(paneSelector).forEach(p => p.style.display = 'none');
+                    root.querySelectorAll(tabSelector).forEach(b => b.classList.remove('bg-slate-700'));
+                    const pane = root.querySelector('[data-pane="' + name + '"]') ||
+                        root.querySelector('[data_pane="' + name + '"]');
+                    const btn = document.querySelector('[data-tab="' + name + '"]') ||
+                        document.querySelector('[data_tab="' + name + '"]');
+                    if (pane) pane.style.display = 'block';
+                    if (btn) btn.classList.add('bg-slate-700');
+                }
+
+                function initSettingsTabs(root=document) {
+                    const panes = root.querySelectorAll(paneSelector);
+                    panes.forEach((p, i) => p.style.display = (i === 0) ? 'block' : 'none');
+                    const firstTab = root.querySelector(tabSelector);
+                    if (firstTab) firstTab.classList.add('bg-slate-700');
+                }
+
+                // Delegated click handler bound once on document
+                if (!document._settingsTabsBoundGlobal) {
+                    document.addEventListener('click', function(e){
+                        const btn = e.target.closest(tabSelector);
+                        if (!btn) return;
+                        const name = btn.getAttribute('data-tab') || btn.getAttribute('data_tab');
+                        if (!name) return;
+                        activateTabByName(name);
+                    });
+                    document._settingsTabsBoundGlobal = true;
+                }
+
+                // Run on initial load
+                window.addEventListener('DOMContentLoaded', () => initSettingsTabs());
+
+                // Re-run after HTMX swaps into #app-main
+                document.addEventListener('htmx:afterSwap', (evt) => {
+                    try {
+                        if (evt.detail && evt.detail.target && evt.detail.target.id === 'app-main') {
+                            initSettingsTabs(evt.detail.target);
+                        }
+                    } catch (e) {
+                        console.warn('initSettingsTabs error', e);
+                    }
+                });
+            })();
+        """),
         id="app-sidebar",
         cls="sidebar w-64 bg-gray-800 dark:bg-gray-950 text-white p-6 flex flex-col transition-all duration-200",
     )

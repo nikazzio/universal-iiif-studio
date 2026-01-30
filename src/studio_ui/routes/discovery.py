@@ -20,3 +20,4 @@ def setup_discovery_routes(app):
     app.post("/api/resolve_manifest")(discovery_handlers.resolve_manifest)
     app.post("/api/start_download")(discovery_handlers.start_download)
     app.get("/api/download_status/{download_id}")(discovery_handlers.get_download_status)
+    app.post("/api/cancel_download/{download_id}")(discovery_handlers.cancel_download)

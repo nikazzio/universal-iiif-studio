@@ -4,10 +4,9 @@ Handlers are top-level functions so `setup_discovery_routes` can remain
 very small and satisfy ruff's complexity check.
 """
 
-from typing import Any
 from urllib.parse import unquote
 
-from fasthtml.common import Request
+from fasthtml.common import Div, Request
 
 # Importiamo i nuovi componenti grafici
 from studio_ui.components.discovery import (
@@ -20,19 +19,84 @@ from studio_ui.components.layout import base_layout
 from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloader_thread
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark
+from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
 
-# Shared progress store used by the polling endpoint
-download_progress: dict[str, Any] = {}
+# No in-memory progress store: UI reads progress from DB
 
 
 def discovery_page(request: Request):
     """Render the Discovery page."""
-    content = discovery_content()
+    vault = VaultManager()
+    active_list = vault.get_active_downloads()
+
     is_hx = request.headers.get("HX-Request") == "true"
+
+    # HTMX fragment request: return the discovery content only (with downloads area)
     if is_hx:
-        return content
+        active_frag = None
+        if active_list:
+            cards = []
+            for active in active_list:
+                job_id = str(active.get("job_id") or "")
+                doc_id = str(active.get("doc_id") or "")
+                library = str(active.get("library") or "")
+
+                curr = int(active.get("current", 0))
+                total = int(active.get("total", 0))
+                percent = int((curr / total * 100) if total > 0 else 0)
+
+                status_data = {
+                    "status": str(active.get("status", "running")),
+                    "current": curr,
+                    "total": total,
+                    "percent": percent,
+                    "error": active.get("error"),
+                }
+                try:
+                    ms = vault.get_manuscript(doc_id) or {}
+                    status_data["title"] = ms.get("title") or doc_id
+                except Exception:
+                    status_data["title"] = doc_id
+
+                cards.append(render_download_status(job_id, doc_id, library, status_data))
+
+            active_frag = Div(*cards, id="download-status-area")
+
+        return discovery_content(initial_preview=None, active_download_fragment=active_frag)
+
+    # Full-page request: wrap in base layout and include downloads area (all active downloads)
+    active_frag = None
+    if active_list:
+        cards = []
+        for active in active_list:
+            job_id = str(active.get("job_id") or "")
+            doc_id = str(active.get("doc_id") or "")
+            library = str(active.get("library") or "")
+
+            curr = int(active.get("current", 0))
+            total = int(active.get("total", 0))
+            percent = int((curr / total * 100) if total > 0 else 0)
+
+            status_data = {
+                "status": str(active.get("status", "running")),
+                "current": curr,
+                "total": total,
+                "percent": percent,
+                "error": active.get("error"),
+            }
+            try:
+                ms = vault.get_manuscript(doc_id) or {}
+                status_data["title"] = ms.get("title") or doc_id
+            except Exception:
+                status_data["title"] = doc_id
+
+            cards.append(render_download_status(job_id, doc_id, library, status_data))
+
+        active_frag = Div(*cards, id="download-status-area")
+
+    content = discovery_content(initial_preview=None, active_download_fragment=active_frag)
     return base_layout("Discovery", content, active_page="discovery")
 
 
@@ -98,9 +162,9 @@ def start_download(manifest_url: str, doc_id: str, library: str):
         doc_id = unquote(doc_id)
         library = unquote(library)
 
-        download_id = start_downloader_thread(manifest_url, doc_id, library, download_progress)
+        download_id = start_downloader_thread(manifest_url, doc_id, library)
 
-        # Ritorna subito il primo stato (0%) per avviare il polling
+        # Return initial DB-backed status fragment to start polling
         initial_status = {"status": "starting", "current": 0, "total": 0, "percent": 0}
         return render_download_status(download_id, doc_id, library, initial_status)
 
@@ -111,15 +175,50 @@ def start_download(manifest_url: str, doc_id: str, library: str):
 
 def get_download_status(download_id: str, doc_id: str = "", library: str = ""):
     """Return current download status for polling (HTMX endpoint)."""
-    status_data = download_progress.get(download_id, {"status": "starting"})
+    vault = VaultManager()
+    job = vault.get_download_job(download_id) or {}
 
-    curr = status_data.get("current", 0)
-    total = status_data.get("total", 0)
+    curr = job.get("current", 0)
+    total = job.get("total", 0)
+    status = job.get("status", "starting")
+    error = job.get("error")
 
-    # Calcolo percentuale sicuro
     percent = int((curr / total * 100) if total > 0 else 0)
 
-    # Aggiorniamo i dati per il render
-    status_data["percent"] = percent
+    status_data = {"status": status, "current": curr, "total": total, "percent": percent, "error": error}
 
+    return render_download_status(download_id, doc_id, library, status_data)
+
+
+def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
+    """Cancel a running download job (UI action).
+
+    Marks the job as errored/cancelled in the DB and returns the
+    updated status fragment for the preview area.
+    """
+    vault = VaultManager()
+    job = vault.get_download_job(download_id) or {}
+    curr = job.get("current", 0)
+    total = job.get("total", 0)
+    try:
+        # Mark as cancelling first so UI shows immediate feedback
+        vault.update_download_job(download_id, current=curr, total=total, status="cancelling", error="Cancelling")
+    except Exception:
+        logger.debug("Failed to mark job cancelled", exc_info=True)
+
+    # Also inform in-process JobManager to request cooperative cancellation
+    try:
+        from universal_iiif_core.jobs import job_manager
+
+        job_manager.request_cancel(download_id)
+    except Exception:
+        logger.debug("Failed to request job cancellation from JobManager", exc_info=True)
+
+    status_data = {
+        "status": "cancelling",
+        "current": curr,
+        "total": total,
+        "percent": int((curr / total * 100) if total else 0),
+        "error": "Cancelling",
+    }
     return render_download_status(download_id, doc_id, library, status_data)

@@ -42,7 +42,7 @@ class IIIFDownloader:
     def __init__(
         self,
         manifest_url: str,
-        output_dir: str = "downloads",
+        output_dir: str | Path | None = None,
         output_name: str | None = None,
         workers: int = 4,
         clean_cache: bool = False,
@@ -72,9 +72,16 @@ class IIIFDownloader:
         )
         self.logger = get_download_logger(self.ms_id)
 
-        out_base = Path(output_dir).expanduser()
-        if not out_base.is_absolute():
-            out_base = (Path.cwd() / out_base).resolve()
+        # Resolve output base directory. Prefer explicit param; otherwise use config manager.
+        cm = get_config_manager()
+        if output_dir is None:
+            out_base = cm.get_downloads_dir()
+        else:
+            out_base = Path(output_dir).expanduser()
+            if not out_base.is_absolute():
+                out_base = (Path.cwd() / out_base).resolve()
+            # Ensure we have an absolute, resolved path
+            out_base = out_base.resolve()
 
         lib_dir = out_base / self.library
         ensure_dir(lib_dir)
@@ -312,7 +319,11 @@ class IIIFDownloader:
                 max_ram_gb = float(cm.get_setting("images.tile_stitch_max_ram_gb", 2) or 2)
             except (TypeError, ValueError):
                 max_ram_gb = 2.0
-            max_ram_gb = max(1.0, min(max_ram_gb, 64.0))
+            # Allow small RAM caps for testing/low-memory environments while
+            # still preventing absurd values. Lower bound relaxed from 1.0GB
+            # to 0.1GB so users can request e.g. 0.5GB and trigger disk-backed
+            # stitching behavior instead of forcing a larger in-memory canvas.
+            max_ram_gb = max(0.1, min(max_ram_gb, 64.0))
             max_ram_bytes = int(max_ram_gb * (1024**3))
 
             dims = stitch_iiif_tiles_to_jpeg(
@@ -434,11 +445,27 @@ class IIIFDownloader:
             self.logger.debug("Native PDF download failed", exc_info=True)
             return False
 
-    def run(self):
-        """Execute the download workflow for the manifest."""
+    def run(
+        self,
+        progress_callback: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ):
+        """Execute the download workflow for the manifest.
+
+        Args:
+            progress_callback: Optional callable that receives (current, total)
+                and will be invoked as pages are downloaded. If provided it
+                overrides any instance-level `progress_callback` set at init.
+            should_cancel: Optional callable returning True to request cancellation.
+                It is polled during the run; when True, the method should abort
+                further processing and perform any necessary cleanup.
+        """
         self.extract_metadata()
         canvases = self.get_canvases()
-        self.vault.upsert_manuscript(self.ms_id, status="downloading", total_canvases=len(canvases))
+
+        total_pages = len(canvases)
+        # Register total pages upfront so the DB/UI can display a stable total
+        self.vault.upsert_manuscript(self.ms_id, status="downloading", total_canvases=total_pages)
 
         if self.clean_cache:
             clean_dir(self.temp_dir)
@@ -446,7 +473,10 @@ class IIIFDownloader:
         native_pdf_url = self.get_pdf_url()
         should_download_native_pdf = self._should_download_native_pdf()
 
-        downloaded, page_stats = self._download_canvases(canvases)
+        # Prefer runtime provided callback over instance attribute
+        cb = progress_callback or self.progress_callback
+
+        downloaded, page_stats = self._download_canvases(canvases, progress_callback=cb, should_cancel=should_cancel)
         self._store_page_stats(page_stats)
 
         valid = [f for f in downloaded if f]
@@ -472,14 +502,45 @@ class IIIFDownloader:
         except (OSError, ValueError, TypeError):
             return True
 
-    def _download_canvases(self, canvases: list[dict[str, Any]]):
+    def _download_canvases(
+        self,
+        canvases: list[dict[str, Any]],
+        progress_callback: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ):
         downloaded: list[str | None] = [None] * len(canvases)
         page_stats = []
+        # Pre-scan temp_dir for resumable files so progress can reflect existing data
+        to_download = []
+        for i, canvas in enumerate(canvases):
+            filename = Path(self.temp_dir) / f"pag_{i:04d}.jpg"
+            resumed = None
+            try:
+                resumed = self._resume_existing_scan(filename, self._resolve_canvas_base_url(canvas) or "", canvas, i)
+            except Exception:
+                resumed = None
+            if resumed:
+                fname, stats = resumed
+                downloaded[i] = fname
+                if stats:
+                    page_stats.append(stats)
+            else:
+                to_download.append((i, canvas))
+
+        # Initial progress reflecting pre-existing files
+        if progress_callback:
+            try:
+                completed = sum(1 for f in downloaded if f)
+                progress_callback(completed, len(canvases))
+            except Exception:
+                self.logger.debug("Initial progress callback failed", exc_info=True)
+
+        # Submit only missing pages to the executor
         with ThreadPoolExecutor(max_workers=self.workers) as executor:
             future_to_index = {
-                executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in enumerate(canvases)
+                executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in to_download
             }
-            for future in tqdm(as_completed(future_to_index), total=len(canvases)):
+            for future in tqdm(as_completed(future_to_index), total=len(to_download) if to_download else 0):
                 idx = future_to_index[future]
                 result = future.result()
                 if result:
@@ -487,9 +548,28 @@ class IIIFDownloader:
                     downloaded[idx] = fname
                     if stats:
                         page_stats.append(stats)
-                if self.progress_callback:
+                if progress_callback:
                     completed = sum(1 for f in downloaded if f)
-                    self.progress_callback(completed, len(canvases))
+                    try:
+                        progress_callback(completed, len(canvases))
+                    except Exception:
+                        # Never allow progress hooks to interrupt downloads
+                        self.logger.debug("Progress callback raised an exception", exc_info=True)
+
+                # Cooperative cancellation check
+                if should_cancel and should_cancel():
+                    completed = sum(1 for f in downloaded if f)
+                    try:
+                        self.vault.update_download_job(
+                            self.ms_id,
+                            current=completed,
+                            total=len(canvases),
+                            status="cancelled",
+                            error="Cancelled by user",
+                        )
+                    except Exception:
+                        self.logger.debug("Failed to mark job cancelled in DB", exc_info=True)
+                    break
         return downloaded, page_stats
 
     def _store_page_stats(self, page_stats):

@@ -1,4 +1,6 @@
+import threading
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fasthtml.common import RedirectResponse, fast_app, serve
@@ -9,6 +11,7 @@ from starlette.staticfiles import StaticFiles
 
 from studio_ui.routes.api import setup_api_routes
 from studio_ui.routes.discovery import setup_discovery_routes
+from studio_ui.routes.settings import setup_settings_routes
 from studio_ui.routes.studio import setup_studio_routes
 from universal_iiif_core import __version__
 from universal_iiif_core.config_manager import get_config_manager
@@ -21,12 +24,56 @@ logger = get_logger(__name__)
 # Initialize configuration
 config = get_config_manager()
 
+
+# On startup, reset any stale download jobs left as pending/running by previous process.
+try:
+    from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+    vm = VaultManager()
+    reset_count = vm.reset_active_downloads()
+    if reset_count:
+        logger.info(f"Marked {reset_count} stale download job(s) as errored on startup")
+except Exception:
+    logger.debug("Failed to reset stale download jobs on startup", exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """Gestione del ciclo di vita dell'app FastHTML."""
+    # Startup: reset any stale DB jobs and kick off housekeeping in background
+    try:
+        from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+        def _housekeeping():
+            try:
+                vm2 = VaultManager()
+                removed = vm2.cleanup_stale_data(retention_hours=24)
+                if removed:
+                    logger.info(f"Cleaned up {removed} stale download job(s) and temp data")
+            except Exception:
+                logger.debug("Housekeeping cleanup failed", exc_info=True)
+
+        try:
+            t = threading.Thread(target=_housekeeping, daemon=True)
+            t.start()
+        except Exception:
+            logger.debug("Failed to schedule housekeeping thread", exc_info=True)
+    except Exception:
+        logger.debug("Housekeeping startup skipped (VaultManager unavailable)", exc_info=True)
+
+    yield
+
+    # Shutdown: nothing special to clean up for now
+    return
+
+
 # Create FastHTML app
 app, rt = fast_app(
     pico=False,  # Don't use PicoCSS
     hdrs=(
         # Additional headers if needed
     ),
+    lifespan=lifespan,
 )
 
 # Setup static file serving
@@ -57,7 +104,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Dispatch the request and log the response."""
-        logger.info(f"🌐 [{request.method}] {request.url.path}")
+        # Reduce noise: HTMX polling for download status is frequent; log at DEBUG.
+        try:
+            path = request.url.path or ""
+        except Exception:
+            path = ""
+
+        if path.startswith("/api/download_status/") and request.method.upper() == "GET":
+            logger.debug(f"Polling: [{request.method}] {path}")
+        else:
+            logger.info(f"🌐 [{request.method}] {path}")
+
         return await call_next(request)
 
 
@@ -76,6 +133,9 @@ setup_studio_routes(app)
 
 # Discovery page routes
 setup_discovery_routes(app)
+
+# Settings page routes
+setup_settings_routes(app)
 
 
 # Root redirect
