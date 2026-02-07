@@ -192,4 +192,125 @@ def get_manifest_details(manifest_url: str) -> SearchResult | None:
         return None
 
 
-__all__ = ["resolve_shelfmark", "search_gallica", "search_gallica_by_id", "get_manifest_details", "smart_search", "TIMEOUT_SECONDS"]
+def search_vatican(query: str, max_results: int = 5) -> list[SearchResult]:
+    """Search Vatican Library by generating shelfmark variants.
+
+    Since Vatican doesn't have a public search API, we try common shelfmark
+    patterns and verify which manifests actually exist.
+
+    Args:
+        query: User input (e.g., "1223", "Urb lat 1223", "Vat.gr.123")
+        max_results: Maximum number of results to return
+
+    Returns:
+        List of SearchResult for manifests that exist
+    """
+    from .vatican import VaticanResolver, normalize_shelfmark
+
+    query = (query or "").strip()
+    if not query:
+        return []
+
+    resolver = VaticanResolver()
+    results: list[SearchResult] = []
+
+    # 1. Prima prova a normalizzare direttamente (caso: input già valido)
+    try:
+        normalized = normalize_shelfmark(query)
+        manifest_url = f"https://digi.vatlib.it/iiif/{normalized}/manifest.json"
+        result = _verify_vatican_manifest(manifest_url, normalized, resolver)
+        if result:
+            results.append(result)
+    except Exception:
+        pass  # Input non è una segnatura valida, proviamo varianti
+
+    # 2. Se l'input sembra un numero, genera varianti per fondi comuni
+    if query.isdigit() and len(results) < max_results:
+        collections = ["Urb.lat", "Vat.lat", "Pal.lat", "Reg.lat", "Barb.lat", "Vat.gr", "Pal.gr"]
+        for coll in collections:
+            if len(results) >= max_results:
+                break
+            ms_id = f"MSS_{coll}.{query}"
+            manifest_url = f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json"
+            result = _verify_vatican_manifest(manifest_url, ms_id, resolver)
+            if result:
+                results.append(result)
+
+    # 3. Se l'input contiene lettere, prova a interpretarlo come segnatura parziale
+    if not query.isdigit() and len(results) < max_results:
+        # Prova varianti con prefissi comuni
+        prefixes = ["Urb.lat.", "Vat.lat.", "Pal.lat.", "Reg.lat.", "Barb.lat."]
+        for prefix in prefixes:
+            if len(results) >= max_results:
+                break
+            # Se query contiene già un pattern simile, skip
+            if any(p.lower().replace(".", "") in query.lower().replace(".", " ").replace(".", "") for p in prefixes):
+                break
+            # Estrai numero se presente
+            import re
+            nums = re.findall(r"\d+", query)
+            if nums:
+                ms_id = f"MSS_{prefix}{nums[0]}"
+                manifest_url = f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json"
+                result = _verify_vatican_manifest(manifest_url, ms_id, resolver)
+                if result:
+                    results.append(result)
+
+    return results
+
+
+def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchResult | None:
+    """Verify a Vatican manifest exists and return SearchResult if valid."""
+    try:
+        # Vatican doesn't support HEAD, use GET with short timeout
+        resp = requests.get(manifest_url, headers=REAL_BROWSER_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            return None
+
+        manifest = resp.json()
+
+        # Parse metadata
+        label = manifest.get("label", ms_id)
+        if isinstance(label, list):
+            label = label[0] if label else ms_id
+
+        # Extract metadata from manifest
+        meta_map: dict[str, str] = {}
+        for item in manifest.get("metadata", []):
+            lbl = item.get("label", "")
+            val = item.get("value", "")
+            if isinstance(val, list):
+                val = ", ".join(str(v) for v in val)
+            meta_map[lbl.lower()] = str(val)
+
+        thumb = manifest.get("thumbnail", {})
+        thumb_url = thumb.get("@id") if isinstance(thumb, dict) else None
+
+        # Count canvases
+        sequences = manifest.get("sequences", [])
+        canvases = sequences[0].get("canvases", []) if sequences else []
+        page_count = len(canvases)
+
+        result: SearchResult = {
+            "id": ms_id,
+            "title": label,
+            "author": meta_map.get("author", meta_map.get("contributor", "")),
+            "date": meta_map.get("date", ""),
+            "description": meta_map.get("description", f"{page_count} pagine"),
+            "manifest": manifest_url,
+            "thumbnail": thumb_url or "",
+            "thumb": thumb_url or "",
+            "library": "Vaticana",
+            "language": meta_map.get("language", ""),
+            "publisher": meta_map.get("shelfmark", ms_id),
+            "raw": {"page_count": page_count},
+        }
+
+        return result
+
+    except Exception as exc:
+        logger.debug("Vatican manifest check failed for %s: %s", ms_id, exc)
+        return None
+
+
+__all__ = ["resolve_shelfmark", "search_gallica", "search_gallica_by_id", "search_vatican", "get_manifest_details", "smart_search", "TIMEOUT_SECONDS"]

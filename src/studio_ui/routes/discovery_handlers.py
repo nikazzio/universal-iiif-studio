@@ -145,32 +145,57 @@ def resolve_manifest(library: str, shelfmark: str):
             # Se smart_search restituisce più risultati o non è un match diretto
             return render_search_results_list(results)
 
-        # === RAMO B: VATICANA / OXFORD (Logica Classica) ===
-        # Per ora Vaticana non supporta la ricerca testuale, solo ID diretti
+        # === RAMO B: VATICANA / OXFORD (Logica Classica + Ricerca) ===
 
-        # 1. Risoluzione URL
+        # 1. Risoluzione URL diretta
         try:
             manifest_url, doc_id = resolve_shelfmark(library, shelfmark)
         except Exception as e:
-            logger.error(f"Resolver error: {e}")
-            return render_error_message("Errore nel Resolver", str(e))
+            logger.debug(f"Direct resolution failed: {e}")
+            manifest_url, doc_id = None, None
+
+        # 2. Se risoluzione diretta fallisce per Vaticana, prova ricerca per varianti
+        if not manifest_url and library == "Vaticana":
+            from universal_iiif_core.resolvers.discovery import search_vatican
+
+            logger.info("Trying Vatican search for: %s", shelfmark)
+            try:
+                results = search_vatican(shelfmark, max_results=5)
+                if results:
+                    # Se c'è un solo risultato, mostra preview diretto
+                    if len(results) == 1:
+                        item = results[0]
+                        preview_data = {
+                            "id": item.get("id"),
+                            "library": "Vaticana",
+                            "url": item.get("manifest"),
+                            "label": item.get("title", "Senza Titolo"),
+                            "description": item.get("description", ""),
+                            "pages": item.get("raw", {}).get("page_count", 0),
+                            "thumbnail": item.get("thumbnail"),
+                        }
+                        return render_preview(preview_data)
+                    # Altrimenti mostra lista risultati
+                    return render_search_results_list(results)
+            except Exception as e:
+                logger.warning("Vatican search failed: %s", e)
 
         if not manifest_url:
             hint = "Verifica la segnatura."
             if library == "Vaticana":
-                hint += " Prova formati come 'Urb.lat.1779'."
+                hint += " Prova formati come 'Urb.lat.1779' o inserisci solo il numero (es. '1223')."
 
             return render_error_message(
                 "Manoscritto non trovato", f"Impossibile risolvere '{shelfmark}' per {library}. {hint}"
             )
 
-        # 2. Analisi del Manifest (Download leggero)
+        # 3. Analisi del Manifest (Download leggero)
         try:
             manifest_info = analyze_manifest(manifest_url)
         except Exception:
             return render_error_message("Errore Manifest", "Manifest IIIF corrotto o irraggiungibile.")
 
-        # 3. Preparazione Dati Anteprima
+        # 4. Preparazione Dati Anteprima
         preview_data = {
             "id": doc_id or manifest_info.get("label", "Unknown"),
             "library": library,

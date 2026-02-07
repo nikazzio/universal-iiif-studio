@@ -4,7 +4,6 @@ Gestisce la grafica della pagina di ricerca, le card di anteprima,
 i messaggi di errore e la barra di avanzamento del download.
 """
 
-# ... (altri import esistenti)
 from fasthtml.common import (
     H2,
     H3,
@@ -19,58 +18,99 @@ from fasthtml.common import (
     P,
     Select,
     Span,
-    Table,
-    Tbody,
-    Td,
-    Th,
-    Tr,
 )
 
 
 def render_search_results_list(results: list) -> Div:
-    """Renderizza una lista di risultati di ricerca (es. Gallica)."""
+    """Renderizza una lista di risultati di ricerca con metadati estesi."""
     cards = []
 
     for item in results:
         # Estraiamo i dati
         title = item.get("title", "Senza titolo")
+        author = item.get("author", "")
+        date = item.get("date", "")
+        language = item.get("language", "")
+        publisher = item.get("publisher", "")
+        ark = item.get("ark", "")
+        library = item.get("library", "Gallica")
+
         # Tronchiamo la descrizione se troppo lunga
         desc_text = item.get("description", "") or ""
-        desc = desc_text[:150] + "..." if len(desc_text) > 150 else desc_text
+        desc = desc_text[:120] + "..." if len(desc_text) > 120 else desc_text
 
         thumb = item.get("thumbnail")
         doc_id = item.get("id")
         manifest_url = item.get("manifest")
-        library = item.get("library", "Gallica")
+
+        # Link al viewer originale
+        viewer_url = None
+        if library == "Gallica" and ark:
+            viewer_url = f"https://gallica.bnf.fr/{ark}"
+        elif library == "Gallica" and doc_id:
+            viewer_url = f"https://gallica.bnf.fr/ark:/12148/{doc_id}"
+        elif library == "Vaticana" and doc_id:
+            viewer_url = f"https://digi.vatlib.it/view/{doc_id}"
 
         # Azione: Avvia Download
-        # Usiamo gli stessi endpoint della card singola
         hx_vals = f'{{"manifest_url": "{manifest_url}", "doc_id": "{doc_id}", "library": "{library}"}}'
 
         btn = Button(
             "⬇️ Scarica",
             cls="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1 rounded transition-colors",
-            hx_post="/discovery/download",
+            hx_post="/api/start_download",
             hx_vals=hx_vals,
             hx_target="#download-status-area",
             hx_swap="innerHTML",
         )
 
-        # Layout Card Orizzontale Compatta
+        # Link esterno al viewer
+        viewer_link = (
+            A(
+                "🔗 Viewer",
+                href=viewer_url,
+                target="_blank",
+                cls="text-xs text-blue-400 hover:text-blue-300 underline ml-2",
+            )
+            if viewer_url
+            else None
+        )
+
+        # Layout Card Orizzontale con più info
         img_col = Div(
-            Img(src=thumb, cls="w-16 h-16 object-cover rounded border border-slate-600")
+            Img(src=thumb, cls="w-20 h-20 object-cover rounded border border-slate-600")
             if thumb
             else Div(
                 "No IMG",
-                cls="w-16 h-16 bg-slate-800 rounded flex items-center justify-center text-[10px] text-slate-500",
+                cls="w-20 h-20 bg-slate-800 rounded flex items-center justify-center text-[10px] text-slate-500",
             ),
             cls="flex-shrink-0 mr-4",
         )
 
+        # Metadati aggiuntivi in formato compatto
+        meta_items = []
+        if author and author != "Autore sconosciuto":
+            meta_items.append(Span(f"👤 {author[:40]}", cls="text-xs text-slate-400"))
+        if date:
+            meta_items.append(Span(f"📅 {date}", cls="text-xs text-slate-500"))
+        if language:
+            meta_items.append(Span(f"🌐 {language.upper()}", cls="text-xs text-slate-500"))
+        if publisher:
+            meta_items.append(Span(f"📚 {publisher[:30]}", cls="text-xs text-slate-500"))
+
+        meta_row = Div(*meta_items, cls="flex flex-wrap gap-x-3 gap-y-1 mb-1") if meta_items else None
+
+        # ID badge
+        id_badge = Span(
+            doc_id[:20] + "..." if len(doc_id or "") > 20 else doc_id,
+            cls="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono",
+        )
+
         txt_col = Div(
-            H3(title, cls="text-sm font-bold text-slate-200 mb-1 leading-tight"),
-            P(desc, cls="text-xs text-slate-400 mb-2 line-clamp-2"),
-            Div(btn, cls="flex justify-end"),
+            H3(title[:80] + ("..." if len(title) > 80 else ""), cls="text-sm font-bold text-slate-200 mb-1 leading-tight"),
+            meta_row if meta_row else "",
+            P(desc, cls="text-xs text-slate-400 mb-2 line-clamp-2") if desc else "",
+            Div(id_badge, viewer_link if viewer_link else "", btn, cls="flex items-center gap-2 justify-between"),
             cls="flex-grow min-w-0",
         )
 
@@ -91,7 +131,7 @@ def render_search_results_list(results: list) -> Div:
             cls="flex justify-between items-baseline mb-4 border-b border-slate-700 pb-2",
         ),
         Div(*cards, cls="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar"),
-        id="discovery-preview",  # Rimpiazza l'area di preview
+        id="discovery-preview",
     )
 
 
@@ -217,82 +257,117 @@ def discovery_content(initial_preview=None, active_download_fragment=None) -> Di
 
 
 def render_preview(data: dict) -> Div:
-    """Render preview block for a manifest."""
-    # Warning se ci sono troppe pagine
+    """Render preview block for a manifest (unified style with search results)."""
     pages = int(data.get("pages", 0))
-    warning = ""
+    doc_id = data.get("id", "")
+    library = data.get("library", "")
+    manifest_url = data.get("url", "")
+    label = data.get("label", "Senza Titolo")
+    description = data.get("description", "")
+    thumbnail = data.get("thumbnail", "")
+
+    # Warning se ci sono troppe pagine
+    warning = None
     if pages > 500:
         warning = Div(
             f"⚠️ Questo manoscritto contiene molte pagine ({pages}). Il download richiederà tempo.",
             cls=(
                 "text-xs text-amber-800 dark:text-amber-200 mb-4 bg-amber-50 "
-                "dark:bg-amber-900/30 p-3 rounded border border-amber-200"
+                "dark:bg-amber-900/30 p-3 rounded border border-amber-200 dark:border-amber-700"
             ),
         )
 
-    return Div(
-        H3(
-            f"📖 {data['label']}",
-            cls="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2",
+    # Link al viewer originale
+    viewer_url = None
+    if library == "Gallica":
+        viewer_url = f"https://gallica.bnf.fr/ark:/12148/{doc_id}"
+    elif library == "Vaticana":
+        viewer_url = f"https://digi.vatlib.it/view/{doc_id}"
+    elif library == "Bodleian":
+        viewer_url = f"https://digital.bodleian.ox.ac.uk/objects/{doc_id}"
+
+    viewer_link = (
+        A(
+            "🔗 Apri nel viewer originale",
+            href=viewer_url,
+            target="_blank",
+            cls="text-sm text-blue-400 hover:text-blue-300 underline",
+        )
+        if viewer_url
+        else None
+    )
+
+    # Thumbnail
+    img_col = Div(
+        Img(src=thumbnail, cls="w-32 h-32 object-cover rounded-lg border border-slate-600")
+        if thumbnail
+        else Div(
+            "📜",
+            cls="w-32 h-32 bg-slate-800 rounded-lg flex items-center justify-center text-4xl",
         ),
-        P(
-            data.get("description", ""),
-            cls="text-gray-600 dark:text-gray-400 mb-4 italic line-clamp-3",
-        ),
-        Div(
-            Table(
-                Tbody(
-                    Tr(
-                        Th("ID", cls="text-left py-1 pr-4 font-medium text-gray-500"),
-                        Td(data["id"], cls="dark:text-gray-300"),
-                    ),
-                    Tr(
-                        Th("Library", cls="text-left py-1 pr-4 font-medium text-gray-500"),
-                        Td(data["library"], cls="dark:text-gray-300"),
-                    ),
-                    Tr(
-                        Th("Pagine", cls="text-left py-1 pr-4 font-medium text-gray-500"),
-                        Td(str(data["pages"]), cls="dark:text-gray-300"),
-                    ),
-                    Tr(
-                        Th("Manifest", cls="text-left py-1 pr-4 font-medium text-gray-500"),
-                        Td(
-                            data["url"],
-                            cls="text-xs truncate max-w-sm text-blue-500",
-                        ),
-                    ),
-                ),
-                cls="w-full mb-6",
-            ),
-            warning,
-            Form(
-                Input(type="hidden", name="manifest_url", value=data["url"]),
-                Input(type="hidden", name="doc_id", value=data["id"]),
-                Input(type="hidden", name="library", value=data["library"]),
-                Button(
-                    Span("🚀 Avvia Download", cls="font-bold"),
-                    type="submit",
-                    cls=(
-                        "w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg "
-                        "transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center "
-                        "justify-center gap-2"
-                    ),
-                ),
-                hx_post="/api/start_download",
-                hx_target="#discovery-preview",
-                hx_swap="innerHTML",
-            ),
+        cls="flex-shrink-0 mr-6",
+    )
+
+    # Metadata badges
+    meta_items = [
+        Span(f"📚 {library}", cls="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded"),
+        Span(f"📄 {pages} pagine", cls="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded"),
+    ]
+
+    # ID badge
+    id_badge = Span(
+        doc_id,
+        cls="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded font-mono",
+    )
+
+    # Content column
+    txt_col = Div(
+        H3(label, cls="text-xl font-bold text-slate-100 mb-2"),
+        P(description[:200] + ("..." if len(description) > 200 else ""), cls="text-sm text-slate-400 mb-3 italic")
+        if description
+        else "",
+        Div(*meta_items, id_badge, cls="flex flex-wrap gap-2 mb-3"),
+        viewer_link if viewer_link else "",
+        cls="flex-grow",
+    )
+
+    # Download form
+    download_form = Form(
+        Input(type="hidden", name="manifest_url", value=manifest_url),
+        Input(type="hidden", name="doc_id", value=doc_id),
+        Input(type="hidden", name="library", value=library),
+        Button(
+            Span("🚀 Avvia Download", cls="font-bold"),
+            type="submit",
             cls=(
-                "bg-gray-50 dark:bg-gray-900 p-6 rounded-lg border-2 border-dashed "
-                "border-indigo-200 dark:border-indigo-900"
+                "w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg "
+                "transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center "
+                "justify-center gap-2 text-lg"
             ),
         ),
-        cls="animate-in fade-in slide-in-from-top-4 duration-300",
+        hx_post="/api/start_download",
+        hx_target="#download-status-area",
+        hx_swap="innerHTML",
+    )
+
+    return Div(
+        warning if warning else "",
+        Div(
+            img_col,
+            txt_col,
+            cls="flex items-start mb-6",
+        ),
+        download_form,
+        id="discovery-preview",
+        cls=(
+            "bg-slate-800/60 p-6 rounded-lg border border-slate-700 "
+            "animate-in fade-in slide-in-from-top-4 duration-300"
+        ),
     )
 
 
 def render_download_status(download_id: str, doc_id: str, library: str, status_data: dict) -> Div:
-    """Render the download status (Progress Bar or Success Card)."""
+    """Render the download status (Progress Bar or Success Card) - unified slate theme."""
     percent = status_data.get("percent", 0)
     status = status_data.get("status", "running")
     current = status_data.get("current", 0)
@@ -300,42 +375,40 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
     error = status_data.get("error")
     title = status_data.get("title") or doc_id
 
-    # 1.b Cancelling state: show immediate feedback but keep polling
+    # Common styles
+    card_cls = "bg-slate-800/60 p-6 rounded-lg border border-slate-700 shadow-sm"
+    header_title_cls = "text-lg font-bold text-slate-100"
+    badge_cls = "text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded ml-2"
+    subtext_cls = "text-sm text-slate-400 mt-1"
+    percent_cls = "text-3xl font-extrabold text-indigo-400"
+    progress_bg_cls = "w-full bg-slate-700 rounded-full h-2.5 mb-2"
+    progress_bar_cls = "bg-indigo-500 h-2.5 rounded-full transition-all duration-500 ease-out"
+
+    # 1.b Cancelling state
     if status == "cancelling":
         header = Div(
             Div(
-                H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
-                Span(
-                    library,
-                    cls=(
-                        "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
-                        " dark:text-indigo-300 px-2 py-1 rounded ml-2"
-                    ),
-                ),
+                H3(title, cls=header_title_cls),
+                Span(library, cls=badge_cls),
                 cls="flex items-center justify-between",
             ),
-            P(f"{current}/{total} pagine", cls="text-sm text-gray-500 mt-1"),
+            P(f"{current}/{total} pagine", cls=subtext_cls),
             cls="mb-4",
         )
 
         percent_block = Div(
-            Div(f"{percent}%", cls="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300"),
-            P("Cancelling…", cls="text-sm text-red-600"),
+            Div(f"{percent}%", cls=percent_cls),
+            P("Annullamento...", cls="text-sm text-red-400"),
             cls="flex items-center gap-4 mb-4",
         )
 
         progress_bar = Div(
-            Div(
-                Div(
-                    cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out",
-                    style=f"width: {percent}%",
-                ),
-                cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2",
-            )
+            Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls)
         )
 
         body = Div(
-            header, percent_block, progress_bar, P("Annullamento in corso...", cls="text-xs text-gray-400 italic")
+            header, percent_block, progress_bar,
+            P("Annullamento in corso...", cls="text-xs text-slate-500 italic")
         )
 
         return Div(
@@ -343,17 +416,14 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
             hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
             hx_trigger="every 1s",
             hx_swap="outerHTML",
-            cls=(
-                "bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 "
-                "dark:border-gray-700 shadow-sm space-y-3"
-            ),
+            cls=card_cls,
         )
 
     # 1. Caso Errore
     if "error" in status or error:
         return render_error_message("Errore durante il download", str(error or status))
 
-    # 2. Caso Completato (Mostra bottone per lo Studio)
+    # 2. Caso Completato
     if percent >= 100 or status == "completed":
         from urllib.parse import quote
 
@@ -363,10 +433,10 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
         return Div(
             Div(
                 Span("✅", cls="text-4xl mb-4 block"),
-                H3("Download Completato!", cls="text-xl font-bold text-green-700 dark:text-green-300 mb-2"),
+                H3("Download Completato!", cls="text-xl font-bold text-green-400 mb-2"),
                 P(
                     f"Il manoscritto '{doc_id}' è stato salvato correttamente.",
-                    cls="text-gray-600 dark:text-gray-400 mb-6",
+                    cls="text-slate-400 mb-6",
                 ),
                 A(
                     Button(
@@ -382,72 +452,55 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
                 cls="text-center",
             ),
             cls=(
-                "bg-green-50 dark:bg-green-900/20 border border-green-200 "
-                "dark:border-green-800 p-8 rounded-lg shadow-sm animate-in zoom-in "
-                "duration-300"
+                "bg-green-900/20 border border-green-800 p-8 rounded-lg shadow-sm "
+                "animate-in zoom-in duration-300"
             ),
         )
 
-    # 3. Caso In Corso (Barra di progresso + Polling)
-    # Importante: passiamo doc_id e library nel polling per non perderli
+    # 3. Caso In Corso
     controls = Div(
         Button(
-            "⛔ Annulla Download",
-            cls=("bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg shadow-sm transition-all"),
+            "⛔ Annulla",
+            cls="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-all",
             hx_post=f"/api/cancel_download/{download_id}?doc_id={doc_id}&library={library}",
             hx_target="#discovery-preview",
             hx_swap="outerHTML",
         ),
         cls="mt-4 flex justify-end",
     )
-    # Enhanced header with title and library badge
+
     header = Div(
         Div(
-            H3(title, cls="text-lg font-bold text-gray-800 dark:text-gray-100"),
-            Span(
-                library,
-                cls=(
-                    "text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
-                    " dark:text-indigo-300 px-2 py-1 rounded ml-2"
-                ),
-            ),
+            H3(title, cls=header_title_cls),
+            Span(library, cls=badge_cls),
             cls="flex items-center justify-between",
         ),
-        P(f"{current}/{total} pagine", cls="text-sm text-gray-500 mt-1"),
+        P(f"{current}/{total} pagine", cls=subtext_cls),
         cls="mb-4",
     )
 
-    # Large percent display
     percent_block = Div(
-        Div(f"{percent}%", cls="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300"),
-        P("Processing…", cls="text-sm text-gray-500"),
+        Div(f"{percent}%", cls=percent_cls),
+        P("Scaricamento in corso...", cls="text-sm text-slate-500"),
         cls="flex items-center gap-4 mb-4",
     )
 
     progress_bar = Div(
-        Div(
-            Div(
-                cls="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out", style=f"width: {percent}%"
-            ),
-            cls="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2",
-        )
+        Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls)
     )
 
     body = Div(
         header,
         percent_block,
         progress_bar,
-        P("Ottimizzazione immagini e salvataggio nel database...", cls="text-xs text-gray-400 italic animate-pulse"),
+        P("Ottimizzazione immagini e salvataggio...", cls="text-xs text-slate-500 italic animate-pulse"),
     )
 
-    # Polling continuo ogni 1 secondo (omit when completed/error by returning different fragment)
     return Div(
         body,
         controls,
         hx_get=f"/api/download_status/{download_id}?doc_id={doc_id}&library={library}",
         hx_trigger="every 1s",
         hx_swap="outerHTML",
-        cls=(
-            "bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-3"
-        ),
+        cls=card_cls,
     )
