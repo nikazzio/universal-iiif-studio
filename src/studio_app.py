@@ -102,9 +102,10 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # (stored in runtime `data/local/snippets`) are served at `/assets/snippets/...`.
 app.mount("/assets/snippets", StaticFiles(directory=str(snippets_path)), name="assets_snippets")
 
-if downloads_path.exists():
-    app.mount("/downloads", StaticFiles(directory=str(downloads_path)), name="downloads")
-    logger.info(f"📂 Mounted downloads directory: {downloads_path}")
+# Ensure downloads directory exists and mount it
+downloads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=str(downloads_path)), name="downloads")
+logger.info(f"📂 Mounted downloads directory: {downloads_path}")
 
 
 # Request Logging Middleware
