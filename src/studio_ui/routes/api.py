@@ -12,7 +12,9 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 from fasthtml.common import Request, Response
+from starlette.responses import FileResponse
 
+from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.services.ocr.storage import OCRStorage
 
@@ -23,6 +25,38 @@ logger = get_logger(__name__)
 
 def setup_api_routes(app) -> None:
     """Register API routes for manifest serving."""
+
+    @app.get("/downloads/{path:path}")
+    def serve_download_file(path: str) -> Response:
+        """Serve files from the downloads directory.
+        
+        This explicit route is needed because FastHTML's default static
+        route may intercept requests before Starlette's mount handlers.
+        """
+        config = get_config_manager()
+        downloads_dir = config.get_downloads_dir()
+        file_path = downloads_dir / path
+        
+        if not file_path.exists():
+            logger.warning("Download file not found: %s", file_path)
+            return Response("404 Not Found", status_code=404)
+        
+        # Determine content type
+        suffix = file_path.suffix.lower()
+        content_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".json": "application/json",
+            ".pdf": "application/pdf",
+        }
+        media_type = content_types.get(suffix, "application/octet-stream")
+        
+        return FileResponse(
+            str(file_path),
+            media_type=media_type,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
     @app.get("/iiif/manifest/{library}/{doc_id}")
     def get_manifest(request: Request, library: str, doc_id: str) -> Response:
