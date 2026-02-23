@@ -32,7 +32,7 @@ def setup_api_routes(app) -> None:
         logger.info("serve_download_file called with path: %s", path)
         config = get_config_manager()
         downloads_dir = config.get_downloads_dir()
-        
+
         # Security: Resolve to absolute path and validate it's within downloads_dir
         try:
             requested_path = (downloads_dir / path).resolve()
@@ -40,13 +40,13 @@ def setup_api_routes(app) -> None:
         except (ValueError, RuntimeError):
             logger.warning("Path traversal attempt blocked: %s", path)
             return Response("403 Forbidden", status_code=403)
-        
+
         logger.info("Looking for file: %s (exists: %s)", requested_path, requested_path.exists())
-        
+
         if not requested_path.exists():
             logger.warning("Download file not found: %s", requested_path)
             return Response("404 Not Found", status_code=404)
-        
+
         # Determine content type
         suffix = requested_path.suffix.lower()
         content_types = {
@@ -57,7 +57,7 @@ def setup_api_routes(app) -> None:
             ".pdf": "application/pdf",
         }
         media_type = content_types.get(suffix, "application/octet-stream")
-        
+
         logger.info("Serving file: %s as %s", requested_path, media_type)
         return FileResponse(
             str(requested_path),

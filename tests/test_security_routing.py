@@ -3,8 +3,8 @@
 Tests for path traversal, CORS configuration, and exception handling.
 """
 
+
 import pytest
-from pathlib import Path
 from fasthtml.common import fast_app
 from starlette.testclient import TestClient
 
@@ -40,8 +40,7 @@ def test_path_traversal_blocked(test_client):
 def test_downloads_serve_only_allowed_files():
     """Ensure path validation logic blocks files outside downloads_dir."""
     from universal_iiif_core.config_manager import get_config_manager
-    from pathlib import Path
-    
+
     config = get_config_manager()
     downloads_dir = config.get_downloads_dir()
 
@@ -91,7 +90,7 @@ def test_cors_configuration_from_config():
     # With default config.json, should have localhost entries
     assert isinstance(allowed_origins, list)
     assert len(allowed_origins) > 0
-    
+
     # Should not be wildcard in production config
     if "localhost" not in str(allowed_origins):
         assert "*" not in allowed_origins, "Production config should not use CORS wildcard"
@@ -106,7 +105,7 @@ def test_exception_sanitization_resolve_manifest():
 
     # Result should be an error component, not raw exception
     result_str = str(result)
-    
+
     # Should NOT contain:
     # - Stack traces
     # - File paths
@@ -130,14 +129,14 @@ def test_exception_sanitization_start_download():
     result = start_download("https://invalid-manifest-url-that-will-fail", "test_doc", "Gallica")
 
     result_str = str(result)
-    
+
     # Should NOT expose:
     # - Database paths
     # - Internal exceptions with stack traces
     # - Sensitive system info
     assert "Traceback" not in result_str
     assert ".py:" not in result_str  # Python file references in stack traces
-    
+
     # The component should be a valid HTMX polling fragment
     assert 'hx-get="/api/download_status/' in result_str or "Errore" in result_str
 
@@ -157,10 +156,10 @@ def test_path_validation_with_symlinks(test_client, tmp_path):
 
         # Attempt to access via symlink
         response = test_client.get("/downloads/evil_link")
-        
+
         # Should be blocked (403) or not found (404), but NOT 200
         assert response.status_code in (403, 404)
-        
+
         if response.status_code == 200:
             # If it somehow returns 200, content must NOT be the secret
             assert response.text != "secret content"
@@ -180,7 +179,7 @@ def test_manifest_endpoint_error_handling(test_client):
 
     # Should return JSON error, not HTML exception page
     assert response.status_code in (404, 500)
-    
+
     # Content-Type should be JSON
     assert "application/json" in response.headers.get("content-type", "")
 

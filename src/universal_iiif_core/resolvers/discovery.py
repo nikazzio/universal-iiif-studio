@@ -103,10 +103,10 @@ def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
     """
     if not doc_id:
         return []
-    
+
     # Search by identifier field
     cql = f'dc.identifier all "{doc_id}"'
-    
+
     params = {
         "operation": "searchRetrieve",
         "version": "1.2",
@@ -114,15 +114,15 @@ def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
         "maximumRecords": "5",
         "startRecord": "1",
     }
-    
+
     try:
         logger.debug("Searching Gallica SRU by ID: %s", doc_id)
         resp = requests.get(GALLICA_BASE_URL, params=params, headers=REAL_BROWSER_HEADERS, timeout=TIMEOUT_SECONDS)
         resp.raise_for_status()
-        
+
         resolver = GallicaResolver()
         return GallicaXMLParser.parse_sru(resp.content, resolver)
-    
+
     except Exception as exc:
         logger.error("Gallica ID search failed for %s: %s", doc_id, exc, exc_info=True)
         return []
