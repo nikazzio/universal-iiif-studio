@@ -4,6 +4,8 @@ Gestisce la grafica della pagina di ricerca, le card di anteprima,
 i messaggi di errore e la barra di avanzamento del download.
 """
 
+from urllib.parse import quote
+
 from fasthtml.common import (
     H2,
     H3,
@@ -52,15 +54,23 @@ def render_search_results_list(results: list) -> Div:
         elif library == "Vaticana" and doc_id:
             viewer_url = f"https://digi.vatlib.it/view/{doc_id}"
 
-        # Azione: Avvia Download
+        # Azioni: salva in Libreria / salva+download
         hx_vals = f'{{"manifest_url": "{manifest_url}", "doc_id": "{doc_id}", "library": "{library}"}}'
 
-        btn = Button(
-            "⬇️ Scarica",
+        add_btn = Button(
+            "➕ Aggiungi",
             cls="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1 rounded transition-colors",
-            hx_post="/api/start_download",
+            hx_post="/api/discovery/add_to_library",
             hx_vals=hx_vals,
-            hx_target="#download-status-area",
+            hx_target="#download-manager-area",
+            hx_swap="innerHTML",
+        )
+        add_dl_btn = Button(
+            "⬇️ Aggiungi + Download",
+            cls="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1 rounded transition-colors",
+            hx_post="/api/discovery/add_and_download",
+            hx_vals=hx_vals,
+            hx_target="#download-manager-area",
             hx_swap="innerHTML",
         )
 
@@ -105,6 +115,15 @@ def render_search_results_list(results: list) -> Div:
             doc_id[:20] + "..." if len(doc_id or "") > 20 else doc_id,
             cls="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono",
         )
+        badge_id = f"pdf-badge-{(doc_id or 'item').replace(' ', '-').replace('/', '-')[:28]}"
+        pdf_badge = Div(
+            "PDF: verifica...",
+            id=badge_id,
+            hx_get=f"/api/discovery/pdf_capability?manifest_url={quote(str(manifest_url or ''), safe='')}",
+            hx_trigger="load",
+            hx_swap="outerHTML",
+            cls="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded",
+        )
 
         txt_col = Div(
             H3(
@@ -113,7 +132,11 @@ def render_search_results_list(results: list) -> Div:
             ),
             meta_row if meta_row else "",
             P(desc, cls="text-xs text-slate-400 mb-2 line-clamp-2") if desc else "",
-            Div(id_badge, viewer_link if viewer_link else "", btn, cls="flex items-center gap-2 justify-between"),
+            Div(
+                Div(id_badge, pdf_badge, cls="flex items-center gap-2"),
+                Div(viewer_link if viewer_link else "", add_btn, add_dl_btn, cls="flex items-center gap-2"),
+                cls="flex items-center gap-2 justify-between",
+            ),
             cls="flex-grow min-w-0",
         )
 
@@ -130,7 +153,7 @@ def render_search_results_list(results: list) -> Div:
     return Div(
         Div(
             H3(f"Trovati {len(results)} risultati", cls="text-md font-bold text-slate-100"),
-            Span("Clicca su scarica per importare", cls="text-xs text-slate-500"),
+            Span("Aggiungi in libreria o avvia download dalla card", cls="text-xs text-slate-500"),
             cls="flex justify-between items-baseline mb-4 border-b border-slate-700 pb-2",
         ),
         Div(*cards, cls="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar"),
@@ -267,20 +290,25 @@ def discovery_content(initial_preview=None, active_download_fragment=None) -> Di
     """
     preview_block = initial_preview if initial_preview is not None else Div(id="discovery-preview", cls="mt-8")
     downloads_block = (
-        active_download_fragment if active_download_fragment is not None else Div(id="download-status-area", cls="mb-6")
+        active_download_fragment if active_download_fragment is not None else Div(id="download-manager-area")
     )
 
     return Div(
-        H2("🛰️ Discovery & Download", cls="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"),
-        discovery_form(),
-        # Downloads area separate from search preview
+        H2("🛰️ Discovery", cls="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"),
         Div(
-            H3("Download in corso", cls="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2"),
-            downloads_block,
-            cls="mb-8",
+            Div(
+                discovery_form(),
+                preview_block,
+                cls="w-full xl:w-[66%] xl:pr-4",
+            ),
+            Div(
+                H3("Download Manager", cls="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2"),
+                downloads_block,
+                cls="w-full xl:w-[34%] xl:sticky xl:top-6 self-start",
+            ),
+            cls="flex flex-col xl:flex-row gap-6",
         ),
-        preview_block,
-        cls="p-6 max-w-5xl mx-auto",
+        cls="p-6 max-w-7xl mx-auto",
     )
 
 
@@ -293,6 +321,7 @@ def render_preview(data: dict) -> Div:
     label = data.get("label", "Senza Titolo")
     description = data.get("description", "")
     thumbnail = data.get("thumbnail", "")
+    has_native_pdf = data.get("has_native_pdf")
 
     # Warning se ci sono troppe pagine
     warning = None
@@ -341,6 +370,26 @@ def render_preview(data: dict) -> Div:
         Span(f"📚 {library}", cls="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded"),
         Span(f"📄 {pages} pagine", cls="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded"),
     ]
+    if has_native_pdf is True:
+        meta_items.append(
+            Span(
+                "PDF nativo disponibile",
+                cls="text-xs bg-emerald-800 text-emerald-100 px-2 py-1 rounded",
+            )
+        )
+    elif has_native_pdf is False:
+        meta_items.append(Span("Solo immagini", cls="text-xs bg-amber-800 text-amber-100 px-2 py-1 rounded"))
+    else:
+        meta_items.append(
+            Div(
+                "PDF: verifica...",
+                id="preview-pdf-badge",
+                hx_get=f"/api/discovery/pdf_capability?manifest_url={quote(str(manifest_url or ''), safe='')}",
+                hx_trigger="load",
+                hx_swap="outerHTML",
+                cls="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded",
+            )
+        )
 
     # ID badge
     id_badge = Span(
@@ -359,23 +408,33 @@ def render_preview(data: dict) -> Div:
         cls="flex-grow",
     )
 
-    # Download form
-    download_form = Form(
-        Input(type="hidden", name="manifest_url", value=manifest_url),
-        Input(type="hidden", name="doc_id", value=doc_id),
-        Input(type="hidden", name="library", value=library),
+    hx_vals = f'{{"manifest_url": "{manifest_url}", "doc_id": "{doc_id}", "library": "{library}"}}'
+    download_form = Div(
         Button(
-            Span("🚀 Avvia Download", cls="font-bold"),
-            type="submit",
+            Span("➕ Aggiungi a Libreria", cls="font-bold"),
+            cls=(
+                "w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg "
+                "transition-all shadow-lg hover:shadow-xl active:scale-95 "
+                "flex items-center justify-center gap-2 text-sm"
+            ),
+            hx_post="/api/discovery/add_to_library",
+            hx_vals=hx_vals,
+            hx_target="#download-manager-area",
+            hx_swap="innerHTML",
+        ),
+        Button(
+            Span("🚀 Aggiungi + Download", cls="font-bold"),
             cls=(
                 "w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg "
-                "transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center "
-                "justify-center gap-2 text-lg"
+                "transition-all shadow-lg hover:shadow-xl active:scale-95 "
+                "flex items-center justify-center gap-2 text-lg"
             ),
+            hx_post="/api/discovery/add_and_download",
+            hx_vals=hx_vals,
+            hx_target="#download-manager-area",
+            hx_swap="innerHTML",
         ),
-        hx_post="/api/start_download",
-        hx_target="#download-status-area",
-        hx_swap="innerHTML",
+        cls="grid gap-3",
     )
 
     return Div(
@@ -522,4 +581,124 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
         hx_trigger="every 1s",
         hx_swap="outerHTML",
         cls=card_cls,
+    )
+
+
+def render_pdf_capability_badge(has_pdf: bool) -> Div:
+    """Render a compact badge for native PDF availability."""
+    if has_pdf:
+        return Div("PDF nativo disponibile", cls="text-[10px] bg-emerald-800 text-emerald-100 px-1.5 py-0.5 rounded")
+    return Div("Solo immagini", cls="text-[10px] bg-amber-800 text-amber-100 px-1.5 py-0.5 rounded")
+
+
+def render_download_manager(jobs: list[dict]) -> Div:
+    """Render the full download manager panel."""
+    if not jobs:
+        body = Div(
+            P("Nessun download in coda.", cls="text-sm text-slate-400"),
+            P("Puoi continuare a cercare mentre i download vengono eseguiti qui.", cls="text-xs text-slate-500 mt-1"),
+            cls="bg-slate-900/40 border border-slate-700 rounded-lg p-4",
+        )
+    else:
+        cards = [render_download_job_card(job) for job in jobs]
+        body = Div(*cards, cls="space-y-3")
+
+    return Div(
+        body,
+        hx_get="/api/download_manager",
+        hx_trigger="every 1s",
+        hx_swap="outerHTML",
+        id="download-manager-area",
+        cls="space-y-2",
+    )
+
+
+def render_download_job_card(job: dict) -> Div:
+    """Render a single card inside the Download Manager list."""
+    status = str(job.get("status") or "queued")
+    doc_id = str(job.get("doc_id") or "-")
+    library = str(job.get("library") or "-")
+    job_id = str(job.get("job_id") or "")
+    current = int(job.get("current", 0) or 0)
+    total = int(job.get("total", 0) or 0)
+    queue_position = int(job.get("queue_position", 0) or 0)
+    error = str(job.get("error") or "")
+    percent = int((current / total * 100) if total > 0 else 0)
+
+    badge_map = {
+        "running": "bg-indigo-800 text-indigo-100",
+        "queued": "bg-slate-700 text-slate-100",
+        "cancelling": "bg-amber-700 text-amber-100",
+        "completed": "bg-emerald-700 text-emerald-100",
+        "cancelled": "bg-slate-700 text-slate-200",
+        "error": "bg-rose-700 text-rose-100",
+    }
+    badge_cls = badge_map.get(status, "bg-slate-700 text-slate-100")
+    badge_text = status.upper()
+    if status == "queued" and queue_position > 0:
+        badge_text = f"QUEUED #{queue_position}"
+
+    actions = []
+    if status in {"running", "queued", "cancelling"}:
+        actions.append(
+            Button(
+                "⛔ Cancella",
+                cls="text-xs bg-rose-700 hover:bg-rose-600 text-white px-2 py-1 rounded",
+                hx_post=f"/api/download_manager/cancel/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status == "queued":
+        actions.append(
+            Button(
+                "⬆️ Priorità",
+                cls="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded",
+                hx_post=f"/api/download_manager/prioritize/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status in {"error", "cancelled"}:
+        actions.append(
+            Button(
+                "🔁 Retry",
+                cls="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded",
+                hx_post=f"/api/download_manager/retry/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status == "completed":
+        actions.append(
+            A(
+                "📖 Studio",
+                href=f"/studio?doc_id={quote(doc_id)}&library={quote(library)}",
+                cls="text-xs text-indigo-300 hover:text-indigo-200 underline",
+            )
+        )
+
+    progress = Div(
+        Div(
+            Div(cls="h-2 rounded bg-indigo-500", style=f"width: {percent}%"),
+            cls="w-full bg-slate-700 rounded h-2",
+        ),
+        P(f"{current}/{total} ({percent}%)", cls="text-[11px] text-slate-400 mt-1") if total > 0 else "",
+        cls="mt-2",
+    )
+    if status == "queued":
+        progress = Div(P("In attesa di uno slot libero...", cls="text-[11px] text-slate-400 mt-2"), cls="mt-1")
+    if status in {"error", "cancelled"} and error:
+        progress = Div(P(error, cls="text-[11px] text-rose-300 mt-2"), cls="mt-1")
+
+    return Div(
+        Div(
+            H3(doc_id, cls="text-sm font-bold text-slate-100 truncate"),
+            Span(badge_text, cls=f"text-[10px] px-2 py-1 rounded {badge_cls}"),
+            cls="flex items-start justify-between gap-2",
+        ),
+        P(library, cls="text-xs text-slate-400"),
+        progress,
+        Div(*actions, cls="mt-2 flex flex-wrap gap-2"),
+        cls="bg-slate-900/50 border border-slate-700 rounded-lg p-3",
     )

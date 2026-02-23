@@ -172,6 +172,7 @@ def _sidebar(active_page: str = "") -> Nav:
     nav_items = [
         ("studio", "Studio", "/studio", "📖"),
         ("discovery", "Discovery", "/discovery", "🔍"),
+        ("library", "Libreria", "/library", "📚"),
         ("export", "Export", "/export", "📄"),
         ("settings", "Impostazioni", "/settings", "⚙️"),
     ]

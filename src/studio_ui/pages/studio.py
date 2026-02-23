@@ -114,7 +114,20 @@ def document_picker():
     )
 
 
-def studio_layout(title, library, doc_id, page, manifest_url, initial_canvas, manifest_json, total_pages, meta):
+def studio_layout(
+    title,
+    library,
+    doc_id,
+    page,
+    manifest_url,
+    initial_canvas,
+    manifest_json,
+    total_pages,
+    meta,
+    asset_status: str = "",
+    has_native_pdf: bool | None = None,
+    pdf_local_available: bool = False,
+):
     """Render the main Studio split-view layout."""
     return Div(
         Div(
@@ -138,6 +151,33 @@ def studio_layout(title, library, doc_id, page, manifest_url, initial_canvas, ma
                                             "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
                                             "dark:text-indigo-400 text-[11px] font-bold px-3 py-1 "
                                             "rounded uppercase tracking-wider"
+                                        ),
+                                    ),
+                                    Span(
+                                        (asset_status or "unknown").upper(),
+                                        cls=(
+                                            "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 "
+                                            "text-[10px] font-bold px-2 py-0.5 rounded"
+                                        ),
+                                    ),
+                                    Span(
+                                        "PDF nativo" if has_native_pdf else "Solo immagini",
+                                        cls=(
+                                            "bg-emerald-50 dark:bg-emerald-900/30 "
+                                            "text-emerald-700 dark:text-emerald-300 "
+                                            "text-[10px] font-bold px-2 py-0.5 rounded"
+                                        )
+                                        if has_native_pdf is not None
+                                        else (
+                                            "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 "
+                                            "text-[10px] font-bold px-2 py-0.5 rounded"
+                                        ),
+                                    ),
+                                    Span(
+                                        "PDF locale ✓" if pdf_local_available else "PDF locale -",
+                                        cls=(
+                                            "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 "
+                                            "text-[10px] font-bold px-2 py-0.5 rounded"
                                         ),
                                     ),
                                     Span(

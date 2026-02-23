@@ -36,7 +36,8 @@ class OCRStorage:
             db_rows = self.vault.get_all_manuscripts()
             for row in db_rows:
                 # Only show valid entries with a path or explicitly downloaded
-                if row.get("status") in ["complete", "downloading", "pending"]:
+                state = row.get("asset_state") or row.get("status") or "saved"
+                if state in ["saved", "complete", "downloading", "pending", "partial", "error", "queued"]:
                     path = row.get("local_path")
                     # If path is missing in DB (legacy), try to construct it
                     if not path:
@@ -52,6 +53,15 @@ class OCRStorage:
                             "path": path,
                             "label": label,
                             "status": row.get("status", "unknown"),
+                            "asset_state": state,
+                            "total_canvases": int(row.get("total_canvases") or 0),
+                            "downloaded_canvases": int(row.get("downloaded_canvases") or 0),
+                            "pdf_local_available": bool(row.get("pdf_local_available")),
+                            "has_native_pdf": (
+                                bool(row.get("has_native_pdf")) if row.get("has_native_pdf") is not None else None
+                            ),
+                            "item_type": row.get("item_type") or "altro",
+                            "item_type_source": row.get("item_type_source") or "auto",
                         }
                     )
         except Exception as e:

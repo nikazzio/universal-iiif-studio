@@ -1,25 +1,30 @@
-"""Route handlers for the Discovery page.
+"""Route handlers for the Discovery page and Download Manager.
 
 Handlers are top-level functions so `setup_discovery_routes` can remain
 very small and satisfy ruff's complexity check.
 """
 
+from pathlib import Path
 from urllib.parse import unquote
 
-from fasthtml.common import Div, Request
+from fasthtml.common import Request
 
 from studio_ui.common.toasts import build_toast
 
 # Importiamo i nuovi componenti grafici
 from studio_ui.components.discovery import (
     discovery_content,
+    render_download_manager,
     render_download_status,
     render_feedback_message,
+    render_pdf_capability_badge,
     render_preview,
     render_search_results_list,
 )
 from studio_ui.components.layout import base_layout
 from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloader_thread
+from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark, smart_search
 from universal_iiif_core.services.storage.vault_manager import VaultManager
@@ -47,77 +52,69 @@ def _with_toast(fragment, message: str, tone: str = "info"):
     return [fragment, build_toast(message, tone=tone)]
 
 
+def _infer_item_type(label: str, description: str) -> str:
+    text = f"{label} {description}".lower()
+    if any(token in text for token in ("incunab",)):
+        return "incunabolo"
+    if any(token in text for token in ("stampa", "printed", "print")):
+        return "libro a stampa"
+    if any(token in text for token in ("periodic", "journal", "rivista")):
+        return "periodico"
+    if any(token in text for token in ("manoscr", "manuscript", "codex", "ms ")):
+        return "manoscritto"
+    return "altro"
+
+
+def _downloads_doc_path(library: str, doc_id: str) -> Path:
+    cm = get_config_manager()
+    return cm.get_downloads_dir() / library / doc_id
+
+
+def _upsert_saved_entry(
+    manifest_url: str,
+    doc_id: str,
+    library: str,
+    *,
+    label: str = "",
+    description: str = "",
+    pages: int = 0,
+    has_native_pdf: bool | None = None,
+) -> None:
+    entry_label = (label or doc_id or "Senza Titolo").strip()
+    entry_desc = (description or "").strip()
+    total = int(pages or 0)
+    v = VaultManager()
+    v.upsert_manuscript(
+        doc_id,
+        display_title=entry_label,
+        title=entry_label,
+        library=library,
+        manifest_url=manifest_url,
+        local_path=str(_downloads_doc_path(library, doc_id)),
+        status="saved",
+        asset_state="saved",
+        total_canvases=total,
+        downloaded_canvases=0,
+        has_native_pdf=1 if has_native_pdf else 0 if has_native_pdf is False else None,
+        pdf_local_available=0,
+        item_type=_infer_item_type(entry_label, entry_desc),
+        item_type_source="auto",
+        missing_pages_json="[]",
+    )
+
+
+def _download_manager_fragment(limit: int = 50):
+    jobs = VaultManager().list_download_jobs(limit=limit)
+    return render_download_manager(jobs)
+
+
 def discovery_page(request: Request):
     """Render the Discovery page."""
-    vault = VaultManager()
-    active_list = vault.get_active_downloads()
-
     is_hx = request.headers.get("HX-Request") == "true"
-
-    # HTMX fragment request: return the discovery content only (with downloads area)
+    manager = _download_manager_fragment()
     if is_hx:
-        active_frag = None
-        if active_list:
-            cards = []
-            for active in active_list:
-                job_id = str(active.get("job_id") or "")
-                doc_id = str(active.get("doc_id") or "")
-                library = str(active.get("library") or "")
-
-                curr = int(active.get("current", 0))
-                total = int(active.get("total", 0))
-                percent = int((curr / total * 100) if total > 0 else 0)
-
-                status_data = {
-                    "status": str(active.get("status", "running")),
-                    "current": curr,
-                    "total": total,
-                    "percent": percent,
-                    "error": active.get("error"),
-                }
-                try:
-                    ms = vault.get_manuscript(doc_id) or {}
-                    status_data["title"] = ms.get("title") or doc_id
-                except Exception:
-                    status_data["title"] = doc_id
-
-                cards.append(render_download_status(job_id, doc_id, library, status_data))
-
-            active_frag = Div(*cards, id="download-status-area")
-
-        return discovery_content(initial_preview=None, active_download_fragment=active_frag)
-
-    # Full-page request: wrap in base layout and include downloads area (all active downloads)
-    active_frag = None
-    if active_list:
-        cards = []
-        for active in active_list:
-            job_id = str(active.get("job_id") or "")
-            doc_id = str(active.get("doc_id") or "")
-            library = str(active.get("library") or "")
-
-            curr = int(active.get("current", 0))
-            total = int(active.get("total", 0))
-            percent = int((curr / total * 100) if total > 0 else 0)
-
-            status_data = {
-                "status": str(active.get("status", "running")),
-                "current": curr,
-                "total": total,
-                "percent": percent,
-                "error": active.get("error"),
-            }
-            try:
-                ms = vault.get_manuscript(doc_id) or {}
-                status_data["title"] = ms.get("title") or doc_id
-            except Exception:
-                status_data["title"] = doc_id
-
-            cards.append(render_download_status(job_id, doc_id, library, status_data))
-
-        active_frag = Div(*cards, id="download-status-area")
-
-    content = discovery_content(initial_preview=None, active_download_fragment=active_frag)
+        return discovery_content(initial_preview=None, active_download_fragment=manager)
+    content = discovery_content(initial_preview=None, active_download_fragment=manager)
     return base_layout("Discovery", content, active_page="discovery")
 
 
@@ -131,6 +128,7 @@ def _build_item_preview_data(item: dict, library: str, pages: int = 0) -> dict:
         "description": item.get("description", ""),
         "pages": pages,
         "thumbnail": item.get("thumbnail"),
+        "has_native_pdf": item.get("has_native_pdf"),
     }
 
 
@@ -142,7 +140,8 @@ def _build_manifest_preview_data(manifest_info: dict, manifest_url: str, doc_id:
         "url": manifest_url,
         "label": manifest_info.get("label", "Senza Titolo"),
         "description": manifest_info.get("description", "Nessuna descrizione."),
-        "pages": manifest_info.get("canvases", 0),
+        "pages": manifest_info.get("pages", 0),
+        "has_native_pdf": manifest_info.get("has_native_pdf"),
     }
 
 
@@ -260,20 +259,62 @@ def resolve_manifest(library: str, shelfmark: str):
         )
 
 
-def start_download(manifest_url: str, doc_id: str, library: str):
-    """Start an asynchronous download job and return a polling fragment."""
+def add_to_library(manifest_url: str, doc_id: str, library: str):
+    """Persist a manuscript in Library without starting a download."""
     try:
         manifest_url = unquote(manifest_url)
         doc_id = unquote(doc_id)
         library = unquote(library)
+        if not manifest_url or not doc_id or not library:
+            return _with_feedback_toast("Dati mancanti", "Manifest, ID e biblioteca sono obbligatori.", tone="danger")
+
+        info, _err = _analyze_manifest_safe(manifest_url)
+        info = info or {}
+        _upsert_saved_entry(
+            manifest_url,
+            doc_id,
+            library,
+            label=info.get("label", doc_id),
+            description=info.get("description", ""),
+            pages=int(info.get("pages", 0) or 0),
+            has_native_pdf=info.get("has_native_pdf"),
+        )
+        return _with_toast(
+            _download_manager_fragment(),
+            f"Aggiunto in Libreria: {doc_id}",
+            tone="success",
+        )
+    except Exception:
+        logger.exception("Add to library failed")
+        return _with_feedback_toast("Errore Libreria", "Impossibile salvare l'entry in Libreria.", tone="danger")
+
+
+def add_and_download(manifest_url: str, doc_id: str, library: str):
+    """Persist a manuscript and enqueue download."""
+    try:
+        manifest_url = unquote(manifest_url)
+        doc_id = unquote(doc_id)
+        library = unquote(library)
+        if not manifest_url or not doc_id or not library:
+            return _with_feedback_toast("Dati mancanti", "Manifest, ID e biblioteca sono obbligatori.", tone="danger")
+
+        info, _err = _analyze_manifest_safe(manifest_url)
+        info = info or {}
+        _upsert_saved_entry(
+            manifest_url,
+            doc_id,
+            library,
+            label=info.get("label", doc_id),
+            description=info.get("description", ""),
+            pages=int(info.get("pages", 0) or 0),
+            has_native_pdf=info.get("has_native_pdf"),
+        )
 
         download_id = start_downloader_thread(manifest_url, doc_id, library)
 
-        # Return initial DB-backed status fragment to start polling
-        initial_status = {"status": "starting", "current": 0, "total": 0, "percent": 0}
         return _with_toast(
-            render_download_status(download_id, doc_id, library, initial_status),
-            f"Download avviato per {doc_id}.",
+            _download_manager_fragment(),
+            f"Download accodato per {doc_id} (job: {download_id[:12]}...).",
             tone="info",
         )
 
@@ -288,6 +329,11 @@ def start_download(manifest_url: str, doc_id: str, library: str):
             "Impossibile avviare il download. Riprova più tardi.",
             tone="danger",
         )
+
+
+def start_download(manifest_url: str, doc_id: str, library: str):
+    """Backward-compatible endpoint kept for legacy callers."""
+    return add_and_download(manifest_url, doc_id, library)
 
 
 def get_download_status(download_id: str, doc_id: str = "", library: str = ""):
@@ -307,14 +353,19 @@ def get_download_status(download_id: str, doc_id: str = "", library: str = ""):
     return render_download_status(download_id, doc_id, library, status_data)
 
 
-def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
-    """Cancel a running download job (UI action).
+def download_manager():
+    """Polling endpoint for the right-side Download Manager panel."""
+    return _download_manager_fragment()
 
-    Marks the job as errored/cancelled in the DB and returns the
-    updated status fragment for the preview area.
-    """
+
+def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
+    """Cancel a queued/running download job."""
     vault = VaultManager()
     job = vault.get_download_job(download_id) or {}
+    if not doc_id:
+        doc_id = str(job.get("doc_id") or "")
+    if not library:
+        library = str(job.get("library") or "")
     curr = job.get("current", 0)
     total = job.get("total", 0)
     try:
@@ -323,23 +374,50 @@ def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
     except Exception:
         logger.debug("Failed to mark job cancelled", exc_info=True)
 
-    # Also inform in-process JobManager to request cooperative cancellation
     try:
-        from universal_iiif_core.jobs import job_manager
-
         job_manager.request_cancel(download_id)
     except Exception:
         logger.debug("Failed to request job cancellation from JobManager", exc_info=True)
 
-    status_data = {
-        "status": "cancelling",
-        "current": curr,
-        "total": total,
-        "percent": int((curr / total * 100) if total else 0),
-        "error": "Cancelling",
-    }
     return _with_toast(
-        render_download_status(download_id, doc_id, library, status_data),
+        _download_manager_fragment(),
         f"Annullamento richiesto per {doc_id}.",
         tone="info",
     )
+
+
+def retry_download(download_id: str):
+    """Retry a failed/cancelled job using its stored manifest/doc/library."""
+    vault = VaultManager()
+    job = vault.get_download_job(download_id) or {}
+    manifest_url = str(job.get("manifest_url") or "")
+    doc_id = str(job.get("doc_id") or "")
+    library = str(job.get("library") or "")
+    if not manifest_url or not doc_id or not library:
+        return _with_feedback_toast("Retry non disponibile", "Dati job insufficienti.", tone="danger")
+    try:
+        start_downloader_thread(manifest_url, doc_id, library)
+        return _with_toast(_download_manager_fragment(), f"Retry accodato per {doc_id}.", tone="info")
+    except Exception:
+        logger.exception("Retry enqueue failed for job %s", download_id)
+        return _with_feedback_toast("Errore Retry", "Impossibile accodare il retry.", tone="danger")
+
+
+def prioritize_download(download_id: str):
+    """Move a queued job to queue head."""
+    if not job_manager.prioritize_download(download_id):
+        return _with_feedback_toast("Priorità non applicata", "Il job non è in coda o non esiste.", tone="info")
+    return _with_toast(_download_manager_fragment(), "Job portato in cima alla coda.", tone="success")
+
+
+def pdf_capability(manifest_url: str):
+    """Return a tiny badge with native-PDF capability (lazy-loaded per result card)."""
+    manifest_url = unquote(manifest_url or "")
+    if not manifest_url:
+        return render_pdf_capability_badge(False)
+    try:
+        info = analyze_manifest(manifest_url)
+        has_pdf = bool(info.get("has_native_pdf"))
+        return render_pdf_capability_badge(has_pdf)
+    except Exception:
+        return render_pdf_capability_badge(False)

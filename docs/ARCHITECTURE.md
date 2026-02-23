@@ -14,7 +14,8 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards).
 * **Routes**:
   * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations.
-  * `discovery_handlers.py`: Orchestrates search, resolution, and download initiation.
+  * `discovery_handlers.py`: Orchestrates search, add-to-library, and download manager actions.
+  * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
 * **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
 
 ### 2. Core Business Logic (`universal_iiif_core/`)
@@ -31,28 +32,30 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **OCR Module**:
   * Abstracts differences between local Kraken models and Cloud APIs (OpenAI/Anthropic).
 * **Storage**:
-  * `VaultManager`: SQLite interface for metadata and job tracking.
+  * `VaultManager`: SQLite interface for metadata and job tracking (`queued/running/partial/complete` states).
 
 ---
 
 ## Interactive Flows
 
-### 1. Discovery & Resolution
+### 1. Discovery, Library Add, and Resolution
 
 1. **User Input**: The user enters a shelfmark (e.g., "Urb.lat.1779") or a URL.
 2. **Dispatcher**: `resolve_shelfmark` detects the library signature and selects the correct strategy.
 3. **Normalization**: The resolver converts "dirty" inputs into a canonical IIIF Manifest URL.
-4. **Preview**: The UI fetches basic metadata to display the preview card.
+4. **Preview**: The UI fetches basic metadata and lazy-checks native PDF availability.
+5. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
 
-### 2. The Download "Golden Flow"
+### 2. Download Manager + Golden Flow
 
-When a download starts, the background worker strictly follows this decision tree:
+Downloads are queued in a DB-backed manager with bounded concurrency (`settings.system.max_concurrent_downloads`).
+Queued jobs are promoted FIFO (with optional prioritization) and each running worker follows this flow:
 
 1. **Check Native PDF**: Does the manifest provide a download link?
     * **YES + `settings.pdf.prefer_native_pdf=true`**: Download the PDF. Then, **EXTRACT** pages to high-quality JPGs in `scans/` (Critical for Studio compatibility).
     * **NO**: Fallback to downloading IIIF tiles/canvases one by one into `scans/`.
 2. **Optional Compiled PDF**: If (and only if) no native PDF was used **AND** `settings.pdf.create_pdf_from_images=true`, generate a PDF from the downloaded images.
-3. **Completion**: Update DB status to `completed`.
+3. **Completion**: Update DB status and manuscript `asset_state` (`complete` or `partial`).
 
 ### 3. Studio & OCR
 
@@ -71,7 +74,7 @@ When a download starts, the background worker strictly follows this decision tre
   * **Client-side**: Sidebar state (collapsed/expanded) is saved in `localStorage`.
 * **Visual Feedback**:
   * **Toasts**: Floating notifications anchored to the top-right viewport.
-  * **Progress**: Real-time progress bars driven by DB polling.
+  * **Progress**: Real-time queue/running status driven by DB polling in the Download Manager side panel.
 
 ## Key Design Decisions
 

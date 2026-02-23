@@ -24,6 +24,7 @@ from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.services.ocr.processor import OCRProcessor
 from universal_iiif_core.services.ocr.storage import OCRStorage
+from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.utils import load_json
 
 logger = get_logger(__name__)
@@ -136,6 +137,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             return panel
 
         manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
+        ms_row = VaultManager().get_manuscript(doc_id) or {}
 
         content = studio_layout(
             title,
@@ -147,6 +149,9 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             manifest_json,
             total_pages,
             meta or {},
+            asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
+            has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
+            pdf_local_available=bool(ms_row.get("pdf_local_available")),
         )
         if is_hx:
             return content

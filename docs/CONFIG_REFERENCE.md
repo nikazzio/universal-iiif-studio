@@ -48,6 +48,7 @@ Notes:
 ## `settings.system`
 
 - `settings.system.download_workers` (`int`, default: `4`)
+- `settings.system.max_concurrent_downloads` (`int`, default: `2`)
 - `settings.system.ocr_concurrency` (`int`, default: `1`)
 - `settings.system.request_timeout` (`int`, default: `30`)
 

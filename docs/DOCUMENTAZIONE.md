@@ -13,6 +13,7 @@ Il file `config.json` è la singola fonte di verità.
 ### ⚙️ Sistema e Download
 
 * `settings.system.download_workers`: Numero di thread per il download parallelo delle immagini (default: 4).
+* `settings.system.max_concurrent_downloads`: Numero massimo di download documento in esecuzione contemporanea (default: 2). Gli altri job restano in coda.
 * `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
 
 ### 📄 Opzioni PDF (Core + UI Config)
@@ -42,6 +43,14 @@ Le API key vanno in `api_keys`: `openai`, `anthropic`, `google_vision`, `hugging
 
 Il sistema di download è stato completamente riscritto per essere intelligente e resiliente.
 
+### 🧭 Discovery separata da Download Manager
+
+La pagina Discovery è divisa in due aree:
+* **Sinistra**: ricerca/risoluzione manifest e anteprime.
+* **Destra**: **Download Manager** con coda, job in esecuzione, errori e retry.
+
+Questo permette di continuare a cercare nuovi manoscritti mentre uno o più download sono in corso.
+
 ### 🛰️ Smart Resolvers
 
 Il campo di ricerca accetta input "sporchi". Il sistema normalizza automaticamente:
@@ -59,6 +68,20 @@ Quando avvii un download, il sistema decide la strategia migliore:
    * **Se non c'è**: Scarica le immagini dai server IIIF una per una.
 2. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
 
+### 📚 Libreria Locale (Local Assets)
+
+Nuova sezione `Libreria`:
+* vista **Grid/List** degli asset locali;
+* raggruppamento per **biblioteca** e **tipologia** (`manoscritto`, `libro a stampa`, `incunabolo`, `periodico`, `altro`);
+* stato per item: `saved`, `queued/downloading`, `partial`, `complete`, `error`;
+* badge PDF: disponibilità PDF nel manifest e PDF locale.
+
+Azioni principali:
+* **Delete** documento locale;
+* **Clean partial** per ripulire download incompleti;
+* **Retry missing** (riprende solo le pagine mancanti);
+* **Retry range** (intervalli specifici, es. `1-10,15,30-35`).
+
 ### 🛡️ Resilienza di Rete
 
 Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compressioni (Brotli/Gzip) per aggirare i blocchi (WAF) di biblioteche severe come Gallica.
@@ -70,6 +93,7 @@ Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compre
 * **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
 * **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
 * **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
+* **Header stato asset**: in Studio vengono mostrati stato download (`saved/partial/complete/...`) e badge PDF (nativo/locale).
 
 ### 🎚️ Visual Tab
 
