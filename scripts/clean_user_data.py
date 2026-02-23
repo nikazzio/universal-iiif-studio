@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Utility to reset the user-data directories managed by the project."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,9 +13,7 @@ from universal_iiif_core.config_manager import get_config_manager
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the cleanup helper."""
-    parser = argparse.ArgumentParser(
-        description="Reset downloads, temp and log folders managed by the project."
-    )
+    parser = argparse.ArgumentParser(description="Reset downloads, temp and log folders managed by the project.")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -60,11 +59,7 @@ def collect_targets(config, include_data_local: bool, extra: Iterable[str]) -> l
     if include_data_local:
         samples.append(("data/local tree", root / "data" / "local"))
 
-    extras = [
-        ("extra", Path(item))
-        for item in extra
-        if item
-    ]
+    extras = [("extra", Path(item)) for item in extra if item]
     all_targets: list[tuple[str, Path]] = []
     seen: set[Path] = set()
 

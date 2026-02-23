@@ -101,137 +101,132 @@ def discovery_page(request: Request):
     return base_layout("Discovery", content, active_page="discovery")
 
 
+def _build_item_preview_data(item: dict, library: str, pages: int = 0) -> dict:
+    """Build preview payload from a search result item."""
+    return {
+        "id": item.get("id"),
+        "library": library,
+        "url": item.get("manifest"),
+        "label": item.get("title", "Senza Titolo"),
+        "description": item.get("description", ""),
+        "pages": pages,
+        "thumbnail": item.get("thumbnail"),
+    }
+
+
+def _build_manifest_preview_data(manifest_info: dict, manifest_url: str, doc_id: str | None, library: str) -> dict:
+    """Build preview payload from analyzed manifest metadata."""
+    return {
+        "id": doc_id or manifest_info.get("label", "Unknown"),
+        "library": library,
+        "url": manifest_url,
+        "label": manifest_info.get("label", "Senza Titolo"),
+        "description": manifest_info.get("description", "Nessuna descrizione."),
+        "pages": manifest_info.get("canvases", 0),
+    }
+
+
+def _resolve_gallica_flow(shelfmark: str):
+    try:
+        results = smart_search(shelfmark)
+    except ValueError as exc:
+        return render_error_message("Errore Gallica", str(exc))
+    except Exception:
+        logger.exception("Gallica search failed for shelfmark: %s", shelfmark)
+        return render_error_message(
+            "Errore Gallica",
+            "Ricerca temporaneamente non disponibile. Riprova più tardi.",
+        )
+
+    if not results:
+        return render_error_message("Nessun risultato", f"Nessun manoscritto trovato per '{shelfmark}' su Gallica.")
+
+    first = results[0]
+    is_direct = bool(first.get("raw", {}).get("_is_direct_match", False))
+    if len(results) == 1 and is_direct:
+        return render_preview(_build_item_preview_data(first, "Gallica", pages=0))
+    return render_search_results_list(results)
+
+
+def _resolve_manifest_direct(library: str, shelfmark: str) -> tuple[str | None, str | None]:
+    try:
+        return resolve_shelfmark(library, shelfmark)
+    except Exception as exc:
+        logger.debug("Direct resolution failed: %s", exc)
+        return None, None
+
+
+def _resolve_vatican_fallback(shelfmark: str):
+    from universal_iiif_core.resolvers.discovery import search_vatican
+
+    logger.info("Trying Vatican search for: %s", shelfmark)
+    try:
+        results = search_vatican(shelfmark, max_results=5)
+    except Exception as exc:
+        logger.warning("Vatican search failed: %s", exc)
+        return None
+
+    if not results:
+        return None
+    if len(results) == 1:
+        first = results[0]
+        pages = int(first.get("raw", {}).get("page_count", 0) or 0)
+        return render_preview(_build_item_preview_data(first, "Vaticana", pages=pages))
+    return render_search_results_list(results)
+
+
+def _build_not_found_hint(library: str) -> str:
+    hint = "Verifica la segnatura."
+    if library == "Vaticana":
+        hint += " Prova formati come 'Urb.lat.1779' o inserisci solo il numero (es. '1223')."
+    return hint
+
+
+def _analyze_manifest_safe(manifest_url: str):
+    try:
+        return analyze_manifest(manifest_url), None
+    except ValueError as exc:
+        return None, render_error_message("Errore Manifest", str(exc))
+    except Exception:
+        logger.exception("Manifest analysis failed for URL: %s", manifest_url)
+        return None, render_error_message(
+            "Errore Manifest",
+            "Manifest IIIF non accessibile. Verifica l'URL o riprova più tardi.",
+        )
+
+
 def resolve_manifest(library: str, shelfmark: str):
     """Resolve a shelfmark or URL and return a preview fragment."""
     try:
-        # Controllo Input Vuoto
         if not shelfmark or not shelfmark.strip():
             return render_error_message("Input mancante", "Inserisci una segnatura o una parola chiave.")
 
         logger.info("Resolving: lib=%s input=%s", library, shelfmark)
 
-        # === RAMO A: GALLICA (Ricerca Smart o ID) ===
         if "Gallica" in library:
-            try:
-                # smart_search restituisce SEMPRE una lista (di 1 o N elementi)
-                results = smart_search(shelfmark)
-            except ValueError as e:
-                # Known input validation errors: safe to expose
-                return render_error_message("Errore Gallica", str(e))
-            except Exception:
-                # Unknown errors: log but don't expose details
-                logger.exception("Gallica search failed for shelfmark: %s", shelfmark)
-                return render_error_message(
-                    "Errore Gallica",
-                    "Ricerca temporaneamente non disponibile. Riprova più tardi."
-                )
+            return _resolve_gallica_flow(shelfmark)
 
-            if not results:
-                return render_error_message(
-                    "Nessun risultato", f"Nessun manoscritto trovato per '{shelfmark}' su Gallica."
-                )
-
-            # CASO 1: ID DIRETTO (Lista con 1 elemento flaggato come match esatto)
-            # Se è un URL specifico o un ID, smart_search restituisce 1 risultato con i dettagli completi
-            is_direct = results[0].get("raw", {}).get("_is_direct_match", False)
-
-            if len(results) == 1 and is_direct:
-                # È un manoscritto singolo: usiamo la vista standard di anteprima
-                item = results[0]
-                preview_data = {
-                    "id": item.get("id"),
-                    "library": "Gallica",
-                    "url": item.get("manifest"),
-                    "label": item.get("title", "Senza Titolo"),
-                    "description": item.get("description", ""),
-                    "pages": 0,  # Gallica SRU a volte non dà il conteggio pagine, ma va bene
-                    "thumbnail": item.get("thumbnail"),
-                }
-                return render_preview(preview_data)
-
-            # CASO 2: RISULTATI DI RICERCA (Lista di N elementi)
-            # Se smart_search restituisce più risultati o non è un match diretto
-            return render_search_results_list(results)
-
-        # === RAMO B: VATICANA / OXFORD (Logica Classica + Ricerca) ===
-
-        # 1. Risoluzione URL diretta
-        try:
-            manifest_url, doc_id = resolve_shelfmark(library, shelfmark)
-        except Exception as e:
-            logger.debug(f"Direct resolution failed: {e}")
-            manifest_url, doc_id = None, None
-
-        # 2. Se risoluzione diretta fallisce per Vaticana, prova ricerca per varianti
-        if not manifest_url and library == "Vaticana":
-            from universal_iiif_core.resolvers.discovery import search_vatican
-
-            logger.info("Trying Vatican search for: %s", shelfmark)
-            try:
-                results = search_vatican(shelfmark, max_results=5)
-                if results:
-                    # Se c'è un solo risultato, mostra preview diretto
-                    if len(results) == 1:
-                        item = results[0]
-                        preview_data = {
-                            "id": item.get("id"),
-                            "library": "Vaticana",
-                            "url": item.get("manifest"),
-                            "label": item.get("title", "Senza Titolo"),
-                            "description": item.get("description", ""),
-                            "pages": item.get("raw", {}).get("page_count", 0),
-                            "thumbnail": item.get("thumbnail"),
-                        }
-                        return render_preview(preview_data)
-                    # Altrimenti mostra lista risultati
-                    return render_search_results_list(results)
-            except Exception as e:
-                logger.warning("Vatican search failed: %s", e)
+        manifest_url, doc_id = _resolve_manifest_direct(library, shelfmark)
+        if not manifest_url and library == "Vaticana" and (fallback_fragment := _resolve_vatican_fallback(shelfmark)):
+            return fallback_fragment
 
         if not manifest_url:
-            hint = "Verifica la segnatura."
-            if library == "Vaticana":
-                hint += " Prova formati come 'Urb.lat.1779' o inserisci solo il numero (es. '1223')."
-
             return render_error_message(
-                "Manoscritto non trovato", f"Impossibile risolvere '{shelfmark}' per {library}. {hint}"
+                "Manoscritto non trovato",
+                f"Impossibile risolvere '{shelfmark}' per {library}. {_build_not_found_hint(library)}",
             )
 
-        # 3. Analisi del Manifest (Download leggero)
-        try:
-            manifest_info = analyze_manifest(manifest_url)
-        except ValueError as e:
-            # Known validation errors (empty manifest, parse errors): safe to expose
-            return render_error_message("Errore Manifest", str(e))
-        except Exception:
-            logger.exception("Manifest analysis failed for URL: %s", manifest_url)
-            return render_error_message(
-                "Errore Manifest",
-                "Manifest IIIF non accessibile. Verifica l'URL o riprova più tardi."
-            )
+        manifest_info, manifest_error = _analyze_manifest_safe(manifest_url)
+        if manifest_error:
+            return manifest_error
+        return render_preview(_build_manifest_preview_data(manifest_info, manifest_url, doc_id, library))
 
-        # 4. Preparazione Dati Anteprima
-        preview_data = {
-            "id": doc_id or manifest_info.get("label", "Unknown"),
-            "library": library,
-            "url": manifest_url,
-            "label": manifest_info.get("label", "Senza Titolo"),
-            "description": manifest_info.get("description", "Nessuna descrizione."),
-            "pages": manifest_info.get("canvases", 0),
-        }
-
-        return render_preview(preview_data)
-
-    except ValueError as e:
-        # Known input validation errors: safe to expose
-        logger.warning("Validation error in resolve_manifest: %s", e)
-        return render_error_message("Errore Input", str(e))
+    except ValueError as exc:
+        logger.warning("Validation error in resolve_manifest: %s", exc)
+        return render_error_message("Errore Input", str(exc))
     except Exception:
         logger.exception("Unexpected error in resolve_manifest")
-        return render_error_message(
-            "Errore Interno",
-            "Si è verificato un errore imprevisto. Riprova più tardi."
-        )
+        return render_error_message("Errore Interno", "Si è verificato un errore imprevisto. Riprova più tardi.")
 
 
 def start_download(manifest_url: str, doc_id: str, library: str):
@@ -253,10 +248,7 @@ def start_download(manifest_url: str, doc_id: str, library: str):
         return render_error_message("Errore Input", str(e))
     except Exception:
         logger.exception("Download start failed")
-        return render_error_message(
-            "Errore Download",
-            "Impossibile avviare il download. Riprova più tardi."
-        )
+        return render_error_message("Errore Download", "Impossibile avviare il download. Riprova più tardi.")
 
 
 def get_download_status(download_id: str, doc_id: str = "", library: str = ""):

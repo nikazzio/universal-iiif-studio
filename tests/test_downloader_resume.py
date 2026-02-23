@@ -18,8 +18,8 @@ def test_resume_existing_scan_detects_valid_image(tmp_path, monkeypatch):
     class MockDownloader:
         def __init__(self, temp_dir):
             self.temp_dir = temp_dir
-            self.logger = type('Logger', (), {'info': lambda self, m: None, 'warning': lambda *a, **k: None})()
-            self.cm = type('CM', (), {'get_setting': lambda self, k, d=None: d})()
+            self.logger = type("Logger", (), {"info": lambda self, m: None, "warning": lambda *a, **k: None})()
+            self.cm = type("CM", (), {"get_setting": lambda self, k, d=None: d})()
 
         def _get_thumbnail_url(self, canvas):
             return None

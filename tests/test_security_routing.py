@@ -45,7 +45,6 @@ def test_downloads_serve_only_allowed_files():
     downloads_dir = config.get_downloads_dir()
 
     # Test 1: Valid path within downloads_dir
-    valid_path = downloads_dir / "subdir" / "test.jpg"
     try:
         resolved = (downloads_dir / "subdir/test.jpg").resolve()
         resolved.relative_to(downloads_dir.resolve())
@@ -113,7 +112,7 @@ def test_exception_sanitization_resolve_manifest():
     assert "Traceback" not in result_str
     assert "/home/" not in result_str
     assert "/src/" not in result_str
-    assert "File \"" not in result_str
+    assert 'File "' not in result_str
 
     # Should contain user-friendly message
     assert "Errore" in result_str or "Error" in result_str

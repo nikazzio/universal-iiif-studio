@@ -329,9 +329,7 @@ def _add_image_page(
         tw.write_text(page, color=(0, 0, 0), render_mode=3)
 
 
-def _fits_text_in_box(
-    box_rect: fitz.Rect, text: str, font: fitz.Font, fontsize: float
-) -> bool:
+def _fits_text_in_box(box_rect: fitz.Rect, text: str, font: fitz.Font, fontsize: float) -> bool:
     """Return True if the supplied text fits inside the provided rectangle."""
     rect = fitz.Rect(box_rect)
     tw = fitz.TextWriter(rect)
@@ -361,9 +359,7 @@ def _split_chunk_at_boundary(text: str, length: int) -> tuple[str, str]:
     return text[:length], text[length:]
 
 
-def _slice_transcription_text(
-    text: str, box_rect: fitz.Rect, font: fitz.Font, fontsize: float
-) -> tuple[str, str]:
+def _slice_transcription_text(text: str, box_rect: fitz.Rect, font: fitz.Font, fontsize: float) -> tuple[str, str]:
     if not text:
         return "", ""
     low, high, best = 1, len(text), 0

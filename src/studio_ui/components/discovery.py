@@ -107,7 +107,10 @@ def render_search_results_list(results: list) -> Div:
         )
 
         txt_col = Div(
-            H3(title[:80] + ("..." if len(title) > 80 else ""), cls="text-sm font-bold text-slate-200 mb-1 leading-tight"),
+            H3(
+                title[:80] + ("..." if len(title) > 80 else ""),
+                cls="text-sm font-bold text-slate-200 mb-1 leading-tight",
+            ),
             meta_row if meta_row else "",
             P(desc, cls="text-xs text-slate-400 mb-2 line-clamp-2") if desc else "",
             Div(id_badge, viewer_link if viewer_link else "", btn, cls="flex items-center gap-2 justify-between"),
@@ -360,8 +363,7 @@ def render_preview(data: dict) -> Div:
         download_form,
         id="discovery-preview",
         cls=(
-            "bg-slate-800/60 p-6 rounded-lg border border-slate-700 "
-            "animate-in fade-in slide-in-from-top-4 duration-300"
+            "bg-slate-800/60 p-6 rounded-lg border border-slate-700 animate-in fade-in slide-in-from-top-4 duration-300"
         ),
     )
 
@@ -402,13 +404,10 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
             cls="flex items-center gap-4 mb-4",
         )
 
-        progress_bar = Div(
-            Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls)
-        )
+        progress_bar = Div(Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls))
 
         body = Div(
-            header, percent_block, progress_bar,
-            P("Annullamento in corso...", cls="text-xs text-slate-500 italic")
+            header, percent_block, progress_bar, P("Annullamento in corso...", cls="text-xs text-slate-500 italic")
         )
 
         return Div(
@@ -451,10 +450,7 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
                 ),
                 cls="text-center",
             ),
-            cls=(
-                "bg-green-900/20 border border-green-800 p-8 rounded-lg shadow-sm "
-                "animate-in zoom-in duration-300"
-            ),
+            cls=("bg-green-900/20 border border-green-800 p-8 rounded-lg shadow-sm animate-in zoom-in duration-300"),
         )
 
     # 3. Caso In Corso
@@ -485,9 +481,7 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
         cls="flex items-center gap-4 mb-4",
     )
 
-    progress_bar = Div(
-        Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls)
-    )
+    progress_bar = Div(Div(Div(cls=progress_bar_cls, style=f"width: {percent}%"), cls=progress_bg_cls))
 
     body = Div(
         header,

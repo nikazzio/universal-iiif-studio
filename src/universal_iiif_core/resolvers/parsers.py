@@ -155,55 +155,61 @@ class IIIFManifestParser:
         manifest: dict[str, Any], manifest_url: str, library: str | None = None, doc_id: str | None = None
     ) -> SearchResult | None:
         """Parse IIIF manifest JSON into a SearchResult entry."""
-
-        def _get_label(m: dict[str, Any]) -> str:
-            label = m.get("label") or m.get("title")
-            if not label:
-                return doc_id or "Senza titolo"
-            if isinstance(label, dict):
-                for v in label.values():
-                    if isinstance(v, list) and v:
-                        return str(v[0])
-                    if v:
-                        return str(v)
-                return doc_id or "Senza titolo"
-            if isinstance(label, list):
-                return str(label[0]) if label else (doc_id or "Senza titolo")
-            return str(label)
-
-        title = _get_label(manifest)
-
-        meta_map: dict[str, str] = IIIFManifestParser._extract_metadata_map(manifest.get("metadata") or [])
-
-        author = meta_map.get("creator") or meta_map.get("author") or "Autore sconosciuto"
-        date = meta_map.get("date")
-        publisher = meta_map.get("publisher") or meta_map.get("source")
-        language = meta_map.get("language")
-        description = meta_map.get("description")
-
+        title = IIIFManifestParser._extract_label(manifest, doc_id)
+        meta_map = IIIFManifestParser._extract_metadata_map(manifest.get("metadata") or [])
         thumb_url = IIIFManifestParser._extract_thumbnail(manifest, manifest_url, doc_id)
 
         result: SearchResult = {
             "id": doc_id or (manifest.get("id") or manifest_url),
             "title": title[:200],
-            "author": author[:100],
+            "author": IIIFManifestParser._extract_author(meta_map)[:100],
             "manifest": manifest_url,
             "thumbnail": thumb_url or "",
             "thumb": thumb_url or "",
             "library": library or "",
             "raw": manifest,
         }
-
-        if date:
-            result["date"] = date
-        if description:
-            result["description"] = description[:1000]
-        if publisher:
-            result["publisher"] = publisher
-        if language:
-            result["language"] = language
-
+        IIIFManifestParser._apply_optional_metadata(result, meta_map)
         return result
+
+    @staticmethod
+    def _extract_label(manifest: dict[str, Any], doc_id: str | None) -> str:
+        """Extract a human-readable label from IIIF manifest fields."""
+        label = manifest.get("label") or manifest.get("title")
+        if not label:
+            return doc_id or "Senza titolo"
+        if isinstance(label, dict):
+            return IIIFManifestParser._first_dict_value(label, doc_id or "Senza titolo")
+        if isinstance(label, list):
+            return str(label[0]) if label else (doc_id or "Senza titolo")
+        return str(label)
+
+    @staticmethod
+    def _first_dict_value(value_map: dict[str, Any], fallback: str) -> str:
+        """Return first meaningful dict value supporting scalar and list values."""
+        for value in value_map.values():
+            if isinstance(value, list) and value:
+                return str(value[0])
+            if value:
+                return str(value)
+        return fallback
+
+    @staticmethod
+    def _extract_author(meta_map: dict[str, str]) -> str:
+        """Extract preferred author field from parsed metadata map."""
+        return meta_map.get("creator") or meta_map.get("author") or "Autore sconosciuto"
+
+    @staticmethod
+    def _apply_optional_metadata(result: SearchResult, meta_map: dict[str, str]) -> None:
+        """Attach optional metadata fields to result when available."""
+        if date := meta_map.get("date"):
+            result["date"] = date
+        if description := meta_map.get("description"):
+            result["description"] = description[:1000]
+        if publisher := meta_map.get("publisher") or meta_map.get("source"):
+            result["publisher"] = publisher
+        if language := meta_map.get("language"):
+            result["language"] = language
 
     @staticmethod
     def _extract_metadata_map(metadata_obj: Any) -> dict[str, str]:
@@ -230,56 +236,98 @@ class IIIFManifestParser:
     @staticmethod
     def _extract_thumbnail(manifest: dict[str, Any], manifest_url: str, doc_id: str | None) -> str | None:
         """Extract thumbnail URL from IIIF manifest JSON with fallbacks."""
-        # 1) manifest thumbnail
-        th = manifest.get("thumbnail")
-        if th:
-            if isinstance(th, list) and th:
-                th = th[0]
-            if isinstance(th, dict):
-                return th.get("id") or th.get("@id") or th.get("source")
-            if isinstance(th, str):
-                return th
+        return (
+            IIIFManifestParser._thumb_from_manifest_thumbnail(manifest)
+            or IIIFManifestParser._thumb_from_v3_items(manifest)
+            or IIIFManifestParser._thumb_from_v2_sequences(manifest)
+            or IIIFManifestParser._thumb_from_heuristics(manifest_url, doc_id)
+        )
 
-        # 2) items/canvases chain (IIIF v3)
-        items = manifest.get("items") or []
-        if items and isinstance(items, list):
-            first = items[0]
-            if isinstance(first, dict):
-                t = first.get("thumbnail")
-                if t:
-                    if isinstance(t, list):
-                        t = t[0]
-                    if isinstance(t, dict):
-                        return t.get("id") or t.get("@id")
-                    if isinstance(t, str):
-                        return t
+    @staticmethod
+    def _thumb_from_manifest_thumbnail(manifest: dict[str, Any]) -> str | None:
+        """Extract thumbnail from top-level `thumbnail` field."""
+        thumbnail_obj = manifest.get("thumbnail")
+        if isinstance(thumbnail_obj, list):
+            thumbnail_obj = thumbnail_obj[0] if thumbnail_obj else None
 
-                ann_items = first.get("items") or []
-                if ann_items and isinstance(ann_items, list) and isinstance(ann_items[0], dict):
-                    inner_items = ann_items[0].get("items") or []
-                    if inner_items and isinstance(inner_items[0], dict):
-                        body = inner_items[0].get("body")
-                        if isinstance(body, dict):
-                            return body.get("id") or body.get("@id")
+        if isinstance(thumbnail_obj, dict):
+            return thumbnail_obj.get("id") or thumbnail_obj.get("@id") or thumbnail_obj.get("source")
+        if isinstance(thumbnail_obj, str):
+            return thumbnail_obj
+        return None
 
-        # 3) IIIF v2 fallback
-        seq = manifest.get("sequences") or []
-        if seq and isinstance(seq, list):
-            canvases = seq[0].get("canvases") or []
-            if canvases and isinstance(canvases, list):
-                images = canvases[0].get("images") or []
-                if images and isinstance(images, list):
-                    resource = images[0].get("resource") or {}
-                    if isinstance(resource, dict):
-                        return resource.get("@id") or resource.get("id")
+    @staticmethod
+    def _thumb_from_v3_items(manifest: dict[str, Any]) -> str | None:
+        """Extract thumbnail from IIIF v3 items/annotations chain."""
+        items = manifest.get("items")
+        if not isinstance(items, list) or not items:
+            return None
 
-        # 4) heuristic fallbacks
-        if doc_id:
-            if "bodleian" in manifest_url or "ox.ac.uk" in manifest_url:
-                return f"https://iiif.bodleian.ox.ac.uk/iiif/thumbnail/{doc_id}.jpg"
-            if "vatlib" in manifest_url:
-                return manifest_url.replace("/manifest.json", "/full/!200,200/0/default.jpg")
+        first_item = items[0]
+        if not isinstance(first_item, dict):
+            return None
 
+        if direct_thumb := IIIFManifestParser._thumb_from_item_thumbnail(first_item):
+            return direct_thumb
+        return IIIFManifestParser._thumb_from_annotation_body(first_item)
+
+    @staticmethod
+    def _thumb_from_item_thumbnail(item: dict[str, Any]) -> str | None:
+        """Extract thumbnail directly from a v3 item object."""
+        thumbnail_obj = item.get("thumbnail")
+        if isinstance(thumbnail_obj, list):
+            thumbnail_obj = thumbnail_obj[0] if thumbnail_obj else None
+        if isinstance(thumbnail_obj, dict):
+            return thumbnail_obj.get("id") or thumbnail_obj.get("@id")
+        if isinstance(thumbnail_obj, str):
+            return thumbnail_obj
+        return None
+
+    @staticmethod
+    def _thumb_from_annotation_body(item: dict[str, Any]) -> str | None:
+        """Extract thumbnail from first annotation body in v3 structure."""
+        ann_items = item.get("items")
+        if not isinstance(ann_items, list) or not ann_items or not isinstance(ann_items[0], dict):
+            return None
+
+        inner_items = ann_items[0].get("items")
+        if not isinstance(inner_items, list) or not inner_items or not isinstance(inner_items[0], dict):
+            return None
+
+        body = inner_items[0].get("body")
+        if isinstance(body, dict):
+            return body.get("id") or body.get("@id")
+        return None
+
+    @staticmethod
+    def _thumb_from_v2_sequences(manifest: dict[str, Any]) -> str | None:
+        """Extract thumbnail from IIIF v2 sequence/canvas/image structure."""
+        sequences = manifest.get("sequences")
+        if not isinstance(sequences, list) or not sequences:
+            return None
+
+        canvases = sequences[0].get("canvases")
+        if not isinstance(canvases, list) or not canvases:
+            return None
+
+        images = canvases[0].get("images")
+        if not isinstance(images, list) or not images:
+            return None
+
+        resource = images[0].get("resource")
+        if isinstance(resource, dict):
+            return resource.get("@id") or resource.get("id")
+        return None
+
+    @staticmethod
+    def _thumb_from_heuristics(manifest_url: str, doc_id: str | None) -> str | None:
+        """Build thumbnail URL using known library URL conventions."""
+        if not doc_id:
+            return None
+        if "bodleian" in manifest_url or "ox.ac.uk" in manifest_url:
+            return f"https://iiif.bodleian.ox.ac.uk/iiif/thumbnail/{doc_id}.jpg"
+        if "vatlib" in manifest_url:
+            return manifest_url.replace("/manifest.json", "/full/!200,200/0/default.jpg")
         return None
 
 

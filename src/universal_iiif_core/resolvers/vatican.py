@@ -49,10 +49,7 @@ def normalize_shelfmark(raw: str) -> str:
     series = m.group("series")
     number = m.group("number")
 
-    if series:
-        normalized = f"MSS_{coll}.{series.lower()}.{number}"
-    else:
-        normalized = f"MSS_{coll}.{number}"
+    normalized = f"MSS_{coll}.{series.lower()}.{number}" if series else f"MSS_{coll}.{number}"
 
     logger.debug("Normalized VAT shelfmark %r -> %r", raw, normalized)
     return normalized
@@ -62,6 +59,7 @@ class VaticanResolver(BaseResolver):
     """Resolver for Vatican Library IIIF manifests."""
 
     def can_resolve(self, url_or_id: str) -> bool:  # pragma: no cover - trivial branching
+        """Return True when the input looks like a Vatican URL or shelfmark."""
         s = (url_or_id or "").strip()
         if "digi.vatlib.it" in s:
             return True
@@ -70,6 +68,7 @@ class VaticanResolver(BaseResolver):
         return bool(_SHELF_RE.search(s))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
+        """Build Vatican manifest URL and normalized document id from input."""
         s = (url_or_id or "").strip()
 
         if not s:
