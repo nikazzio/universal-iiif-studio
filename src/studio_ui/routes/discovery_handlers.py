@@ -8,11 +8,13 @@ from urllib.parse import unquote
 
 from fasthtml.common import Div, Request
 
+from studio_ui.common.toasts import build_toast
+
 # Importiamo i nuovi componenti grafici
 from studio_ui.components.discovery import (
     discovery_content,
     render_download_status,
-    render_error_message,
+    render_feedback_message,
     render_preview,
     render_search_results_list,
 )
@@ -25,6 +27,24 @@ from universal_iiif_core.services.storage.vault_manager import VaultManager
 logger = get_logger(__name__)
 
 # No in-memory progress store: UI reads progress from DB
+
+
+def _toast_text(title: str, details: str = "") -> str:
+    detail = (details or "").strip()
+    return f"{title}: {detail}" if detail else title
+
+
+def _with_feedback_toast(title: str, details: str = "", tone: str = "danger"):
+    """Return Discovery inline feedback + global toast."""
+    return [
+        render_feedback_message(title, details, tone=tone),
+        build_toast(_toast_text(title, details), tone=tone),
+    ]
+
+
+def _with_toast(fragment, message: str, tone: str = "info"):
+    """Append a global toast to an existing fragment response."""
+    return [fragment, build_toast(message, tone=tone)]
 
 
 def discovery_page(request: Request):
@@ -130,16 +150,21 @@ def _resolve_gallica_flow(shelfmark: str):
     try:
         results = smart_search(shelfmark)
     except ValueError as exc:
-        return render_error_message("Errore Gallica", str(exc))
+        return _with_feedback_toast("Errore Gallica", str(exc), tone="danger")
     except Exception:
         logger.exception("Gallica search failed for shelfmark: %s", shelfmark)
-        return render_error_message(
+        return _with_feedback_toast(
             "Errore Gallica",
             "Ricerca temporaneamente non disponibile. Riprova più tardi.",
+            tone="danger",
         )
 
     if not results:
-        return render_error_message("Nessun risultato", f"Nessun manoscritto trovato per '{shelfmark}' su Gallica.")
+        return _with_feedback_toast(
+            "Nessun risultato",
+            f"Nessun manoscritto trovato per '{shelfmark}' su Gallica.",
+            tone="info",
+        )
 
     first = results[0]
     is_direct = bool(first.get("raw", {}).get("_is_direct_match", False))
@@ -186,12 +211,13 @@ def _analyze_manifest_safe(manifest_url: str):
     try:
         return analyze_manifest(manifest_url), None
     except ValueError as exc:
-        return None, render_error_message("Errore Manifest", str(exc))
+        return None, _with_feedback_toast("Errore Manifest", str(exc), tone="danger")
     except Exception:
         logger.exception("Manifest analysis failed for URL: %s", manifest_url)
-        return None, render_error_message(
+        return None, _with_feedback_toast(
             "Errore Manifest",
             "Manifest IIIF non accessibile. Verifica l'URL o riprova più tardi.",
+            tone="danger",
         )
 
 
@@ -199,7 +225,7 @@ def resolve_manifest(library: str, shelfmark: str):
     """Resolve a shelfmark or URL and return a preview fragment."""
     try:
         if not shelfmark or not shelfmark.strip():
-            return render_error_message("Input mancante", "Inserisci una segnatura o una parola chiave.")
+            return _with_feedback_toast("Input mancante", "Inserisci una segnatura o una parola chiave.", tone="danger")
 
         logger.info("Resolving: lib=%s input=%s", library, shelfmark)
 
@@ -211,9 +237,10 @@ def resolve_manifest(library: str, shelfmark: str):
             return fallback_fragment
 
         if not manifest_url:
-            return render_error_message(
+            return _with_feedback_toast(
                 "Manoscritto non trovato",
                 f"Impossibile risolvere '{shelfmark}' per {library}. {_build_not_found_hint(library)}",
+                tone="danger",
             )
 
         manifest_info, manifest_error = _analyze_manifest_safe(manifest_url)
@@ -223,10 +250,14 @@ def resolve_manifest(library: str, shelfmark: str):
 
     except ValueError as exc:
         logger.warning("Validation error in resolve_manifest: %s", exc)
-        return render_error_message("Errore Input", str(exc))
+        return _with_feedback_toast("Errore Input", str(exc), tone="danger")
     except Exception:
         logger.exception("Unexpected error in resolve_manifest")
-        return render_error_message("Errore Interno", "Si è verificato un errore imprevisto. Riprova più tardi.")
+        return _with_feedback_toast(
+            "Errore Interno",
+            "Si è verificato un errore imprevisto. Riprova più tardi.",
+            tone="danger",
+        )
 
 
 def start_download(manifest_url: str, doc_id: str, library: str):
@@ -240,15 +271,23 @@ def start_download(manifest_url: str, doc_id: str, library: str):
 
         # Return initial DB-backed status fragment to start polling
         initial_status = {"status": "starting", "current": 0, "total": 0, "percent": 0}
-        return render_download_status(download_id, doc_id, library, initial_status)
+        return _with_toast(
+            render_download_status(download_id, doc_id, library, initial_status),
+            f"Download avviato per {doc_id}.",
+            tone="info",
+        )
 
     except ValueError as e:
         # Known validation errors: safe to expose
         logger.warning("Download validation error: %s", e)
-        return render_error_message("Errore Input", str(e))
+        return _with_feedback_toast("Errore Input", str(e), tone="danger")
     except Exception:
         logger.exception("Download start failed")
-        return render_error_message("Errore Download", "Impossibile avviare il download. Riprova più tardi.")
+        return _with_feedback_toast(
+            "Errore Download",
+            "Impossibile avviare il download. Riprova più tardi.",
+            tone="danger",
+        )
 
 
 def get_download_status(download_id: str, doc_id: str = "", library: str = ""):
@@ -299,4 +338,8 @@ def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
         "percent": int((curr / total * 100) if total else 0),
         "error": "Cancelling",
     }
-    return render_download_status(download_id, doc_id, library, status_data)
+    return _with_toast(
+        render_download_status(download_id, doc_id, library, status_data),
+        f"Annullamento richiesto per {doc_id}.",
+        tone="info",
+    )

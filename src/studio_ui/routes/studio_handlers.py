@@ -29,6 +29,21 @@ from universal_iiif_core.utils import load_json
 logger = get_logger(__name__)
 
 
+def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int) -> Script:
+    """Trigger a targeted refresh of the right Studio panel."""
+    encoded_doc = quote(doc_id, safe="")
+    encoded_lib = quote(library, safe="")
+    hx_url = f"/studio/partial/tabs?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}"
+    return Script(
+        "(function(){"
+        "setTimeout(function(){"
+        "try{ htmx.ajax('GET', '" + hx_url + "', {target:'#studio-right-panel', swap:'innerHTML'}); }"
+        "catch(e){ console.error('refresh-err', e); }"
+        "}, 50);"
+        "})();"
+    )
+
+
 def build_studio_tab_content(
     doc_id: str,
     library: str,
@@ -205,8 +220,11 @@ def run_ocr_async(doc_id: str, library: str, page: int, engine: str, model: str 
             else:
                 storage.save_transcription(doc_id, page_idx, res, library)
                 logger.info("✅ Async OCR success & auto-saved: %s p%s", doc_id, page_idx)
-                # Clear any previous error state
-                OCR_JOBS_STATE.pop((doc_id, page_idx), None)
+                OCR_JOBS_STATE[(doc_id, page_idx)] = {
+                    "status": "completed",
+                    "message": f"OCR completato e salvato (pag. {page_idx}).",
+                    "timestamp": time.time(),
+                }
 
         except Exception as e:
             err_msg = str(e)
@@ -235,17 +253,25 @@ def check_ocr_status(doc_id: str, library: str, page: int):
 
     job_state = get_ocr_job_state(doc_id, page_idx)
     error_msg = None
+    toast = None
     if job_state and job_state.get("status") == "error":
         logger.warning("📍 Polling detected error for %s p%s: %s", doc_id, page_idx, job_state["message"])
         error_msg = job_state.get("message")
+        toast = build_toast(f"OCR fallito (pag. {page_idx}): {error_msg}", tone="danger")
 
     is_loading = is_ocr_job_running(doc_id, page_idx)
     if is_loading:
         logger.debug("⌛ OCR still processing for %s p%s; continuing spinner", doc_id, page_idx)
     else:
         logger.info("📡 Polling resolved or idle for %s p%s; refreshing panel", doc_id, page_idx)
+        if job_state and job_state.get("status") == "completed":
+            completion_message = job_state.get("message") or f"OCR completato (pag. {page_idx})."
+            toast = build_toast(completion_message, tone="success")
 
-    return Div(
+    if job_state and not is_loading and job_state.get("status") in {"completed", "error"}:
+        OCR_JOBS_STATE.pop((doc_id, page_idx), None)
+
+    panel = Div(
         build_studio_tab_content(
             doc_id,
             library,
@@ -257,6 +283,7 @@ def check_ocr_status(doc_id: str, library: str, page: int):
         id="studio-right-panel",
         cls="flex-1 overflow-hidden h-full",
     )
+    return [panel, toast] if toast else panel
 
 
 def restore_transcription(doc_id: str, library: str, page: int, timestamp: str):
@@ -283,10 +310,6 @@ def restore_transcription(doc_id: str, library: str, page: int, timestamp: str):
         logger.info("🔄 Restored transcription for %s p%s from %s", doc_id, page_idx, timestamp)
         message = f"Versione del {timestamp} ripristinata."
 
-    toast_div, toast_script = build_toast(
-        message,
-        tone="success" if entry else "danger",
-    )
     return [
         Div(
             build_studio_tab_content(
@@ -298,8 +321,7 @@ def restore_transcription(doc_id: str, library: str, page: int, timestamp: str):
             id="studio-right-panel",
             cls="flex-1 overflow-hidden h-full",
         ),
-        toast_div,
-        toast_script,
+        build_toast(message, tone="success" if entry else "danger"),
         history_refresh_script(doc_id, library, page_idx, info_message=message),
     ]
 
@@ -326,7 +348,7 @@ def save_snippet_api(doc_id: str, library: str, page: int, crop_data: str, trans
         crop_bytes = vault.extract_image_snippet(str(image_path), coords)
 
         if not crop_bytes:
-            return Div("Errore: Impossibile creare ritaglio", cls="text-red-500")
+            return build_toast("Impossibile creare il ritaglio richiesto.", tone="danger")
 
         filename = f"{doc_id}_p{int(page):04d}_{int(time.time())}.png"
         snippet_path = get_snippets_dir() / filename
@@ -338,15 +360,17 @@ def save_snippet_api(doc_id: str, library: str, page: int, crop_data: str, trans
             doc_id, int(page), str(snippet_path), category="Manual", transcription=transcription, coords=data
         )
 
-        from fasthtml.common import Script
-
-        return Script(
-            "document.getElementById('cropper-modal-container').innerHTML = ''; htmx.trigger('#tab-snippets', 'click');"
-        )
+        return [
+            Script(
+                "document.getElementById('cropper-modal-container').innerHTML = ''; "
+                "htmx.trigger('#tab-snippets', 'click');"
+            ),
+            build_toast("Snippet salvato correttamente.", tone="success"),
+        ]
 
     except Exception as e:
         logger.exception("Snippet Save Error")
-        return Div(f"Errore salvataggio: {e}", cls="text-red-500")
+        return build_toast(f"Errore salvataggio snippet: {e}", tone="danger")
 
 
 def save_transcription(doc_id: str, library: str, page: int, text: str):
@@ -359,47 +383,12 @@ def save_transcription(doc_id: str, library: str, page: int, text: str):
         normalized_existing = (existing.get("full_text") if existing else "") or ""
         normalized_new = text or ""
 
-        encoded_doc = quote(doc_id, safe="")
-        encoded_lib = quote(library, safe="")
-        hx_url = f"/studio/partial/tabs?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}"
-        hx_js_url = json.dumps(hx_url)
-
         if normalized_existing == normalized_new:
-            js_icon = json.dumps("ℹ️")
-            js_msg = json.dumps("Nessuna modifica rilevata; il testo è identico all'ultima versione.")
-            js_tone = json.dumps("bg-slate-900/90 border border-slate-600/80 text-slate-50 shadow-slate-700/50")
-            parts = [
-                "(function(){",
-                "try{",
-                " const stack = document.getElementById('studio-toast-stack');",
-                " if(stack){",
-                "  const toast = document.createElement('div');",
-                "  toast.className = 'studio-toast-entry flex items-center gap-3 rounded-2xl border px-4 py-3 ' + ",
-                "  'shadow-2xl backdrop-blur-sm opacity-0 -translate-y-3 scale-95 ' + ",
-                js_tone,
-                ";",
-                "  toast.setAttribute('role','status'); toast.setAttribute('aria-live','polite');",
-                "  toast.innerHTML = '<span class=\\'text-lg leading-none\\>' + ",
-                js_icon,
-                " + '</span><span class=\\'text-sm font-semibold text-current\\>' + ",
-                js_msg,
-                " + '</span>';",
-                "  stack.appendChild(toast);",
-                "  requestAnimationFrame(()=>{ toast.classList.remove('opacity-0','-translate-y-3','scale-95'); ",
-                " toast.classList.add('opacity-100','translate-y-0','scale-100'); });",
-                "  setTimeout(()=>{ toast.classList.add('opacity-0','translate-y-3'); ",
-                " toast.classList.remove('opacity-100','translate-y-0'); },4800);",
-                "  setTimeout(()=>{ if(stack.contains(toast)) toast.remove(); },5600);",
-                " }",
-                "}catch(e){console.error('toast-err',e);}",
-                " setTimeout(function(){ try{ htmx.ajax('GET', ",
-                hx_js_url,
-                " , {target:'#studio-right-panel', swap:'innerHTML'}); ",
-                " }catch(e){console.error('refresh-err',e);} }, 50);",
-                "})();",
+            return [
+                Div("", cls="hidden"),
+                build_toast("Nessuna modifica rilevata; il testo è identico all'ultima versione.", tone="info"),
+                _studio_panel_refresh_script(doc_id, library, page_idx),
             ]
-            js = "".join(parts)
-            return Script(js)
 
         # Save the transcription
         storage.save_transcription(
@@ -409,73 +398,16 @@ def save_transcription(doc_id: str, library: str, page: int, text: str):
             library,
         )
 
-        js_icon = json.dumps("✅")
-        js_msg = json.dumps("Modifiche salvate con successo nello storico")
-        js_tone = json.dumps("bg-emerald-900/95 border border-emerald-500/70 text-emerald-50 shadow-emerald-500/40")
-        parts = [
-            "(function(){",
-            "try{",
-            " const stack = document.getElementById('studio-toast-stack');",
-            " if(stack){",
-            "  const toast = document.createElement('div');",
-            "  toast.className = 'studio-toast-entry flex items-center gap-3 rounded-2xl border px-4 py-3 ' + ",
-            "  'shadow-2xl backdrop-blur-sm opacity-0 -translate-y-3 scale-95 ' + ",
-            js_tone,
-            ";",
-            "  toast.setAttribute('role','status'); toast.setAttribute('aria-live','polite');",
-            "  toast.innerHTML = '<span class=\\'text-lg leading-none\\>' + ",
-            js_icon,
-            " + '</span><span class=\\'text-sm font-semibold text-current\\>' + ",
-            js_msg,
-            " + '</span>';",
-            "  stack.appendChild(toast);",
-            "  requestAnimationFrame(()=>{ toast.classList.remove('opacity-0','-translate-y-3','scale-95'); ",
-            " toast.classList.add('opacity-100','translate-y-0','scale-100'); });",
-            "  setTimeout(()=>{ toast.classList.add('opacity-0','translate-y-3'); ",
-            " toast.classList.remove('opacity-100','translate-y-0'); },4800);",
-            "  setTimeout(()=>{ if(stack.contains(toast)) toast.remove(); },5600);",
-            " }",
-            "}catch(e){console.error('toast-err',e);}",
-            " setTimeout(function(){ try{ htmx.ajax('GET', ",
-            hx_js_url,
-            " , {target:'#studio-right-panel', swap:'innerHTML'}); ",
-            " }catch(e){console.error('refresh-err',e);} }, 50);",
-            "})();",
+        return [
+            Div("", cls="hidden"),
+            build_toast("Modifiche salvate con successo nello storico.", tone="success"),
+            _studio_panel_refresh_script(doc_id, library, page_idx),
         ]
-        js = "".join(parts)
-        return Script(js)
     except Exception as e:
-        js_icon = json.dumps("⚠️")
-        js_msg = json.dumps(f"Errore durante il salvataggio: {e}")
-        js_tone = json.dumps("bg-rose-900/90 border border-rose-500/70 text-rose-50 shadow-rose-500/40")
-        parts = [
-            "(function(){",
-            "try{",
-            " const stack = document.getElementById('studio-toast-stack');",
-            " if(stack){",
-            "  const toast = document.createElement('div');",
-            "  toast.className = 'studio-toast-entry flex items-center gap-3 rounded-2xl border px-4 py-3 ' + ",
-            "  'shadow-2xl backdrop-blur-sm opacity-0 -translate-y-3 scale-95 ' + ",
-            js_tone,
-            ";",
-            "  toast.setAttribute('role','status'); toast.setAttribute('aria-live','polite');",
-            "  toast.innerHTML = '<span class=\\'text-lg leading-none\\>' + ",
-            js_icon,
-            " + '</span><span class=\\'text-sm font-semibold text-current\\>' + ",
-            js_msg,
-            " + '</span>';",
-            "  stack.appendChild(toast);",
-            "  requestAnimationFrame(()=>{ toast.classList.remove('opacity-0','-translate-y-3','scale-95'); ",
-            " toast.classList.add('opacity-100','translate-y-0','scale-100'); });",
-            "  setTimeout(()=>{ toast.classList.add('opacity-0','translate-y-3'); ",
-            " toast.classList.remove('opacity-100','translate-y-0'); },4800);",
-            "  setTimeout(()=>{ if(stack.contains(toast)) toast.remove(); },5600);",
-            " }",
-            "}catch(e){console.error('toast-err',e);}",
-            "})();",
+        return [
+            Div("", cls="hidden"),
+            build_toast(f"Errore durante il salvataggio: {e}", tone="danger"),
         ]
-        js = "".join(parts)
-        return Script(js)
 
 
 def delete_snippet(snippet_id: int):
@@ -488,5 +420,8 @@ def delete_document(doc_id: str, library: str):
     """Delete an entire document and its data."""
     doc_id, library = unquote(doc_id), unquote(library)
     if OCRStorage().delete_document(doc_id, library):
-        return document_picker()
-    return Div("Errore durante la rimozione", cls="text-red-500")
+        return [document_picker(), build_toast(f"Documento '{doc_id}' eliminato.", tone="success")]
+    return [
+        document_picker(),
+        build_toast(f"Errore durante la rimozione di '{doc_id}'.", tone="danger"),
+    ]

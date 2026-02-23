@@ -178,12 +178,6 @@ def studio_layout(title, library, doc_id, page, manifest_url, initial_canvas, ma
         ),
         # Modal placeholder
         Div(id="cropper-modal-container"),
-        # Global toast holder (outside of the right-panel so toasts survive panel swaps)
-        Div(
-            Div(id="studio-toast-stack", cls="flex flex-col gap-2 items-end"),
-            id="studio-toast-holder",
-            cls="pointer-events-none fixed top-4 right-4 z-60 flex w-[min(360px,95vw)] flex-col items-end px-4",
-        ),
         Script(f"""
             (function() {{
                 if (window.__studioMiradorListenerBound) return;

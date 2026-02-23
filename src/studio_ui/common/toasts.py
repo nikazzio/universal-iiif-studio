@@ -2,59 +2,66 @@
 
 from __future__ import annotations
 
-import json
+from fasthtml.common import Button, Div, Span
 
-from fasthtml.common import Div, Script
+from studio_ui.config import get_setting
 
 _TONE_STYLES = {
-    "success": "bg-emerald-900/95 border border-emerald-500/70 text-emerald-50 shadow-emerald-500/40",
-    "info": "bg-slate-900/90 border border-slate-600/80 text-slate-50 shadow-slate-700/50",
-    "danger": "bg-rose-900/90 border border-rose-500/70 text-rose-50 shadow-rose-500/40",
+    "success": (
+        "bg-emerald-100/95 border border-emerald-300 text-emerald-950 shadow-emerald-500/20 "
+        "dark:bg-emerald-900/90 dark:border-emerald-500/70 dark:text-emerald-50 dark:shadow-emerald-500/40"
+    ),
+    "info": (
+        "bg-sky-100/95 border border-sky-300 text-sky-950 shadow-sky-500/20 "
+        "dark:bg-sky-900/85 dark:border-sky-500/60 dark:text-sky-50 dark:shadow-sky-500/30"
+    ),
+    "danger": (
+        "bg-rose-100/95 border border-rose-300 text-rose-950 shadow-rose-500/20 "
+        "dark:bg-rose-900/90 dark:border-rose-500/70 dark:text-rose-50 dark:shadow-rose-500/40"
+    ),
 }
 _ICONS = {"success": "✅", "info": "ℹ️", "danger": "⚠️"}
+_MIN_TIMEOUT_MS = 1000
+_MAX_TIMEOUT_MS = 15000
 
 
-def build_toast(message: str, tone: str = "success") -> tuple[Div, Script]:
-    """Return hidden placeholder and script that appends a toast to the stack."""
+def _coerce_timeout_ms(duration_ms: int | None) -> int:
+    """Return a bounded timeout used by the global toast animation manager."""
+    configured = duration_ms if duration_ms is not None else get_setting("ui.toast_duration", 3000)
+    try:
+        timeout = int(configured)
+    except (TypeError, ValueError):
+        timeout = 3000
+    return max(_MIN_TIMEOUT_MS, min(timeout, _MAX_TIMEOUT_MS))
+
+
+def build_toast(message: str, tone: str = "info", duration_ms: int | None = None) -> Div:
+    """Return an out-of-band toast fragment appended to the global holder."""
     tone_classes = _TONE_STYLES.get(tone, _TONE_STYLES["info"])
-
-    js_msg = json.dumps(message)
-    js_icon = json.dumps(_ICONS.get(tone, "ℹ️"))
-    js_tone = json.dumps(tone_classes)
-
-    parts = [
-        "(function () {",
-        "try {",
-        " const stack = document.getElementById('studio-toast-stack');",
-        " if (!stack) return;",
-        " const toast = document.createElement('div');",
-        " toast.className = 'pointer-events-auto studio-toast-entry flex items-center gap-3 '",
-        " + 'rounded-2xl border px-4 py-3 '",
-        " + 'shadow-2xl backdrop-blur-sm opacity-0 -translate-y-3 scale-95 '",
-        " + 'transition-all duration-300 ' + ",
-        js_tone,
-        ";",
-        " toast.setAttribute('role', 'status');",
-        " toast.setAttribute('aria-live', 'polite');",
-        ' toast.innerHTML = `<span class="text-lg leading-none">${{ ',
-        js_icon,
-        ' }}</span><span class="text-sm font-semibold text-current">${{ ',
-        js_msg,
-        " }}</span>`;",
-        " stack.appendChild(toast);",
-        " requestAnimationFrame(() => {",
-        "  toast.classList.remove('opacity-0', '-translate-y-3', 'scale-95');",
-        "  toast.classList.add('opacity-100', 'translate-y-0', 'scale-100');",
-        " });",
-        " const dismiss = () => {",
-        "  toast.classList.add('opacity-0', 'translate-y-3');",
-        "  toast.classList.remove('opacity-100', 'translate-y-0');",
-        " };",
-        " setTimeout(dismiss, 4800);",
-        " setTimeout(() => { if (stack.contains(toast)) toast.remove(); }, 5600);",
-        "} catch (err) { console.error('Toast render error', err); }",
-        "})();",
-    ]
-    script = Script("".join(parts))
-
-    return Div("", cls="hidden"), script
+    timeout_ms = _coerce_timeout_ms(duration_ms)
+    icon = _ICONS.get(tone, "ℹ️")
+    safe_message = (message or "").strip() or "Operazione completata."
+    return Div(
+        Span(icon, cls="text-lg leading-none mt-0.5"),
+        Div(safe_message, cls="text-sm font-semibold leading-snug"),
+        Button(
+            "✕",
+            type="button",
+            data_toast_close="true",
+            cls=(
+                "ml-3 inline-flex h-6 w-6 items-center justify-center rounded-full "
+                "text-current/80 transition hover:bg-black/10 hover:text-current "
+                "dark:hover:bg-white/10"
+            ),
+            aria_label="Chiudi notifica",
+        ),
+        role="status",
+        aria_live="polite",
+        data_toast_timeout=str(timeout_ms),
+        data_toast_ready="false",
+        hx_swap_oob="beforeend:#studio-toast-holder",
+        cls=(
+            "pointer-events-auto studio-toast-entry flex items-start gap-3 rounded-xl px-4 py-3 "
+            "opacity-0 translate-y-2 scale-95 shadow-xl backdrop-blur-sm transition-all duration-300 " + tone_classes
+        ),
+    )

@@ -67,6 +67,86 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                 ),
                 cls="flex h-screen overflow-hidden",
             ),
+            Div(
+                id="studio-toast-holder",
+                cls="pointer-events-none fixed top-4 right-4 z-50 flex w-[min(360px,95vw)] flex-col gap-2 items-end",
+            ),
+            Script("""
+                (function () {
+                    if (window.__studioToastSystemBound) return;
+                    window.__studioToastSystemBound = true;
+
+                    const ENTER_FROM = ['opacity-0', 'translate-y-2', 'scale-95'];
+                    const ENTER_TO = ['opacity-100', 'translate-y-0', 'scale-100'];
+                    const EXIT_TO = ['opacity-0', 'translate-y-2', 'scale-95'];
+
+                    function dismissToast(toast) {
+                        if (!toast || toast.dataset.toastClosing === 'true') return;
+                        toast.dataset.toastClosing = 'true';
+                        toast.classList.remove(...ENTER_TO);
+                        toast.classList.add(...EXIT_TO);
+                        window.setTimeout(() => {
+                            if (toast && toast.parentNode) toast.remove();
+                        }, 250);
+                    }
+
+                    function resolveTimeoutMs(toast) {
+                        const parsed = Number.parseInt(toast.dataset.toastTimeout || '3000', 10);
+                        if (!Number.isFinite(parsed)) return 3000;
+                        return Math.min(15000, Math.max(1000, parsed));
+                    }
+
+                    function initToast(toast) {
+                        if (!toast || toast.dataset.toastReady === 'true') return;
+                        toast.dataset.toastReady = 'true';
+                        toast.classList.add(...ENTER_FROM);
+                        window.requestAnimationFrame(() => {
+                            toast.classList.remove(...ENTER_FROM);
+                            toast.classList.add(...ENTER_TO);
+                        });
+
+                        const closeBtn = toast.querySelector('[data-toast-close]');
+                        if (closeBtn) {
+                            closeBtn.addEventListener('click', () => dismissToast(toast), { once: true });
+                        }
+
+                        window.setTimeout(() => dismissToast(toast), resolveTimeoutMs(toast));
+                    }
+
+                    function initToastsIn(root) {
+                        if (!root || typeof root.querySelectorAll !== 'function') return;
+                        root.querySelectorAll('.studio-toast-entry').forEach(initToast);
+                    }
+
+                    function bindToastObserver() {
+                        const holder = document.getElementById('studio-toast-holder');
+                        if (!holder || holder.dataset.toastObserverBound === 'true') return;
+                        holder.dataset.toastObserverBound = 'true';
+
+                        const observer = new MutationObserver((mutations) => {
+                            mutations.forEach((mutation) => {
+                                mutation.addedNodes.forEach((node) => {
+                                    if (!(node instanceof Element)) return;
+                                    if (node.classList.contains('studio-toast-entry')) {
+                                        initToast(node);
+                                        return;
+                                    }
+                                    initToastsIn(node);
+                                });
+                            });
+                        });
+                        observer.observe(holder, { childList: true });
+                        initToastsIn(holder);
+                    }
+
+                    document.addEventListener('DOMContentLoaded', bindToastObserver);
+                    document.body.addEventListener('htmx:afterSwap', bindToastObserver);
+                    document.body.addEventListener('htmx:oobAfterSwap', (event) => {
+                        bindToastObserver();
+                        initToastsIn(event.target || document);
+                    });
+                })();
+            """),
             cls="antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100",
         ),
     )

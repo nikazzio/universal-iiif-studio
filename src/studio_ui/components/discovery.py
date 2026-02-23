@@ -138,22 +138,47 @@ def render_search_results_list(results: list) -> Div:
     )
 
 
-def render_error_message(title: str, details: str = "") -> Div:
-    """Renderizza un messaggio di errore user-friendly (Rosso)."""
+_FEEDBACK_STYLES = {
+    "success": {
+        "icon": "✅",
+        "card": "bg-emerald-950/25 border-emerald-500/45",
+        "title": "text-emerald-200",
+        "details": "text-emerald-100/90",
+    },
+    "info": {
+        "icon": "ℹ️",
+        "card": "bg-sky-950/25 border-sky-500/45",
+        "title": "text-sky-200",
+        "details": "text-sky-100/90",
+    },
+    "danger": {
+        "icon": "⚠️",
+        "card": "bg-rose-950/30 border-rose-500/45",
+        "title": "text-rose-200",
+        "details": "text-rose-100/90",
+    },
+}
+
+
+def render_feedback_message(title: str, details: str = "", tone: str = "info") -> Div:
+    """Render inline feedback styled consistently with Discovery result cards."""
+    palette = _FEEDBACK_STYLES.get(tone, _FEEDBACK_STYLES["info"])
     return Div(
+        Div(palette["icon"], cls="text-lg leading-none mt-0.5"),
         Div(
-            Span("⚠️", cls="text-2xl mr-3"),
-            Div(
-                P(title, cls="font-bold text-red-800 dark:text-red-200"),
-                P(details, cls="text-sm text-red-600 dark:text-red-300 mt-1") if details else "",
-            ),
-            cls="flex items-start",
+            P(title, cls=f"text-sm font-bold {palette['title']}"),
+            P(details, cls=f"text-xs mt-1 {palette['details']}") if details else "",
         ),
         cls=(
-            "bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 p-4 rounded "
-            "shadow-sm mt-6 animate-in fade-in slide-in-from-top-2"
+            "flex items-start gap-3 p-3 rounded-lg border transition-all mb-2 "
+            "shadow-sm " + palette["card"] + " hover:bg-slate-800/80"
         ),
     )
+
+
+def render_error_message(title: str, details: str = "") -> Div:
+    """Renderizza un messaggio di errore con stile coerente ai risultati Discovery."""
+    return render_feedback_message(title, details, tone="danger")
 
 
 def discovery_form() -> Div:
