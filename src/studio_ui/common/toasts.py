@@ -88,9 +88,8 @@ def build_toast(message: str, tone: str = "info", duration_ms: int | None = None
     toast_style = (
         _toast_style(normalized_tone)
         + "transform-origin: top right; "
-        + "opacity: 0; "
-        + "transform: translateY(8px) scale(0.96); "
-        + f"animation: studio-toast-in 180ms ease-out forwards, studio-toast-out 240ms ease-in forwards {timeout_ms}ms;"
+        + "opacity: 1; "
+        + "transform: translateY(0) scale(1); "
     )
     toast_card = Div(
         Span(icon, cls="text-lg leading-none mt-0.5"),
@@ -98,7 +97,6 @@ def build_toast(message: str, tone: str = "info", duration_ms: int | None = None
         Button(
             "✕",
             type="button",
-            onclick="var t=this.closest('.studio-toast-entry'); if(t){t.remove();}",
             cls=(
                 "ml-3 inline-flex h-6 w-6 items-center justify-center rounded-full "
                 "text-current/80 transition hover:bg-white/20 hover:text-current"
@@ -109,11 +107,11 @@ def build_toast(message: str, tone: str = "info", duration_ms: int | None = None
         role="status",
         aria_live="polite",
         style=toast_style,
-        onanimationend="if(event.animationName==='studio-toast-out'){ this.remove(); }",
         cls=(
-            "pointer-events-auto studio-toast-entry w-full flex items-start gap-3 px-4 py-3 text-left backdrop-blur-sm"
+            "pointer-events-auto studio-toast-entry w-full flex items-start gap-3 px-4 py-3 text-left "
+            "backdrop-blur-sm transition-all duration-200 ease-out"
         ),
-        **{"data-toast-timeout": str(timeout_ms), "data-toast-ready": "true"},
+        **{"data-toast-timeout": str(timeout_ms)},
     )
     return Div(
         toast_card,

@@ -29,6 +29,32 @@ from universal_iiif_core.utils import load_json
 logger = get_logger(__name__)
 
 
+def _with_toast(fragment, message: str, tone: str = "info"):
+    """Append a global toast to a standard fragment response."""
+    return [fragment, build_toast(message, tone=tone)]
+
+
+def _toast_only(message: str, tone: str = "info"):
+    """Return a noop target payload plus a global toast for HTMX requests."""
+    return _with_toast(Div("", cls="hidden"), message, tone=tone)
+
+
+def _load_manifest_payload(manifest_path: Path, page: int) -> tuple[dict, str | None]:
+    """Load manifest JSON and resolve the initial canvas for a target page."""
+    with manifest_path.open(encoding="utf-8") as f:
+        manifest_json = json.load(f)
+        if "sequences" in manifest_json:
+            items = manifest_json["sequences"][0].get("canvases", [])
+        else:
+            items = manifest_json.get("items", [])
+
+        target_idx = int(page) - 1
+        initial_canvas = None
+        if 0 <= target_idx < len(items):
+            initial_canvas = items[target_idx].get("@id") or items[target_idx].get("id")
+    return manifest_json, initial_canvas
+
+
 def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int) -> Script:
     """Trigger a targeted refresh of the right Studio panel."""
     encoded_doc = quote(doc_id, safe="")
@@ -100,24 +126,16 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
         doc_q = quote(doc_id, safe="")
         manifest_url = f"{base_url}/iiif/manifest/{lib_q}/{doc_q}"
 
-        # Initial Canvas Selection
-        initial_canvas = None
         manifest_path = Path(paths["manifest"])
 
         if not manifest_path.exists():
-            return Div("Manifesto non trovato", cls="p-10")
+            message = "Manifesto non trovato."
+            panel = Div(message, cls="p-10")
+            if is_hx:
+                return _with_toast(panel, message, tone="danger")
+            return panel
 
-        with manifest_path.open(encoding="utf-8") as f:
-            manifest_json = json.load(f)
-            items = []
-            if "sequences" in manifest_json:
-                items = manifest_json["sequences"][0].get("canvases", [])
-            elif "items" in manifest_json:
-                items = manifest_json["items"]
-
-            target_idx = int(page) - 1
-            if 0 <= target_idx < len(items):
-                initial_canvas = items[target_idx].get("@id") or items[target_idx].get("id")
+        manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
 
         content = studio_layout(
             title,
@@ -136,6 +154,9 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
 
     except Exception as e:
         logger.exception("Studio Error")
+        message = "Errore caricamento Studio."
+        if is_hx:
+            return _with_toast(Div(message, cls="p-10"), f"{message} {e}", tone="danger")
         return base_layout("Errore", Div(f"Errore caricamento: {e}", cls="p-10"))
 
 
@@ -412,8 +433,12 @@ def save_transcription(doc_id: str, library: str, page: int, text: str):
 
 def delete_snippet(snippet_id: int):
     """Delete a snippet by ID."""
-    OCRStorage().vault.delete_snippet(snippet_id)
-    return ""
+    try:
+        OCRStorage().vault.delete_snippet(snippet_id)
+        return _toast_only("Snippet eliminato correttamente.", tone="success")
+    except Exception as exc:
+        logger.exception("Snippet delete error for id=%s", snippet_id)
+        return _toast_only(f"Errore durante l'eliminazione dello snippet: {exc}", tone="danger")
 
 
 def delete_document(doc_id: str, library: str):

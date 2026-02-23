@@ -44,6 +44,7 @@ def snippets_tab_content(doc_id, page, library):
                         "✖",
                         hx_delete=f"/api/delete_snippet/{s['id']}",
                         hx_target="closest .snippet",
+                        hx_swap="outerHTML",
                         cls="text-red-400 hover:text-red-600",
                     ),
                     cls="flex justify-between items-center mb-2",

@@ -146,16 +146,20 @@ class JobManager:
 
     def _mark_failure(self, job_id: str, exc: Exception, job_type: str, db_job_id: str | None) -> None:
         logger.exception("Job %s failed", job_id)
-        with self._lock:
-            self._jobs[job_id]["status"] = "failed"
-            self._jobs[job_id]["error"] = str(exc)
-            self._jobs[job_id]["message"] = f"Error: {exc}"
+        error_text = str(exc)
+        message_text = f"Error: {exc}"
 
         if job_type == "download":
             try:
-                self._update_db_safe(db_job_id or job_id, status="error", error=str(exc))
+                # Keep DB state synchronized before exposing final in-memory status.
+                self._update_db_safe(db_job_id or job_id, status="error", error=error_text)
             except Exception:
                 logger.exception("Failed to write failure to vault DB for %s", db_job_id or job_id)
+
+        with self._lock:
+            self._jobs[job_id]["status"] = "failed"
+            self._jobs[job_id]["error"] = error_text
+            self._jobs[job_id]["message"] = message_text
 
     def _finalize_incomplete_download(
         self,
