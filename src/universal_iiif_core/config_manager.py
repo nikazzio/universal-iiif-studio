@@ -29,6 +29,12 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         "logs_dir": "data/local/logs",
         "snippets_dir": "data/local/snippets",
     },
+    "security": {
+        "allowed_origins": [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ],
+    },
     "api_keys": {
         "openai": "",
         "anthropic": "",
