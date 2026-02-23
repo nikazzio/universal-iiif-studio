@@ -506,15 +506,12 @@ class VaultManager:
                     except Exception:
                         title = None
 
-                logger.info(
-                    "Download update: job=%s doc=%s title=%s %s/%s status=%s",
-                    job_id,
-                    doc_id or "-",
-                    title or "-",
-                    current,
-                    total,
-                    status,
-                )
+                log_message = "Download update: job=%s doc=%s title=%s %s/%s status=%s"
+                log_args = (job_id, doc_id or "-", title or "-", current, total, status)
+                if status in {"completed", "error", "cancelled", "cancelling"}:
+                    logger.info(log_message, *log_args)
+                else:
+                    logger.debug(log_message, *log_args)
             except Exception:
                 logger.debug("Failed to log download update for job %s", job_id, exc_info=True)
             finally:
