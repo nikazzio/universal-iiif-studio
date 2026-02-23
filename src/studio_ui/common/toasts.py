@@ -88,8 +88,8 @@ def build_toast(message: str, tone: str = "info", duration_ms: int | None = None
     toast_style = (
         _toast_style(normalized_tone)
         + "transform-origin: top right; "
-        + "opacity: 0; "
-        + "transform: translateY(8px) scale(0.96); "
+        + "opacity: 1; "
+        + "transform: translateY(0) scale(1); "
     )
     toast_card = Div(
         Span(icon, cls="text-lg leading-none mt-0.5"),
