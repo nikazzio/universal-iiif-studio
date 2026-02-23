@@ -69,7 +69,9 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
             ),
             Div(
                 id="studio-toast-holder",
-                cls="pointer-events-none fixed top-4 right-4 z-50 flex w-[min(360px,95vw)] flex-col gap-2 items-end",
+                cls=(
+                    "pointer-events-none fixed top-4 right-4 z-50 flex w-[min(420px,95vw)] flex-col gap-2 items-stretch"
+                ),
             ),
             Script("""
                 (function () {
@@ -79,10 +81,14 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                     const ENTER_FROM = ['opacity-0', 'translate-y-2', 'scale-95'];
                     const ENTER_TO = ['opacity-100', 'translate-y-0', 'scale-100'];
                     const EXIT_TO = ['opacity-0', 'translate-y-2', 'scale-95'];
+                    const CLOSE_SELECTOR = '[data-toast-close],[data_toast_close]';
 
                     function dismissToast(toast) {
-                        if (!toast || toast.dataset.toastClosing === 'true') return;
-                        toast.dataset.toastClosing = 'true';
+                        if (!toast) return;
+                        const closingFlag = toast.getAttribute('data-toast-closing')
+                            || toast.getAttribute('data_toast_closing');
+                        if (closingFlag === 'true') return;
+                        toast.setAttribute('data-toast-closing', 'true');
                         toast.classList.remove(...ENTER_TO);
                         toast.classList.add(...EXIT_TO);
                         window.setTimeout(() => {
@@ -91,25 +97,25 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                     }
 
                     function resolveTimeoutMs(toast) {
-                        const parsed = Number.parseInt(toast.dataset.toastTimeout || '3000', 10);
+                        const raw = toast.getAttribute('data-toast-timeout')
+                            || toast.getAttribute('data_toast_timeout')
+                            || '3000';
+                        const parsed = Number.parseInt(raw, 10);
                         if (!Number.isFinite(parsed)) return 3000;
                         return Math.min(15000, Math.max(1000, parsed));
                     }
 
                     function initToast(toast) {
-                        if (!toast || toast.dataset.toastReady === 'true') return;
-                        toast.dataset.toastReady = 'true';
+                        if (!toast) return;
+                        const readyFlag = toast.getAttribute('data-toast-ready')
+                            || toast.getAttribute('data_toast_ready');
+                        if (readyFlag === 'true') return;
+                        toast.setAttribute('data-toast-ready', 'true');
                         toast.classList.add(...ENTER_FROM);
                         window.requestAnimationFrame(() => {
                             toast.classList.remove(...ENTER_FROM);
                             toast.classList.add(...ENTER_TO);
                         });
-
-                        const closeBtn = toast.querySelector('[data-toast-close]');
-                        if (closeBtn) {
-                            closeBtn.addEventListener('click', () => dismissToast(toast), { once: true });
-                        }
-
                         window.setTimeout(() => dismissToast(toast), resolveTimeoutMs(toast));
                     }
 
@@ -137,6 +143,16 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                         });
                         observer.observe(holder, { childList: true });
                         initToastsIn(holder);
+
+                        if (holder.dataset.toastClickBound !== 'true') {
+                            holder.addEventListener('click', (event) => {
+                                const closeBtn = event.target.closest(CLOSE_SELECTOR);
+                                if (!closeBtn) return;
+                                const toast = closeBtn.closest('.studio-toast-entry');
+                                if (toast) dismissToast(toast);
+                            });
+                            holder.dataset.toastClickBound = 'true';
+                        }
                     }
 
                     document.addEventListener('DOMContentLoaded', bindToastObserver);

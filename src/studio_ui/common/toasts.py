@@ -2,27 +2,22 @@
 
 from __future__ import annotations
 
+import re
+
 from fasthtml.common import Button, Div, Span
 
 from studio_ui.config import get_setting
 
-_TONE_STYLES = {
-    "success": (
-        "bg-emerald-100/95 border border-emerald-300 text-emerald-950 shadow-emerald-500/20 "
-        "dark:bg-emerald-900/90 dark:border-emerald-500/70 dark:text-emerald-50 dark:shadow-emerald-500/40"
-    ),
-    "info": (
-        "bg-sky-100/95 border border-sky-300 text-sky-950 shadow-sky-500/20 "
-        "dark:bg-sky-900/85 dark:border-sky-500/60 dark:text-sky-50 dark:shadow-sky-500/30"
-    ),
-    "danger": (
-        "bg-rose-100/95 border border-rose-300 text-rose-950 shadow-rose-500/20 "
-        "dark:bg-rose-900/90 dark:border-rose-500/70 dark:text-rose-50 dark:shadow-rose-500/40"
-    ),
-}
 _ICONS = {"success": "✅", "info": "ℹ️", "danger": "⚠️"}
 _MIN_TIMEOUT_MS = 1000
 _MAX_TIMEOUT_MS = 15000
+_HEX_RE = re.compile(r"^#?[0-9a-fA-F]{6}$")
+
+_TONE_ANCHORS = {
+    "success": "#10b981",
+    "info": "#0ea5e9",
+    "danger": "#ef4444",
+}
 
 
 def _coerce_timeout_ms(duration_ms: int | None) -> int:
@@ -35,33 +30,80 @@ def _coerce_timeout_ms(duration_ms: int | None) -> int:
     return max(_MIN_TIMEOUT_MS, min(timeout, _MAX_TIMEOUT_MS))
 
 
+def _normalize_hex(color: str | None, fallback: str = "#6366f1") -> str:
+    """Return a normalized #RRGGBB value for CSS usage."""
+    raw = str(color or "").strip()
+    if not _HEX_RE.match(raw):
+        return fallback
+    return raw if raw.startswith("#") else f"#{raw}"
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    value = _normalize_hex(hex_color).lstrip("#")
+    return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+
+def _mix_hex(color_a: str, color_b: str, ratio: float) -> str:
+    """Mix two hex colors with ratio in [0, 1]."""
+    ratio = max(0.0, min(1.0, ratio))
+    a = _hex_to_rgb(color_a)
+    b = _hex_to_rgb(color_b)
+    mixed = (
+        int(a[0] * (1.0 - ratio) + b[0] * ratio),
+        int(a[1] * (1.0 - ratio) + b[1] * ratio),
+        int(a[2] * (1.0 - ratio) + b[2] * ratio),
+    )
+    return f"#{mixed[0]:02x}{mixed[1]:02x}{mixed[2]:02x}"
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    r, g, b = _hex_to_rgb(hex_color)
+    return f"rgba({r}, {g}, {b}, {alpha:.3f})"
+
+
+def _toast_style(tone: str) -> str:
+    """Inline style for reliable gradient/background rendering."""
+    site_theme = _normalize_hex(get_setting("ui.theme_color", "#6366f1"))
+    anchor = _normalize_hex(_TONE_ANCHORS.get(tone, _TONE_ANCHORS["info"]))
+    start = _mix_hex(site_theme, anchor, 0.28 if tone == "info" else 0.48)
+    end = _mix_hex(site_theme, "#0f172a", 0.62)
+    edge = _mix_hex(anchor, "#ffffff", 0.22)
+    shadow = _mix_hex(anchor, "#000000", 0.35)
+    return (
+        f"background: linear-gradient(135deg, {_rgba(start, 0.95)} 0%, {_rgba(end, 0.92)} 100%); "
+        f"border: 1px solid {_rgba(edge, 0.55)}; "
+        f"border-radius: 0.8rem; "
+        f"box-shadow: 0 10px 28px {_rgba(shadow, 0.35)}; "
+        "color: #f8fafc;"
+    )
+
+
 def build_toast(message: str, tone: str = "info", duration_ms: int | None = None) -> Div:
     """Return an out-of-band toast fragment appended to the global holder."""
-    tone_classes = _TONE_STYLES.get(tone, _TONE_STYLES["info"])
+    normalized_tone = tone if tone in _TONE_ANCHORS else "info"
     timeout_ms = _coerce_timeout_ms(duration_ms)
-    icon = _ICONS.get(tone, "ℹ️")
+    icon = _ICONS.get(normalized_tone, "ℹ️")
     safe_message = (message or "").strip() or "Operazione completata."
     return Div(
         Span(icon, cls="text-lg leading-none mt-0.5"),
-        Div(safe_message, cls="text-sm font-semibold leading-snug"),
+        Div(safe_message, cls="text-sm font-semibold leading-snug text-left"),
         Button(
             "✕",
             type="button",
-            data_toast_close="true",
             cls=(
                 "ml-3 inline-flex h-6 w-6 items-center justify-center rounded-full "
-                "text-current/80 transition hover:bg-black/10 hover:text-current "
-                "dark:hover:bg-white/10"
+                "text-current/80 transition hover:bg-white/20 hover:text-current"
             ),
             aria_label="Chiudi notifica",
+            **{"data-toast-close": "true"},
         ),
         role="status",
         aria_live="polite",
-        data_toast_timeout=str(timeout_ms),
-        data_toast_ready="false",
         hx_swap_oob="beforeend:#studio-toast-holder",
+        style=_toast_style(normalized_tone),
         cls=(
-            "pointer-events-auto studio-toast-entry flex items-start gap-3 rounded-xl px-4 py-3 "
-            "opacity-0 translate-y-2 scale-95 shadow-xl backdrop-blur-sm transition-all duration-300 " + tone_classes
+            "pointer-events-auto studio-toast-entry w-full flex items-start gap-3 px-4 py-3 text-left "
+            "opacity-0 translate-y-2 scale-95 backdrop-blur-sm transition-all duration-300"
         ),
+        **{"data-toast-timeout": str(timeout_ms), "data-toast-ready": "false"},
     )
