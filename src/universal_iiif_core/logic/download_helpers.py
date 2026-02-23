@@ -9,9 +9,7 @@ def sanitize_filename(label: str) -> str:
     return safe.strip().replace(" ", "_")
 
 
-def derive_identifier(
-    manifest_url: str, output_folder_name: str | None, library: str | None, label: str | None
-) -> str:
+def derive_identifier(manifest_url: str, output_folder_name: str | None, library: str | None, label: str | None) -> str:
     """Derive a compact folder identifier for a manuscript.
 
     Returns a clean technical ID suitable for both filesystem and database.

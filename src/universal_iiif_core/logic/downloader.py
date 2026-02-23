@@ -196,6 +196,7 @@ class IIIFDownloader:
         output_folder_name: str | None = None,
         library: str = "Unknown",
         job_id: str | None = None,
+        show_progress: bool = True,
     ):
         """Initialize the IIIFDownloader."""
         # basic configuration
@@ -207,6 +208,7 @@ class IIIFDownloader:
         self.progress_callback: Callable[[int, int], None] | None = progress_callback
         self.library = library
         self.job_id: str | None = job_id
+        self.show_progress = show_progress
 
         # load manifest and derive human label (for display, NOT for storage)
         self.manifest: dict[str, Any] = get_json(manifest_url) or {}
@@ -581,7 +583,11 @@ class IIIFDownloader:
         except (OSError, ValueError, TypeError):
             return False
 
-    def _extract_pages_from_pdf(self, pdf_path: Path, progress_callback: Callable[[int, int], None] | None = None) -> bool:
+    def _extract_pages_from_pdf(
+        self,
+        pdf_path: Path,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> bool:
         self._clear_existing_scans()
         viewer_dpi = int(self.cm.get_setting("pdf.viewer_dpi", 150) or 150)
         viewer_quality = int(self.cm.get_setting("images.viewer_quality", 90) or 90)
@@ -759,7 +765,7 @@ class IIIFDownloader:
             future_to_index = {
                 executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in to_download
             }
-            for future in tqdm(as_completed(future_to_index), total=len(to_download)):
+            for future in self._iter_download_futures(future_to_index, len(to_download)):
                 idx = future_to_index[future]
                 try:
                     result = future.result()
@@ -793,6 +799,12 @@ class IIIFDownloader:
                     break
 
         return downloaded, page_stats
+
+    def _iter_download_futures(self, future_to_index: dict, total_to_download: int):
+        futures_iter = as_completed(future_to_index)
+        if self.show_progress:
+            return tqdm(futures_iter, total=total_to_download)
+        return futures_iter
 
     def _store_page_stats(self, page_stats):
         if page_stats:

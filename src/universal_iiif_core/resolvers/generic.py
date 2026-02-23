@@ -3,6 +3,7 @@ from .base import BaseResolver
 
 class GenericResolver(BaseResolver):
     """Fallback resolver that treats the input as an already-resolved manifest URL."""
+
     def can_resolve(self, url_or_id):
         """Return True for anything that looks like an HTTP URL."""
         return url_or_id.lower().startswith("http")

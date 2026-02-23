@@ -25,6 +25,7 @@ class ResolverRegistry:
 
     @classmethod
     def get_resolver_class(cls, library_name: str) -> Any:
+        """Return the resolver class matching the provided library name."""
         name = (library_name or "").lower()
         for key, resolver in cls._MAP.items():
             if key in name:
@@ -33,6 +34,7 @@ class ResolverRegistry:
 
 
 def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | None]:
+    """Resolve a shelfmark to `(manifest_url, doc_id)` for a given library."""
     resolver_cls = ResolverRegistry.get_resolver_class(library)
     resolver = resolver_cls()
     return resolver.get_manifest_url((shelfmark or "").strip())

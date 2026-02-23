@@ -1,10 +1,9 @@
-
-
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 
 def test_delete_manuscript_removes_folder_and_snippets(tmp_path):
+    """Ensure manuscript deletion removes DB entries and on-disk artifacts."""
     # Arrange: point downloads dir to a temporary location
     cm = get_config_manager()
     tmp_downloads = tmp_path / "downloads"

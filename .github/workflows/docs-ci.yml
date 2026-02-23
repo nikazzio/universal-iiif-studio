@@ -3,22 +3,8 @@ name: Docs CI
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - '**/*.md'
-      - '.github/workflows/docs-ci.yml'
-      - '.markdownlint.json'
-      - '.lycheeignore'
-      - 'scripts/check_docs_language.py'
-      - 'scripts/check_changelog_policy.py'
   push:
     branches: ["main"]
-    paths:
-      - '**/*.md'
-      - '.github/workflows/docs-ci.yml'
-      - '.markdownlint.json'
-      - '.lycheeignore'
-      - 'scripts/check_docs_language.py'
-      - 'scripts/check_changelog_policy.py'
 
 concurrency:
   group: docs-${{ github.workflow }}-${{ github.ref }}
@@ -45,29 +31,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Collect changed markdown files
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE_SHA="${{ github.event.before }}"
-          fi
-
-          CHANGED_MD="$(git diff --name-only "$BASE_SHA" "${{ github.sha }}" -- '*.md' || true)"
-          {
-            echo "CHANGED_MD<<EOF"
-            echo "$CHANGED_MD"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-
       - name: Markdown lint
-        if: env.CHANGED_MD != ''
         run: |
           npm install -g markdownlint-cli
-          echo "$CHANGED_MD" | xargs markdownlint
+          markdownlint "**/*.md"
 
       - name: Link check
-        if: env.CHANGED_MD != ''
         uses: lycheeverse/lychee-action@v2
         with:
           fail: true
@@ -77,18 +46,15 @@ jobs:
             --max-retries 3
             --retry-wait-time 2
             --timeout 20
-            --exclude-mail
             --exclude-path .venv/**
             --exclude-path node_modules/**
             --exclude-file .lycheeignore
-            ${{ env.CHANGED_MD }}
+            "**/*.md"
 
       - name: Check docs language consistency
-        if: env.CHANGED_MD != ''
         run: |
-          python scripts/check_docs_language.py $CHANGED_MD
+          python scripts/check_docs_language.py
 
       - name: Check changelog policy
-        if: contains(env.CHANGED_MD, 'CHANGELOG.md')
         run: |
           python scripts/check_changelog_policy.py

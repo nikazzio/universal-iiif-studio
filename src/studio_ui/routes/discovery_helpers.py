@@ -96,8 +96,9 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
     # Thread-local DB manager for safety
     vault = VaultManager()
 
-    # Register the job in DB using the SAFE ID
-    vault.create_download_job(db_job_id, doc_id, library, manifest_url)
+    # Register the job in DB only when no external job manager callback exists.
+    if progress_callback is None:
+        vault.create_download_job(db_job_id, doc_id, library, manifest_url)
 
     # Track last seen values for more informative error reporting
     last = {"current": 0, "total": 0}
@@ -105,10 +106,12 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
     def db_progress_hook(current: int, total: int):
         """Update DB only when values change to reduce write load."""
         if current != last["current"] or total != last["total"]:
-            # Usa db_job_id (hash), non l'URL grezzo
-            vault.update_download_job(job_id=db_job_id, current=current, total=total, status="running")
             last["current"] = current
             last["total"] = total
+
+            # If no external callback is provided, persist progress directly.
+            if progress_callback is None:
+                vault.update_download_job(job_id=db_job_id, current=current, total=total, status="running")
 
         # Call the memory-based job manager callback if provided
         if progress_callback:
@@ -126,13 +129,20 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
             output_folder_name=folder_name,
             progress_callback=db_progress_hook,
             job_id=db_job_id,
+            show_progress=False,
         )
 
         # Pass DB hook and cancellation checker to the runtime `run` call
         downloader.run(should_cancel=should_cancel)
 
-        # Mark completed
-        vault.update_download_job(job_id=db_job_id, current=last["current"], total=last["total"], status="completed")
+        # Mark completed only when no external callback tracks finalization.
+        if progress_callback is None:
+            vault.update_download_job(
+                job_id=db_job_id,
+                current=last["current"],
+                total=last["total"],
+                status="completed",
+            )
 
         # Register manuscript in the main table
         # Ora usiamo il titolo estratto dal manifest reale
@@ -140,6 +150,11 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
 
     except Exception as exc:  # pragma: no cover - runtime safety
         logger.error(f"Download failed for {doc_id}: {exc}", exc_info=True)
-        vault.update_download_job(
-            job_id=db_job_id, current=last["current"], total=last["total"], status="error", error=str(exc)
-        )
+        if progress_callback is None:
+            vault.update_download_job(
+                job_id=db_job_id,
+                current=last["current"],
+                total=last["total"],
+                status="error",
+                error=str(exc),
+            )

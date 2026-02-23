@@ -31,11 +31,27 @@ class JobManager:
 
         Returns the job_id.
         """
-        if kwargs is None:
-            kwargs = {}
-
+        job_kwargs = dict(kwargs or {})
         job_id = str(uuid.uuid4())[:8]
+        db_job_id = job_kwargs.get("db_job_id")
 
+        self._register_pending_job(job_id, job_type, db_job_id)
+        try:
+            if job_type == "download":
+                self._maybe_create_db_record(job_id, db_job_id, job_kwargs)
+        except Exception:
+            logger.exception("Failed to record download job %s in vault DB", db_job_id or job_id)
+
+        thread = threading.Thread(
+            target=self._worker_wrapper,
+            args=(job_id, task_func, args, job_kwargs, job_type, db_job_id),
+            daemon=True,
+        )
+        thread.start()
+
+        return job_id
+
+    def _register_pending_job(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
         with self._lock:
             self._jobs[job_id] = {
                 "id": job_id,
@@ -47,121 +63,121 @@ class JobManager:
                 "error": None,
                 "created_at": time.time(),
                 "cancel_requested": False,
-                # optional mapping to external DB job id
-                "db_job_id": kwargs.get("db_job_id") if isinstance(kwargs, dict) else None,
+                "db_job_id": db_job_id,
             }
 
-        # Persist DB record for downloads (stable id may be provided via kwargs)
-        db_job_id = kwargs.get("db_job_id") if isinstance(kwargs, dict) else None
+    def _worker_wrapper(
+        self,
+        job_id: str,
+        task_func: Callable,
+        args: tuple,
+        job_kwargs: dict[str, Any],
+        job_type: str,
+        db_job_id: str | None,
+    ) -> None:
+        completed_successfully = False
+        self._inject_worker_callbacks(job_id, job_kwargs, job_type, db_job_id)
+        self._mark_running(job_id, job_type, db_job_id)
+
         try:
-            if job_type == "download":
-                # Delegate to helper to keep this function concise
-                self._maybe_create_db_record(job_id, db_job_id, kwargs)
-        except Exception:
-            logger.exception("Failed to record download job %s in vault DB", db_job_id or job_id)
+            result = task_func(*args, **job_kwargs)
+            self._mark_success(job_id, result, job_type, db_job_id)
+            completed_successfully = True
+        except Exception as exc:
+            self._mark_failure(job_id, exc, job_type, db_job_id)
+        finally:
+            self._finalize_incomplete_download(job_id, job_type, db_job_id, completed_successfully)
 
-        def worker_wrapper():
-            # Ensure we mark job state in DB and in-memory reliably even on crash
-            completed_successfully = False
+    def _inject_worker_callbacks(
+        self,
+        job_id: str,
+        job_kwargs: dict[str, Any],
+        job_type: str,
+        db_job_id: str | None,
+    ) -> None:
+        if "progress_callback" not in job_kwargs:
+            job_kwargs["progress_callback"] = self._build_progress_callback(job_id, job_type, db_job_id)
+        if "should_cancel" not in job_kwargs:
+            job_kwargs["should_cancel"] = lambda: self.is_cancel_requested(job_id)
 
-            # Progress callback injector
-            def update_progress(current, total, msg=None):
-                try:
-                    self.update_job(
-                        job_id,
-                        progress=current / total,
-                        message=msg or f"Processing {current}/{total}",
-                    )
-                except Exception:
-                    logger.debug("Failed to update in-memory job progress for %s", job_id, exc_info=True)
-
-                # Update DB progress if available
-                try:
-                    if job_type == "download":
-                        self._update_db_safe(db_job_id or job_id, status="running", current=current, total=total)
-                except Exception:
-                    logger.debug("Failed to update vault DB progress for %s", db_job_id or job_id, exc_info=True)
-
-            # Inject progress callback if the function accepts it
-            # We assume task_func can accept 'progress_callback' kwarg
-            if "progress_callback" not in kwargs:
-                kwargs["progress_callback"] = update_progress
-
-            # Inject a cancel-check callable so task can cooperatively stop
-            def _cancel_check():
-                with self._lock:
-                    return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
-
-            if "should_cancel" not in kwargs:
-                kwargs["should_cancel"] = _cancel_check
-
-            # Mark running in-memory and in DB
-            with self._lock:
-                self._jobs[job_id]["status"] = "running"
-
-            if job_type == "download":
-                try:
-                    self._update_db_safe(db_job_id or job_id, status="running")
-                except Exception:
-                    logger.debug("_update_db_safe failed to mark running for %s", db_job_id or job_id, exc_info=True)
-
+    def _build_progress_callback(self, job_id: str, job_type: str, db_job_id: str | None) -> Callable:
+        def update_progress(current, total, msg=None):
             try:
-                result = task_func(*args, **kwargs)
+                self.update_job(
+                    job_id,
+                    progress=current / total,
+                    message=msg or f"Processing {current}/{total}",
+                )
+            except Exception:
+                logger.debug("Failed to update in-memory job progress for %s", job_id, exc_info=True)
 
-                # mark DB completed first so UI polling sees DB final state
-                if job_type == "download":
-                    try:
-                        self._update_db_safe(db_job_id or job_id, status="completed")
-                    except Exception:
-                        logger.exception("Failed to mark job completed in vault DB: %s", db_job_id or job_id)
+            if job_type != "download":
+                return
+            try:
+                self._update_db_safe(db_job_id or job_id, status="running", current=current, total=total)
+            except Exception:
+                logger.debug("Failed to update vault DB progress for %s", db_job_id or job_id, exc_info=True)
 
-                with self._lock:
-                    self._jobs[job_id]["status"] = "completed"
-                    self._jobs[job_id]["progress"] = 1.0
-                    self._jobs[job_id]["message"] = "Done"
-                    self._jobs[job_id]["result"] = result
+        return update_progress
 
-                completed_successfully = True
+    def _mark_running(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
+        with self._lock:
+            self._jobs[job_id]["status"] = "running"
 
-            except Exception as e:
-                logger.exception("Job %s failed", job_id)
-                with self._lock:
-                    self._jobs[job_id]["status"] = "failed"
-                    self._jobs[job_id]["error"] = str(e)
-                    self._jobs[job_id]["message"] = f"Error: {e}"
+        if job_type != "download":
+            return
+        try:
+            self._update_db_safe(db_job_id or job_id, status="running")
+        except Exception:
+            logger.debug("_update_db_safe failed to mark running for %s", db_job_id or job_id, exc_info=True)
 
-                try:
-                    if job_type == "download":
-                        self._update_db_safe(db_job_id or job_id, status="error", error=str(e))
-                except Exception:
-                    logger.exception("Failed to write failure to vault DB for %s", db_job_id or job_id)
+    def _mark_success(self, job_id: str, result: Any, job_type: str, db_job_id: str | None) -> None:
+        if job_type == "download":
+            try:
+                self._update_db_safe(db_job_id or job_id, status="completed")
+            except Exception:
+                logger.exception("Failed to mark job completed in vault DB: %s", db_job_id or job_id)
 
-            finally:
-                # If the thread died without marking completed, ensure DB shows failure
-                try:
-                    if job_type == "download" and not completed_successfully:
-                        # If cancellation was requested, mark cancelled, else error
-                        with self._lock:
-                            cancel = bool(self._jobs.get(job_id, {}).get("cancel_requested"))
-                        final_error = self._jobs.get(job_id, {}).get("message")
-                        if cancel:
-                            final_error = "Cancelled by user"
-                        try:
-                            self._update_db_safe(
-                                db_job_id or job_id,
-                                status="error",
-                                error=final_error,
-                                current=self._jobs.get(job_id, {}).get("progress", 0),
-                            )
-                        except Exception:
-                            logger.exception("Failed to write final state for %s", db_job_id or job_id)
-                except Exception:
-                    logger.exception("Failed to perform finally DB update for job %s", job_id)
+        with self._lock:
+            self._jobs[job_id]["status"] = "completed"
+            self._jobs[job_id]["progress"] = 1.0
+            self._jobs[job_id]["message"] = "Done"
+            self._jobs[job_id]["result"] = result
 
-        thread = threading.Thread(target=worker_wrapper, daemon=True)
-        thread.start()
+    def _mark_failure(self, job_id: str, exc: Exception, job_type: str, db_job_id: str | None) -> None:
+        logger.exception("Job %s failed", job_id)
+        with self._lock:
+            self._jobs[job_id]["status"] = "failed"
+            self._jobs[job_id]["error"] = str(exc)
+            self._jobs[job_id]["message"] = f"Error: {exc}"
 
-        return job_id
+        if job_type == "download":
+            try:
+                self._update_db_safe(db_job_id or job_id, status="error", error=str(exc))
+            except Exception:
+                logger.exception("Failed to write failure to vault DB for %s", db_job_id or job_id)
+
+    def _finalize_incomplete_download(
+        self,
+        job_id: str,
+        job_type: str,
+        db_job_id: str | None,
+        completed_successfully: bool,
+    ) -> None:
+        if job_type != "download" or completed_successfully:
+            return
+
+        try:
+            snapshot = self.get_job(job_id) or {}
+            final_error = "Cancelled by user" if snapshot.get("cancel_requested") else snapshot.get("message")
+            self._update_db_safe(
+                db_job_id or job_id,
+                status="error",
+                error=final_error,
+                current=snapshot.get("progress", 0),
+            )
+        except Exception:
+            logger.exception("Failed to write final state for %s", db_job_id or job_id)
 
     # --- DB helper methods to keep complexity low ---
     def _maybe_create_db_record(self, job_id: str, db_job_id: str | None, kwargs: dict | Any) -> None:

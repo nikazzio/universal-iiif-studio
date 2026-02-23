@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Final
 
 import requests
@@ -28,6 +29,17 @@ REAL_BROWSER_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Connection": "keep-alive",
 }
+
+_VATICAN_NUMERIC_COLLECTIONS: Final[list[str]] = [
+    "Urb.lat",
+    "Vat.lat",
+    "Pal.lat",
+    "Reg.lat",
+    "Barb.lat",
+    "Vat.gr",
+    "Pal.gr",
+]
+_VATICAN_TEXT_PREFIXES: Final[list[str]] = ["Urb.lat.", "Vat.lat.", "Pal.lat.", "Reg.lat.", "Barb.lat."]
 
 
 def smart_search(input_text: str) -> list[SearchResult]:
@@ -97,7 +109,7 @@ def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | N
 
 def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
     """Search Gallica SRU by document identifier (ARK ID).
-    
+
     This is more reliable than fetching the manifest directly as it uses
     the official SRU API instead of the IIIF endpoint which gets blocked.
     """
@@ -207,56 +219,73 @@ def search_vatican(query: str, max_results: int = 5) -> list[SearchResult]:
     """
     from .vatican import VaticanResolver, normalize_shelfmark
 
-    query = (query or "").strip()
-    if not query:
+    normalized_query = (query or "").strip()
+    if not normalized_query:
         return []
 
     resolver = VaticanResolver()
     results: list[SearchResult] = []
 
-    # 1. Prima prova a normalizzare direttamente (caso: input già valido)
-    try:
-        normalized = normalize_shelfmark(query)
-        manifest_url = f"https://digi.vatlib.it/iiif/{normalized}/manifest.json"
-        result = _verify_vatican_manifest(manifest_url, normalized, resolver)
-        if result:
-            results.append(result)
-    except Exception:
-        pass  # Input non è una segnatura valida, proviamo varianti
+    _append_normalized_candidate(results, normalized_query, resolver, normalize_shelfmark, max_results)
+    if len(results) >= max_results:
+        return results[:max_results]
 
-    # 2. Se l'input sembra un numero, genera varianti per fondi comuni
-    if query.isdigit() and len(results) < max_results:
-        collections = ["Urb.lat", "Vat.lat", "Pal.lat", "Reg.lat", "Barb.lat", "Vat.gr", "Pal.gr"]
-        for coll in collections:
-            if len(results) >= max_results:
-                break
-            ms_id = f"MSS_{coll}.{query}"
-            manifest_url = f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json"
-            result = _verify_vatican_manifest(manifest_url, ms_id, resolver)
-            if result:
-                results.append(result)
-
-    # 3. Se l'input contiene lettere, prova a interpretarlo come segnatura parziale
-    if not query.isdigit() and len(results) < max_results:
-        # Prova varianti con prefissi comuni
-        prefixes = ["Urb.lat.", "Vat.lat.", "Pal.lat.", "Reg.lat.", "Barb.lat."]
-        for prefix in prefixes:
-            if len(results) >= max_results:
-                break
-            # Se query contiene già un pattern simile, skip
-            if any(p.lower().replace(".", "") in query.lower().replace(".", " ").replace(".", "") for p in prefixes):
-                break
-            # Estrai numero se presente
-            import re
-            nums = re.findall(r"\d+", query)
-            if nums:
-                ms_id = f"MSS_{prefix}{nums[0]}"
-                manifest_url = f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json"
-                result = _verify_vatican_manifest(manifest_url, ms_id, resolver)
-                if result:
-                    results.append(result)
+    if normalized_query.isdigit():
+        candidate_ids = _build_numeric_candidate_ids(normalized_query)
+    else:
+        candidate_ids = _build_text_candidate_ids(normalized_query)
+    _append_candidate_results(results, candidate_ids, resolver, max_results)
 
     return results
+
+
+def _append_normalized_candidate(results, query: str, resolver, normalize_shelfmark, max_results: int) -> None:
+    if len(results) >= max_results:
+        return
+    try:
+        normalized = normalize_shelfmark(query)
+    except Exception as exc:
+        logger.debug("Failed to normalize Vatican input %r: %s", query, exc, exc_info=True)
+        return
+
+    manifest_url = _build_vatican_manifest_url(normalized)
+    if result := _verify_vatican_manifest(manifest_url, normalized, resolver):
+        results.append(result)
+
+
+def _build_numeric_candidate_ids(query: str) -> list[str]:
+    return [f"MSS_{collection}.{query}" for collection in _VATICAN_NUMERIC_COLLECTIONS]
+
+
+def _build_text_candidate_ids(query: str) -> list[str]:
+    if _query_contains_known_prefix(query):
+        return []
+    if not (first_number := _extract_first_number(query)):
+        return []
+    return [f"MSS_{prefix}{first_number}" for prefix in _VATICAN_TEXT_PREFIXES]
+
+
+def _query_contains_known_prefix(query: str) -> bool:
+    compact_query = query.lower().replace(".", "").replace(" ", "")
+    return any(prefix.lower().replace(".", "") in compact_query for prefix in _VATICAN_TEXT_PREFIXES)
+
+
+def _extract_first_number(query: str) -> str | None:
+    matches = re.findall(r"\d+", query)
+    return matches[0] if matches else None
+
+
+def _append_candidate_results(results, candidate_ids: list[str], resolver, max_results: int) -> None:
+    for candidate_id in candidate_ids:
+        if len(results) >= max_results:
+            return
+        manifest_url = _build_vatican_manifest_url(candidate_id)
+        if result := _verify_vatican_manifest(manifest_url, candidate_id, resolver):
+            results.append(result)
+
+
+def _build_vatican_manifest_url(ms_id: str) -> str:
+    return f"https://digi.vatlib.it/iiif/{ms_id}/manifest.json"
 
 
 def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchResult | None:
@@ -313,4 +342,12 @@ def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchR
         return None
 
 
-__all__ = ["resolve_shelfmark", "search_gallica", "search_gallica_by_id", "search_vatican", "get_manifest_details", "smart_search", "TIMEOUT_SECONDS"]
+__all__ = [
+    "resolve_shelfmark",
+    "search_gallica",
+    "search_gallica_by_id",
+    "search_vatican",
+    "get_manifest_details",
+    "smart_search",
+    "TIMEOUT_SECONDS",
+]

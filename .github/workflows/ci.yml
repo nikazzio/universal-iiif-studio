@@ -3,15 +3,8 @@ name: CI
 on:
   push:
     branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - 'CHANGELOG.md'
-      - '.github/workflows/**'
   pull_request:
     types: [opened, synchronize, reopened]
-    paths-ignore:
-      - '**.md'
-      - 'CHANGELOG.md'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -55,22 +48,7 @@ jobs:
         
     - name: Lint with Ruff
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-        else
-          BASE_SHA="${{ github.event.before }}"
-        fi
-
-        CHANGED_PY="$(git diff --name-only "$BASE_SHA" "${{ github.sha }}" -- '*.py' || true)"
-        if [ -z "$CHANGED_PY" ]; then
-          echo "No changed Python files detected; skipping Ruff."
-          exit 0
-        fi
-
-        echo "Running Ruff on changed files:"
-        echo "$CHANGED_PY"
-        # shellcheck disable=SC2086
-        ruff check $CHANGED_PY
+        ruff check .
       continue-on-error: false
         
     - name: Run tests
