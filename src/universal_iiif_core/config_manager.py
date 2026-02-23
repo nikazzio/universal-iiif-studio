@@ -43,7 +43,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         },
         "defaults": {
             "default_library": "Vaticana (BAV)",
-            "auto_generate_pdf": True,
             "preferred_ocr_engine": "openai",
         },
         "ui": {
@@ -64,6 +63,8 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         "pdf": {
             "viewer_dpi": 150,
             "ocr_dpi": 300,
+            "prefer_native_pdf": True,
+            "create_pdf_from_images": False,
             "cover": {
                 "logo_path": "",
                 "curator": "",

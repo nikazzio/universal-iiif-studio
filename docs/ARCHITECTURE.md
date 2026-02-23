@@ -49,9 +49,9 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 When a download starts, the background worker strictly follows this decision tree:
 
 1. **Check Native PDF**: Does the manifest provide a download link?
-    * **YES**: Download the PDF. Then, **EXTRACT** pages to high-quality JPGs in `scans/` (Critical for Studio compatibility).
+    * **YES + `settings.pdf.prefer_native_pdf=true`**: Download the PDF. Then, **EXTRACT** pages to high-quality JPGs in `scans/` (Critical for Studio compatibility).
     * **NO**: Fallback to downloading IIIF tiles/canvases one by one into `scans/`.
-2. **Auto-PDF**: If (and only if) no native PDF was found **AND** `auto_generate_pdf` is true in config, generate a PDF from the images.
+2. **Optional Compiled PDF**: If (and only if) no native PDF was used **AND** `settings.pdf.create_pdf_from_images=true`, generate a PDF from the downloaded images.
 3. **Completion**: Update DB status to `completed`.
 
 ### 3. Studio & OCR
@@ -82,6 +82,26 @@ When a download starts, the background worker strictly follows this decision tre
 
 ## Local Data & Cleanup
 
-- Runtime directories (`downloads/`, `data/local/*`, `logs/`, `temp_images/`) vengono risolti attraverso `universal_iiif_core.config_manager` e sono sempre considerati rigenerabili. Non includere asset di configurazione/chiavi in queste cartelle.
-- Lo script `scripts/clean_user_data.py` usa il manager per individuare i percorsi e fornisce flag `--dry-run`, `--yes`, `--include-data-local` e `--extra` per ripulire i dati senza mai toccare `config.json`.
-- Chi esegue build, test o debugging estesi dovrebbe pulire i dati (passi consigliati: `--dry-run`, quindi `--yes`, `pytest tests/`, `ruff check . --select C901`, `ruff format .`) e documentare ogni nuova directory runtime in `.gitignore`.
+- Runtime directories (`downloads/`, `data/local/*`, `logs/`, `temp_images/`) are resolved via `universal_iiif_core.config_manager` and treated as regenerable data. Do not store config assets or secrets in these directories.
+- `scripts/clean_user_data.py` uses the manager to resolve paths and supports `--dry-run`, `--yes`, `--include-data-local`, and `--extra` while preserving `config.json`.
+- For full build/test/debug cycles, clean runtime data first (recommended: `--dry-run`, then `--yes`, `pytest tests/`, `ruff check . --select C901`, `ruff format .`) and register new runtime paths in `.gitignore`.
+
+## Engineering Rationale and Governance
+
+This section centralizes design rationale that is intentionally excluded from `AGENTS.md`.
+
+1. **`src/`-only source layout**
+   - Keeps import behavior explicit and avoids root-level script drift.
+   - Reduces ambiguity between package code and tooling scripts.
+2. **ConfigManager as single runtime path/config authority**
+   - Prevents path fragmentation and hidden assumptions in handlers/services.
+   - Ensures local/user data locations are environment-resolved consistently.
+3. **Scans-first runtime model**
+   - `scans/` remains the operational source for viewer, OCR, and crop tools.
+   - Native PDF support is an ingestion strategy, not a runtime storage replacement.
+4. **Complexity ceiling (C901 <= 10)**
+   - Enforces decomposition into testable single-purpose helpers.
+   - Reduces regression risk in flow-heavy services (download, OCR, resolvers).
+5. **Procedural policy split**
+   - `AGENTS.md`: procedural rules and required command flows only.
+   - `docs/ARCHITECTURE.md`: rationale, tradeoffs, and system-level decisions.

@@ -1,47 +1,65 @@
 # Changelog
 
-Tutte le modifiche notevoli a questo progetto saranno documentate in questo file.
+All notable changes to this project are documented in this file.
+
+## Changelog Format Policy
+
+- Every release section must use this heading format: `## [vX.Y.Z] - YYYY-MM-DD`.
+- Every release must include all three sections:
+  - `### Added`
+  - `### Changed`
+  - `### Fixed`
+- Every non-empty bullet should reference an issue or PR number using the `(#123)` suffix.
+- If a section has no items, use `- None.`
 
 ## [v0.6.0] - 2026-01-23
 
 ### Added
 
-- Feat snippet sqlite (#6)
+- Snippet SQLite feature set (#6).
+
+### Changed
+
+- None.
 
 ### Fixed
 
-- Move runtime data directory from `var/` to `data/local/` and serve snippets from `/assets/snippets/` (chore/docs) (#15)
+- Moved runtime data from `var/` to `data/local/` and served snippets from `/assets/snippets/` (chore/docs) (#15).
 
 ## [v0.5.0] - 2026-01-19
 
 ### Added
 
-- **Rich Text Editor**: Sostituito il vecchio editor di testo con un editor RTF avanzato (basato su un wrapper Quill dedicato).
-  - Supporto per formattazione (Grassetto, Corsivo, Sottolineato).
-  - Elenchi puntati e numerati.
-  - Apici e pedici.
-  - Salvataggio ibrido (HTML per visualizzazione, Plain Text per indicizzazione).
-- **History Restoration**: Migliorato il ripristino dalla cronologia per supportare correttamente il formato RTF.
+- **Rich Text Editor**: Replaced the legacy plain text editor with an advanced RTE based on a dedicated Quill wrapper (#4).
+  - Text formatting support (bold, italic, underline).
+  - Bullet and numbered lists.
+  - Superscript and subscript.
+  - Hybrid save mode (HTML for rendering, plain text for indexing).
+- **History Restoration**: Improved history restore logic to correctly handle RTE content (#4).
 
 ### Changed
 
-- **Logging**: Refactoring completo del sistema di logging. Ora utilizzo un setup centralizzato (`get_logger`) invece di chiamate dirette, migliorando la leggibilità dei log e il debug.
-- **Config**: Migliorata la gestione delle dipendenze e degli import per evitare conflitti circolari.
+- **Logging**: Refactored logging to use centralized setup (`get_logger`) instead of scattered direct calls, improving debuggability and consistency (#4).
+- **Config**: Improved dependency/import handling to reduce circular import conflicts (#4).
 
 ### Fixed
 
-- Risolti conflitti di merge critici durante l'integrazione del branch `add-rich-text`.
-- Corretti bug minori nella gestione degli stati di sessione della UI legacy durante il salvataggio.
+- Resolved critical merge conflicts during integration of branch `add-rich-text` (#4).
+- Fixed minor issues in legacy UI session-state handling during save operations (#4).
 
-## [v0.4.0]
+## [v0.4.0] - 2026-01-19
 
 ### Added
 
-- **Import PDF Locale**: Funzionalità per importare file PDF direttamente nella cartella `downloads/Local`, con estrazione automatica delle immagini.
-- **UI Rimasterizzata**: Nuovo layout per lo Studio Page con sidebar collassabile e navigazione migliorata.
-- **Ricerca Globale**: Nuova pagina per cercare stringhe di testo attraverso tutte le trascrizioni salvate.
+- **Local PDF Import**: Added local PDF import into `downloads/Local` with automatic page image extraction (#3).
+- **Studio UI Remaster**: Introduced a redesigned Studio page with collapsible sidebar and improved navigation (#3).
+- **Global Search**: Added a page to search text across all saved transcriptions (#3).
 
 ### Changed
 
-- Migliorato il sistema di notifiche UI.
-- Ottimizzazione performance per il caricamento di immagini ad alta risoluzione.
+- Improved UI notification handling (#3).
+- Improved performance for high-resolution image loading (#3).
+
+### Fixed
+
+- None.

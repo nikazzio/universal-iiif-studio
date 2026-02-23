@@ -19,9 +19,10 @@ from ..config_manager import get_config_manager
 from ..export_studio import build_professional_pdf
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
 from ..logger import get_download_logger
+from ..pdf_utils import convert_pdf_to_images
 from ..services.storage.vault_manager import VaultManager
 from ..utils import DEFAULT_HEADERS, clean_dir, ensure_dir, get_json, save_json
-from .download_helpers import derive_identifier, sanitize_filename
+from .download_helpers import derive_identifier
 
 # Constants
 MAX_DOWNLOAD_RETRIES = 5
@@ -115,9 +116,7 @@ class PageDownloader:
 
         iiif_q = self.cm.get_setting("images.iiif_quality", "default")
         strategy = self._get_strategy()
-        urls_to_try = [
-            f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy
-        ]
+        urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
 
         downloaded = self.downloader._download_with_retries(
             urls_to_try, self.filename, self.canvas, self.index, base_url
@@ -223,7 +222,7 @@ class IIIFDownloader:
         # UNIFIED IDENTIFIER: same value for folder name, DB id, and internal reference
         # Priority: output_folder_name (from UI) > extracted from URL > sanitized label
         identifier = derive_identifier(self.manifest_url, output_folder_name, self.library, self.label)
-        
+
         # ms_id = identifier (ATOMIC: folder = DB key = internal ID)
         self.ms_id = identifier
         self.logger = get_download_logger(self.ms_id)
@@ -349,7 +348,6 @@ class IIIFDownloader:
         except Exception:
             self.logger.debug("Failed to download page %s", index, exc_info=True)
             return None
-
 
     def _download_with_retries(
         self,
@@ -571,6 +569,86 @@ class IIIFDownloader:
             self.logger.debug("Native PDF download failed", exc_info=True)
             return False
 
+    def _should_prefer_native_pdf(self) -> bool:
+        try:
+            return bool(self.cm.get_setting("pdf.prefer_native_pdf", True))
+        except (OSError, ValueError, TypeError):
+            return True
+
+    def _should_create_pdf_from_images(self) -> bool:
+        try:
+            return bool(self.cm.get_setting("pdf.create_pdf_from_images", False))
+        except (OSError, ValueError, TypeError):
+            return False
+
+    def _extract_pages_from_pdf(self, pdf_path: Path, progress_callback: Callable[[int, int], None] | None = None) -> bool:
+        self._clear_existing_scans()
+        viewer_dpi = int(self.cm.get_setting("pdf.viewer_dpi", 150) or 150)
+        viewer_quality = int(self.cm.get_setting("images.viewer_quality", 90) or 90)
+        ok, message = convert_pdf_to_images(
+            pdf_path=pdf_path,
+            output_dir=self.scans_dir,
+            progress_callback=progress_callback,
+            dpi=viewer_dpi,
+            jpeg_quality=viewer_quality,
+        )
+        if ok:
+            self.logger.info("Native PDF extraction completed: %s", message)
+            return True
+        self.logger.warning("Native PDF extraction failed: %s", message)
+        self._clear_existing_scans()
+        return False
+
+    def _clear_existing_scans(self) -> None:
+        for scan_file in self.scans_dir.glob("pag_*.jpg"):
+            with suppress(OSError):
+                scan_file.unlink()
+
+    def _collect_scan_stats(self, source_label: str) -> list[dict[str, Any]]:
+        page_stats: list[dict[str, Any]] = []
+        for index, image_path in enumerate(sorted(self.scans_dir.glob("pag_*.jpg"))):
+            try:
+                with Image.open(image_path) as img:
+                    width, height = img.size
+                page_stats.append(
+                    {
+                        "page_index": index,
+                        "filename": image_path.name,
+                        "original_url": source_label,
+                        "thumbnail_url": None,
+                        "size_bytes": image_path.stat().st_size,
+                        "width": width,
+                        "height": height,
+                        "resolution_category": "High" if width > 2500 else "Medium",
+                    }
+                )
+            except Exception:
+                self.logger.debug("Failed to collect scan stats for %s", image_path, exc_info=True)
+        return page_stats
+
+    def _try_native_pdf_flow(self, native_pdf_url: str, progress_callback: Callable[[int, int], None] | None) -> bool:
+        self.logger.info("Manifest advertises native PDF: %s", native_pdf_url)
+        if not self.download_native_pdf(native_pdf_url):
+            self.logger.warning("Native PDF download failed; falling back to canvas image download.")
+            return False
+
+        if not self._extract_pages_from_pdf(self.output_path, progress_callback=progress_callback):
+            self.logger.warning("Native PDF extraction failed; falling back to canvas image download.")
+            return False
+
+        page_stats = self._collect_scan_stats(f"{native_pdf_url} (native-pdf)")
+        self._store_page_stats(page_stats)
+        final_files = [str(path) for path in sorted(self.scans_dir.glob("pag_*.jpg"))]
+        self.vault.upsert_manuscript(self.ms_id, status="complete", downloaded_canvases=len(final_files))
+        try:
+            clean_dir(self.temp_dir)
+        except Exception:
+            self.logger.debug("Failed to clean temp dir %s", self.temp_dir, exc_info=True)
+
+        if final_files and self.ocr_model:
+            self.run_batch_ocr(final_files, self.ocr_model)
+        return bool(final_files)
+
     def run(
         self,
         progress_callback: Callable[[int, int], None] | None = None,
@@ -596,15 +674,18 @@ class IIIFDownloader:
         if self.clean_cache:
             clean_dir(self.temp_dir)
 
-        native_pdf_url = self.get_pdf_url()
-        should_download_native_pdf = self._should_download_native_pdf()
-        if native_pdf_url:
-            self.logger.info("Manifest advertises native PDF: %s", native_pdf_url)
-        else:
-            self.logger.info("No native PDF rendering found; proceeding canvas-by-canvas download.")
-
         # Prefer runtime provided callback over instance attribute
         cb = progress_callback or self.progress_callback
+
+        native_pdf_url = self.get_pdf_url()
+        should_prefer_native_pdf = self._should_prefer_native_pdf()
+        if native_pdf_url and should_prefer_native_pdf:
+            if self._try_native_pdf_flow(native_pdf_url, progress_callback=cb):
+                return
+        elif native_pdf_url and not should_prefer_native_pdf:
+            self.logger.info("Native PDF found but preference disabled; proceeding canvas-by-canvas download.")
+        else:
+            self.logger.info("No native PDF rendering found; proceeding canvas-by-canvas download.")
 
         downloaded, page_stats = self._download_canvases(canvases, progress_callback=cb, should_cancel=should_cancel)
         self._store_page_stats(page_stats)
@@ -616,21 +697,11 @@ class IIIFDownloader:
             self.vault.update_status(self.ms_id, "error", str(exc))
             raise
 
-        if native_pdf_url and should_download_native_pdf:
-            self.download_native_pdf(native_pdf_url)
-
-        if should_download_native_pdf and final_files:
+        if self._should_create_pdf_from_images() and final_files:
             self.create_pdf(files=final_files)
 
         if final_files and self.ocr_model:
             self.run_batch_ocr(final_files, self.ocr_model)
-
-    def _should_download_native_pdf(self):
-        try:
-            cm = get_config_manager()
-            return bool(cm.get_setting("defaults.auto_generate_pdf", True))
-        except (OSError, ValueError, TypeError):
-            return True
 
     def _download_canvases(
         self,

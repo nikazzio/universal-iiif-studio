@@ -1,69 +1,134 @@
-# 📜 Universal IIIF Downloader & Studio (v0.7.0)
+# Universal IIIF Downloader & Studio
 
-Uno strumento **professionale** e modulare per scaricare, organizzare e studiare manoscritti digitali.
-Combina un **Downloader Resiliente** (capace di aggirare blocchi WAF e assemblare immagini IIIF) con uno **Studio Digitale** basato su Web (FastHTML/HTMX) per l'analisi, la trascrizione assistita da AI e la gestione dei ritagli.
+[![CI](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/ci.yml)
+[![Release](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/release.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/release.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Lint: Ruff](https://img.shields.io/badge/lint-ruff-46a2f1?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
 
-## 📚 Documentazione Ufficiale
+Developer-focused toolkit for downloading IIIF manuscripts and working with them via:
+- a FastHTML/HTMX web studio (`iiif-studio`)
+- a command-line interface (`iiif-cli`)
 
-- **[Guida Utente](docs/DOCUMENTAZIONE.md)**: Manuale completo su configurazione, utilizzo e funzionalità.
-- **[Architettura](docs/ARCHITECTURE.md)**: Dettagli tecnici su Core, UI Layer, Resolvers e Flussi dati.
-- **[Changelog](CHANGELOG.md)**: Storico delle versioni e delle modifiche.
-
-> **Nuovo contributor?** Leggi prima `AGENTS.md` per capire coding guideline (Ruff C901), branch naming e la gestione dei dati di runtime.
-
----
-
-## 🚀 Nuove Funzionalità (v0.7)
-
-### 🛰️ Smart Discovery & "Golden Flow"
-
-Il sistema ora decide autonomamente la strategia migliore per ottenere la massima qualità:
-
-1. **Risoluzione Intelligente**: Incolla una segnatura sporca (es. `Urb. lat. 1779`) o un URL di Gallica/Oxford; il sistema normalizza l'input e trova il Manifest canonico.
-2. **Golden Flow**:
-   - Se esiste un **PDF Nativo**, lo scarica ed estrae le immagini ad alta risoluzione (HQ JPG) per lo studio.
-   - Se non esiste, scarica le **Tile IIIF** e le assembla.
-3. **Resilienza**: Il downloader imita un browser reale e gestisce compressioni avanzate (Brotli) per aggirare i blocchi IP delle biblioteche più severe (es. Gallica).
-
-### 🏛️ Studio Digitale (FastHTML)
-
-Un'interfaccia reattiva a pannelli, senza ricaricamenti pagina:
-
-- **Viewer**: Mirador integrato con Deep Zoom configurato per analisi paleografica.
-- **Visual Tab**: Filtri in tempo reale (Luminosità, Contrasto, Saturazione, Inversione) applicati via CSS.
-- **Editor**: Trascrizione con Markdown, salvataggio con calcolo delle differenze (Diff) e cronologia versionata.
-- **OCR Ibrido**: Esegui OCR su singola pagina usando **Kraken** (locale) o API Cloud (**GPT-4o, Claude 3.5, Google Vision**).
-
----
-
-## 📋 Requisiti
-
-- **Python 3.10+**
-- Nessuna dipendenza di sistema complessa (usa librerie pure-python e `PyMuPDF`).
-
-## 🔧 Installazione
+## Quickstart
 
 ```bash
-# 1. Clona il repository
-git clone [https://github.com/yourusername/universal-iiif.git](https://github.com/yourusername/universal-iiif.git)
-cd universal-iiif
-
-# 2. Crea ambiente virtuale
+git clone https://github.com/nikazzio/universal-iiif-downloader.git
+cd universal-iiif-downloader
 python3 -m venv .venv
-source .venv/bin/activate   # Linux/Mac
-# .venv\Scripts\activate    # Windows
-
-# 3. Installa il pacchetto
+source .venv/bin/activate
 pip install -e .
-
-```
-# (Opzionale) Dipendenze di sviluppo per test/linting
-pip install -r requirements-dev.txt
+iiif-studio
 ```
 
-### 🧹 Pulizia dei dati locali
+Open: `http://127.0.0.1:8000`
 
-- Prima di eseguire test completi o PR su nuovi resolver/storage, esegui `python scripts/clean_user_data.py --dry-run` per verificare cosa viene rimosso.
-- Usa `python scripts/clean_user_data.py --yes` per cancellare i percorsi `downloads/`, `data/local/temp_images`, `data/local/logs` e ogni directory aggiuntiva dichiarata tramite `universal_iiif_core.config_manager`; aggiungi `--include-data-local` solo se ti serve rigenerare anche modelli/snippet.
-- Se aggiungi nuove cartelle di runtime, aggiornane `.gitignore` e registra il percorso solo passando dalla `ConfigManager`, mai hardcodearle.
-- Dopo la pulizia, esegui `pytest tests/`, `ruff check . --select C901` e `ruff format .` per restare allineato alle regole descritte in `AGENTS.md`.
+Smoke test CLI:
+
+```bash
+iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
+```
+
+## Features
+
+- IIIF manifest resolution and page download pipeline
+- Native PDF-first workflow (configurable)
+- Canvas/image fallback with optional compiled PDF generation
+- Local Studio UI for viewing, OCR workflows, and transcription editing
+- `src/` package layout with separated `core`, `ui`, and `cli` modules
+
+## Run Modes
+
+### Web Studio
+
+```bash
+iiif-studio
+```
+
+Alternative entrypoint:
+
+```bash
+python3 src/studio_app.py
+```
+
+### CLI
+
+```bash
+iiif-cli "<manifest-url>"
+```
+
+## Configuration
+
+Runtime configuration is read from `config.json` through `universal_iiif_core.config_manager`.
+
+Key PDF settings:
+
+```json
+{
+  "settings": {
+    "pdf": {
+      "viewer_dpi": 150,
+      "ocr_dpi": 300,
+      "prefer_native_pdf": true,
+      "create_pdf_from_images": false
+    }
+  }
+}
+```
+
+Meaning:
+- `prefer_native_pdf`: if manifest `rendering` contains a native PDF, native flow is attempted first
+- `create_pdf_from_images`: when native PDF is not used, build a PDF from downloaded images only if `true`
+- `viewer_dpi`: DPI used when extracting JPG pages from native PDF for the web viewer
+- `ocr_dpi`: OCR-oriented DPI setting
+
+## Output Layout
+
+For each manuscript:
+- `downloads/<Library>/<DocumentId>/scans/`: page images (`pag_XXXX.jpg`)
+- `downloads/<Library>/<DocumentId>/pdf/`: native and/or compiled PDF outputs
+- `downloads/<Library>/<DocumentId>/data/`: metadata and processing JSON artifacts
+
+All runtime paths are resolved via `ConfigManager`.
+
+## Dev Commands
+
+```bash
+pytest tests/
+ruff check . --select C901
+ruff format .
+```
+
+## Troubleshooting
+
+`iiif-studio: command not found`
+- Ensure virtualenv is active and reinstall editable package:
+  ```bash
+  source .venv/bin/activate
+  pip install -e .
+  ```
+
+`ruff: command not found`
+- Install dev dependencies:
+  ```bash
+  pip install -r requirements-dev.txt
+  ```
+
+`Address already in use` on startup
+- Port `8000` is already in use. Stop the conflicting process, then rerun `iiif-studio`.
+
+Studio loads but pages are missing
+- Check `downloads/<Library>/<DocumentId>/scans/` for `pag_XXXX.jpg` files.
+- Verify `config.json` PDF flags (`prefer_native_pdf`, `create_pdf_from_images`).
+
+`config.json` changes not applied
+- Validate JSON shape under `settings`.
+- Restart the running process.
+- Compare with `config.example.json`.
+
+## Documentation
+
+- User/feature guide: `docs/DOCUMENTAZIONE.md`
+- Architecture: `docs/ARCHITECTURE.md`
+- Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
+- Contributor/agent rules: `AGENTS.md`

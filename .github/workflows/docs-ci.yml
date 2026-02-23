@@ -1,0 +1,75 @@
+name: Docs CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.md'
+      - '.github/workflows/docs-ci.yml'
+      - '.markdownlint.json'
+      - '.lycheeignore'
+      - 'scripts/check_docs_language.py'
+      - 'scripts/check_changelog_policy.py'
+  push:
+    branches: ["main"]
+    paths:
+      - '**/*.md'
+      - '.github/workflows/docs-ci.yml'
+      - '.markdownlint.json'
+      - '.lycheeignore'
+      - 'scripts/check_docs_language.py'
+      - 'scripts/check_changelog_policy.py'
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Markdown lint
+        run: |
+          npm install -g markdownlint-cli
+          markdownlint "**/*.md"
+
+      - name: Link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          fail: true
+          args: >-
+            --no-progress
+            --verbose
+            --max-retries 3
+            --retry-wait-time 2
+            --timeout 20
+            --exclude-mail
+            --exclude-path .venv/**
+            --exclude-path node_modules/**
+            --exclude-file .lycheeignore
+            **/*.md
+
+      - name: Check docs language consistency
+        run: |
+          python scripts/check_docs_language.py
+
+      - name: Check changelog policy
+        run: |
+          python scripts/check_changelog_policy.py

@@ -12,9 +12,20 @@ Il file `config.json` è la singola fonte di verità.
 
 ### ⚙️ Sistema e Download
 
-* `settings.defaults.auto_generate_pdf`: **(Nuovo)** Se `true`, genera un PDF dalle immagini scaricate *solo se* la biblioteca non fornisce già un PDF ufficiale.
 * `settings.system.download_workers`: Numero di thread per il download parallelo delle immagini (default: 4).
 * `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
+
+### 📄 Opzioni PDF (Core + UI Config)
+
+* `settings.pdf.prefer_native_pdf` (default: `true`): se il manifest IIIF espone un PDF nativo (`rendering`), il downloader lo usa come sorgente primaria.
+* `settings.pdf.create_pdf_from_images` (default: `false`): se non viene usato un PDF nativo, crea un PDF compilato dalle immagini scaricate.
+* `settings.pdf.viewer_dpi` (default: `150`): DPI usati per estrarre le immagini JPG dal PDF nativo per il viewer.
+* `settings.pdf.ocr_dpi` (default: `300`): DPI consigliati per pipeline OCR.
+
+Nel pannello **Settings > OCR & PDF** trovi gli stessi controlli con help text esplicativi:
+* **Prefer Native PDF**: priorita al PDF della biblioteca se disponibile.
+* **Create PDF from Images**: attiva/disattiva la generazione del PDF compilato in fallback.
+* **PDF Viewer DPI** e **PDF OCR DPI**: qualità estrazione/processing.
 
 ### 🤖 Motori OCR
 
@@ -44,9 +55,9 @@ Il campo di ricerca accetta input "sporchi". Il sistema normalizza automaticamen
 Quando avvii un download, il sistema decide la strategia migliore:
 
 1. **Controllo PDF Nativo**: Cerca se la biblioteca offre un PDF ufficiale.
-   * **Se c'è**: Lo scarica e **estrae automaticamente** le pagine in immagini JPG ad alta risoluzione (nella cartella `scans/`). Questo garantisce che lo Studio funzioni anche con i PDF.
+   * **Se c'è** e `settings.pdf.prefer_native_pdf=true`: lo scarica e **estrae automaticamente** le pagine in immagini JPG ad alta risoluzione (nella cartella `scans/`). Questo garantisce che lo Studio funzioni anche con i PDF.
    * **Se non c'è**: Scarica le immagini dai server IIIF una per una.
-2. **Generazione PDF**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo se `auto_generate_pdf` è attivo.
+2. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
 
 ### 🛡️ Resilienza di Rete
 

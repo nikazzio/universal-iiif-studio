@@ -26,8 +26,7 @@
         },
         "defaults": {
             "default_library": "Vaticana",
-            "preferred_ocr_engine": "openai",
-            "auto_generate_pdf": false
+            "preferred_ocr_engine": "openai"
         },
         "ui": {
             "theme_color": "#FF4B4B",
@@ -51,7 +50,9 @@
         },
         "pdf": {
             "viewer_dpi": 150,
-            "ocr_dpi": 300
+            "ocr_dpi": 300,
+            "prefer_native_pdf": true,
+            "create_pdf_from_images": false
         },
         "housekeeping": {
             "temp_cleanup_days": 7
