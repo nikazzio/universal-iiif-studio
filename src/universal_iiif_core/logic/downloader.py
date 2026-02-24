@@ -19,6 +19,7 @@ from tqdm import tqdm
 from ..config_manager import get_config_manager
 from ..export_studio import build_professional_pdf
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
+from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
 from ..pdf_utils import convert_pdf_to_images
 from ..services.storage.vault_manager import VaultManager
@@ -294,11 +295,13 @@ class IIIFDownloader:
 
     def _register_vault(self):
         native_pdf_url = self.get_pdf_url()
+        catalog = parse_manifest_catalog(self.manifest, self.manifest_url, self.ms_id, enrich_external_reference=False)
         try:
             self.vault.upsert_manuscript(
                 self.ms_id,
-                display_title=str(self.label),  # Human-readable for UI
+                display_title=str(catalog.get("catalog_title") or self.label),  # Human-readable for UI
                 title=str(self.label),  # Legacy compat
+                catalog_title=str(catalog.get("catalog_title") or self.label),
                 library=self.library,
                 manifest_url=self.manifest_url,
                 local_path=str(self.doc_dir),
@@ -306,6 +309,16 @@ class IIIFDownloader:
                 asset_state="queued",
                 has_native_pdf=1 if native_pdf_url else 0,
                 pdf_local_available=1 if self.output_path.exists() else 0,
+                shelfmark=str(catalog.get("shelfmark") or ""),
+                date_label=str(catalog.get("date_label") or ""),
+                language_label=str(catalog.get("language_label") or ""),
+                source_detail_url=str(catalog.get("source_detail_url") or ""),
+                reference_text=str(catalog.get("reference_text") or ""),
+                item_type=str(catalog.get("item_type") or "non classificato"),
+                item_type_source="auto",
+                item_type_confidence=float(catalog.get("item_type_confidence") or 0.0),
+                item_type_reason=str(catalog.get("item_type_reason") or ""),
+                metadata_json=str(catalog.get("metadata_json") or "{}"),
             )
         except Exception as e:
             with suppress(Exception):
@@ -333,16 +346,43 @@ class IIIFDownloader:
 
     def extract_metadata(self):
         """Extract and save basic metadata from the manifest."""
+        catalog = parse_manifest_catalog(self.manifest, self.manifest_url, self.ms_id, enrich_external_reference=True)
+        display_title = str(catalog.get("catalog_title") or self.label)
         metadata = {
             "id": self.ms_id,
-            "title": self.label,
+            "title": display_title,
             "attribution": self.manifest.get("attribution"),
             "description": self.manifest.get("description"),
             "manifest_url": self.manifest_url,
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "shelfmark": catalog.get("shelfmark"),
+            "date_label": catalog.get("date_label"),
+            "language_label": catalog.get("language_label"),
+            "source_detail_url": catalog.get("source_detail_url"),
+            "reference_text": catalog.get("reference_text"),
+            "item_type": catalog.get("item_type"),
+            "item_type_confidence": catalog.get("item_type_confidence"),
+            "item_type_reason": catalog.get("item_type_reason"),
+            "metadata_map": catalog.get("metadata_map", {}),
         }
         save_json(self.meta_path, metadata)
         save_json(self.manifest_path, self.manifest)
+        self.vault.upsert_manuscript(
+            self.ms_id,
+            display_title=display_title,
+            title=str(self.label),
+            catalog_title=display_title,
+            shelfmark=str(catalog.get("shelfmark") or ""),
+            date_label=str(catalog.get("date_label") or ""),
+            language_label=str(catalog.get("language_label") or ""),
+            source_detail_url=str(catalog.get("source_detail_url") or ""),
+            reference_text=str(catalog.get("reference_text") or ""),
+            item_type=str(catalog.get("item_type") or "non classificato"),
+            item_type_source="auto",
+            item_type_confidence=float(catalog.get("item_type_confidence") or 0.0),
+            item_type_reason=str(catalog.get("item_type_reason") or ""),
+            metadata_json=str(catalog.get("metadata_json") or "{}"),
+        )
 
     def get_canvases(self):
         """Retrieve the list of canvases from the manifest."""

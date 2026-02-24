@@ -6,6 +6,7 @@ from typing import Any
 
 import fitz  # PyMuPDF
 
+from ...library_catalog import normalize_item_type
 from ...logger import get_logger
 
 logger = get_logger(__name__)
@@ -65,6 +66,7 @@ class VaultManager:
                 id TEXT PRIMARY KEY,
                 display_title TEXT,
                 title TEXT,
+                catalog_title TEXT,
                 library TEXT,
                 manifest_url TEXT,
                 local_path TEXT,
@@ -74,9 +76,18 @@ class VaultManager:
                 asset_state TEXT DEFAULT 'saved',
                 has_native_pdf INTEGER,
                 pdf_local_available INTEGER DEFAULT 0,
-                item_type TEXT DEFAULT 'altro',
+                item_type TEXT DEFAULT 'non classificato',
                 item_type_source TEXT DEFAULT 'auto',
+                item_type_confidence REAL,
+                item_type_reason TEXT,
                 missing_pages_json TEXT,
+                shelfmark TEXT,
+                date_label TEXT,
+                language_label TEXT,
+                source_detail_url TEXT,
+                reference_text TEXT,
+                user_notes TEXT,
+                metadata_json TEXT,
                 last_sync_at TIMESTAMP,
                 error_log TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -137,10 +148,27 @@ class VaultManager:
         self._ensure_column(cursor, "manuscripts", "asset_state", "TEXT DEFAULT 'saved'")
         self._ensure_column(cursor, "manuscripts", "has_native_pdf", "INTEGER")
         self._ensure_column(cursor, "manuscripts", "pdf_local_available", "INTEGER DEFAULT 0")
-        self._ensure_column(cursor, "manuscripts", "item_type", "TEXT DEFAULT 'altro'")
+        self._ensure_column(cursor, "manuscripts", "item_type", "TEXT DEFAULT 'non classificato'")
         self._ensure_column(cursor, "manuscripts", "item_type_source", "TEXT DEFAULT 'auto'")
+        self._ensure_column(cursor, "manuscripts", "item_type_confidence", "REAL")
+        self._ensure_column(cursor, "manuscripts", "item_type_reason", "TEXT")
         self._ensure_column(cursor, "manuscripts", "missing_pages_json", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "catalog_title", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "shelfmark", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "date_label", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "language_label", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "source_detail_url", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "reference_text", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "user_notes", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "metadata_json", "TEXT")
         self._ensure_column(cursor, "manuscripts", "last_sync_at", "TIMESTAMP")
+        cursor.execute(
+            """
+            UPDATE manuscripts
+            SET item_type = 'non classificato'
+            WHERE item_type IS NULL OR TRIM(item_type) = '' OR LOWER(TRIM(item_type)) = 'altro'
+            """
+        )
 
     def _migrate_download_jobs_table(self, cursor: sqlite3.Cursor) -> None:
         self._ensure_column(cursor, "download_jobs", "queue_position", "INTEGER DEFAULT 0")
@@ -153,6 +181,7 @@ class VaultManager:
         valid_keys = (
             "display_title",
             "title",
+            "catalog_title",
             "library",
             "manifest_url",
             "local_path",
@@ -164,7 +193,16 @@ class VaultManager:
             "pdf_local_available",
             "item_type",
             "item_type_source",
+            "item_type_confidence",
+            "item_type_reason",
             "missing_pages_json",
+            "shelfmark",
+            "date_label",
+            "language_label",
+            "source_detail_url",
+            "reference_text",
+            "user_notes",
+            "metadata_json",
             "last_sync_at",
             "error_log",
         )
@@ -178,11 +216,15 @@ class VaultManager:
         if "title" in updates and "display_title" not in updates:
             updates["display_title"] = updates["title"]
 
+        if "item_type" in updates:
+            updates["item_type"] = normalize_item_type(str(updates.get("item_type") or ""))
+
         if not updates:
             self.register_manuscript(manuscript_id)
             return
 
         conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT * FROM manuscripts WHERE id = ?", (manuscript_id,))
@@ -195,6 +237,7 @@ class VaultManager:
                         id,
                         display_title,
                         title,
+                        catalog_title,
                         library,
                         manifest_url,
                         local_path,
@@ -206,20 +249,42 @@ class VaultManager:
                         pdf_local_available,
                         item_type,
                         item_type_source,
+                        item_type_confidence,
+                        item_type_reason,
                         missing_pages_json,
+                        shelfmark,
+                        date_label,
+                        language_label,
+                        source_detail_url,
+                        reference_text,
+                        user_notes,
+                        metadata_json,
                         last_sync_at,
                         error_log
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     values,
                 )
             else:
-                values = [updates.get(k, existing[idx + 1]) for idx, k in enumerate(valid_keys)]
+                existing_columns = tuple(existing.keys())
+                existing_map = {column: existing[column] for column in existing_columns}
+                if (
+                    existing_map.get("item_type_source") == "manual"
+                    and updates.get("item_type_source") == "auto"
+                    and "item_type" in updates
+                ):
+                    updates.pop("item_type", None)
+                    updates.pop("item_type_confidence", None)
+                    updates.pop("item_type_reason", None)
+                    updates.pop("item_type_source", None)
+
+                values = [updates.get(k, existing_map.get(k)) for k in valid_keys]
                 cursor.execute(
                     """
                     UPDATE manuscripts
                     SET display_title = ?,
                         title = ?,
+                        catalog_title = ?,
                         library = ?,
                         manifest_url = ?,
                         local_path = ?,
@@ -231,7 +296,16 @@ class VaultManager:
                         pdf_local_available = ?,
                         item_type = ?,
                         item_type_source = ?,
+                        item_type_confidence = ?,
+                        item_type_reason = ?,
                         missing_pages_json = ?,
+                        shelfmark = ?,
+                        date_label = ?,
+                        language_label = ?,
+                        source_detail_url = ?,
+                        reference_text = ?,
+                        user_notes = ?,
+                        metadata_json = ?,
                         last_sync_at = ?,
                         error_log = ?,
                         updated_at = CURRENT_TIMESTAMP
@@ -244,6 +318,60 @@ class VaultManager:
             logger.error(f"DB Error upserting manuscript {manuscript_id}: {e}")
         finally:
             conn.close()
+
+    @staticmethod
+    def _compute_state(total: int, downloaded: int, status: str) -> str:
+        running_states = {"queued", "running", "downloading", "pending"}
+        if status in running_states:
+            return status
+        if status == "error":
+            return "error"
+        if downloaded <= 0:
+            return "saved"
+        if total <= 0 or downloaded >= total:
+            return "complete"
+        return "partial"
+
+    def normalize_asset_states(self, limit: int = 200) -> int:
+        """Backfill and normalize asset_state/item_type for existing rows."""
+        rows = self.get_all_manuscripts()[: max(1, limit)]
+        updated = 0
+        for row in rows:
+            local_path_raw = str(row.get("local_path") or "").strip()
+            local_path = Path(local_path_raw) if local_path_raw else None
+            scans_dir = local_path / "scans" if local_path else None
+            scans_count = 0
+            if scans_dir and scans_dir.exists():
+                scans_count = len(list(scans_dir.glob("pag_*.jpg")))
+            total = int(row.get("total_canvases") or 0)
+            downloaded = max(int(row.get("downloaded_canvases") or 0), scans_count)
+            if total <= 0 and downloaded > 0:
+                total = downloaded
+            status = str(row.get("status") or "").lower()
+            asset_state = str(row.get("asset_state") or "").lower()
+            target_state = self._compute_state(total, downloaded, status)
+            normalized_type = normalize_item_type(str(row.get("item_type") or ""))
+
+            if (
+                target_state == asset_state
+                and total == int(row.get("total_canvases") or 0)
+                and downloaded == int(row.get("downloaded_canvases") or 0)
+                and normalized_type == str(row.get("item_type") or "")
+            ):
+                continue
+
+            self.upsert_manuscript(
+                str(row.get("id") or ""),
+                status=(
+                    target_state if target_state in {"error", "downloading", "queued", "running"} else row.get("status")
+                ),
+                asset_state=target_state,
+                total_canvases=total,
+                downloaded_canvases=downloaded,
+                item_type=normalized_type,
+            )
+            updated += 1
+        return updated
 
     def get_all_manuscripts(self):
         """Returns all manuscripts from the database."""

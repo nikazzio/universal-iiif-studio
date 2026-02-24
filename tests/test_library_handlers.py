@@ -66,3 +66,58 @@ def test_library_cleanup_partial_resets_state(tmp_path):
         assert not any(scans.glob("pag_*.jpg"))
     finally:
         cm.set_downloads_dir(str(old_downloads))
+
+
+def test_library_start_download_skips_complete_entries(monkeypatch):
+    """Complete items should not enqueue a full re-download from Library."""
+    vm = VaultManager()
+    vm.upsert_manuscript(
+        "DOC_COMPLETE",
+        library="Gallica",
+        manifest_url="https://example.org/m.json",
+        status="complete",
+        asset_state="complete",
+        total_canvases=10,
+        downloaded_canvases=10,
+    )
+
+    called = {"count": 0}
+
+    def _fake_start(*_a, **_k):
+        called["count"] += 1
+        return "jid"
+
+    monkeypatch.setattr(library_handlers, "start_downloader_thread", _fake_start)
+    result = library_handlers.library_start_download("DOC_COMPLETE", "Gallica")
+    assert "già completo" in repr(result)
+    assert called["count"] == 0
+
+
+def test_library_retry_missing_queues_specific_pages(monkeypatch):
+    """Retry missing should enqueue only missing pages from missing_pages_json."""
+    vm = VaultManager()
+    vm.upsert_manuscript(
+        "DOC_MISS",
+        library="Vaticana",
+        manifest_url="https://example.org/missing.json",
+        status="partial",
+        asset_state="partial",
+        total_canvases=8,
+        downloaded_canvases=6,
+        missing_pages_json="[2, 7]",
+    )
+
+    called = {}
+
+    def _fake_start(manifest_url, doc_id, library, target_pages=None):
+        called["manifest_url"] = manifest_url
+        called["doc_id"] = doc_id
+        called["library"] = library
+        called["target_pages"] = set(target_pages or set())
+        return "jid-missing"
+
+    monkeypatch.setattr(library_handlers, "start_downloader_thread", _fake_start)
+    result = library_handlers.library_retry_missing("DOC_MISS", "Vaticana")
+    assert "Retry missing accodato" in repr(result)
+    assert called["manifest_url"] == "https://example.org/missing.json"
+    assert called["target_pages"] == {2, 7}

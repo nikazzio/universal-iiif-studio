@@ -52,19 +52,6 @@ def _with_toast(fragment, message: str, tone: str = "info"):
     return [fragment, build_toast(message, tone=tone)]
 
 
-def _infer_item_type(label: str, description: str) -> str:
-    text = f"{label} {description}".lower()
-    if any(token in text for token in ("incunab",)):
-        return "incunabolo"
-    if any(token in text for token in ("stampa", "printed", "print")):
-        return "libro a stampa"
-    if any(token in text for token in ("periodic", "journal", "rivista")):
-        return "periodico"
-    if any(token in text for token in ("manoscr", "manuscript", "codex", "ms ")):
-        return "manoscritto"
-    return "altro"
-
-
 def _downloads_doc_path(library: str, doc_id: str) -> Path:
     cm = get_config_manager()
     return cm.get_downloads_dir() / library / doc_id
@@ -79,15 +66,25 @@ def _upsert_saved_entry(
     description: str = "",
     pages: int = 0,
     has_native_pdf: bool | None = None,
+    catalog_title: str = "",
+    shelfmark: str = "",
+    date_label: str = "",
+    language_label: str = "",
+    source_detail_url: str = "",
+    reference_text: str = "",
+    item_type: str = "non classificato",
+    item_type_confidence: float = 0.0,
+    item_type_reason: str = "",
+    metadata_json: str = "{}",
 ) -> None:
     entry_label = (label or doc_id or "Senza Titolo").strip()
-    entry_desc = (description or "").strip()
     total = int(pages or 0)
     v = VaultManager()
     v.upsert_manuscript(
         doc_id,
         display_title=entry_label,
         title=entry_label,
+        catalog_title=(catalog_title or "").strip() or entry_label,
         library=library,
         manifest_url=manifest_url,
         local_path=str(_downloads_doc_path(library, doc_id)),
@@ -97,9 +94,17 @@ def _upsert_saved_entry(
         downloaded_canvases=0,
         has_native_pdf=1 if has_native_pdf else 0 if has_native_pdf is False else None,
         pdf_local_available=0,
-        item_type=_infer_item_type(entry_label, entry_desc),
+        item_type=item_type or "non classificato",
         item_type_source="auto",
+        item_type_confidence=float(item_type_confidence or 0.0),
+        item_type_reason=item_type_reason or "",
         missing_pages_json="[]",
+        shelfmark=shelfmark or "",
+        date_label=date_label or "",
+        language_label=language_label or "",
+        source_detail_url=source_detail_url or "",
+        reference_text=reference_text or "",
+        metadata_json=metadata_json or "{}",
     )
 
 
@@ -138,9 +143,10 @@ def _build_manifest_preview_data(manifest_info: dict, manifest_url: str, doc_id:
         "id": doc_id or manifest_info.get("label", "Unknown"),
         "library": library,
         "url": manifest_url,
-        "label": manifest_info.get("label", "Senza Titolo"),
+        "label": manifest_info.get("catalog_title") or manifest_info.get("label", "Senza Titolo"),
         "description": manifest_info.get("description", "Nessuna descrizione."),
         "pages": manifest_info.get("pages", 0),
+        "thumbnail": manifest_info.get("thumbnail"),
         "has_native_pdf": manifest_info.get("has_native_pdf"),
     }
 
@@ -278,6 +284,16 @@ def add_to_library(manifest_url: str, doc_id: str, library: str):
             description=info.get("description", ""),
             pages=int(info.get("pages", 0) or 0),
             has_native_pdf=info.get("has_native_pdf"),
+            catalog_title=info.get("catalog_title", ""),
+            shelfmark=info.get("shelfmark", ""),
+            date_label=info.get("date_label", ""),
+            language_label=info.get("language_label", ""),
+            source_detail_url=info.get("source_detail_url", ""),
+            reference_text=info.get("reference_text", ""),
+            item_type=info.get("item_type", "non classificato"),
+            item_type_confidence=float(info.get("item_type_confidence", 0.0) or 0.0),
+            item_type_reason=info.get("item_type_reason", ""),
+            metadata_json=info.get("metadata_json", "{}"),
         )
         return _with_toast(
             _download_manager_fragment(),
@@ -308,6 +324,16 @@ def add_and_download(manifest_url: str, doc_id: str, library: str):
             description=info.get("description", ""),
             pages=int(info.get("pages", 0) or 0),
             has_native_pdf=info.get("has_native_pdf"),
+            catalog_title=info.get("catalog_title", ""),
+            shelfmark=info.get("shelfmark", ""),
+            date_label=info.get("date_label", ""),
+            language_label=info.get("language_label", ""),
+            source_detail_url=info.get("source_detail_url", ""),
+            reference_text=info.get("reference_text", ""),
+            item_type=info.get("item_type", "non classificato"),
+            item_type_confidence=float(info.get("item_type_confidence", 0.0) or 0.0),
+            item_type_reason=info.get("item_type_reason", ""),
+            metadata_json=info.get("metadata_json", "{}"),
         )
 
         download_id = start_downloader_thread(manifest_url, doc_id, library)

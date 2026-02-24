@@ -12,3 +12,8 @@ def setup_library_routes(app):
     app.post("/api/library/retry_missing")(library_handlers.library_retry_missing)
     app.post("/api/library/retry_range")(library_handlers.library_retry_range)
     app.post("/api/library/set_type")(library_handlers.library_set_type)
+    app.post("/api/library/update_notes")(library_handlers.library_update_notes)
+    app.post("/api/library/refresh_metadata")(library_handlers.library_refresh_metadata)
+    app.post("/api/library/reclassify")(library_handlers.library_reclassify)
+    app.post("/api/library/reclassify_all")(library_handlers.library_reclassify_all)
+    app.post("/api/library/normalize_states")(library_handlers.library_normalize_states)

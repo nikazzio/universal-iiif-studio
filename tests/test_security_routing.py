@@ -3,7 +3,6 @@
 Tests for path traversal, CORS configuration, and exception handling.
 """
 
-
 import pytest
 from starlette.requests import Request
 

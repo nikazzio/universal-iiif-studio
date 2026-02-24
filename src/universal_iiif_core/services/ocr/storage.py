@@ -60,8 +60,13 @@ class OCRStorage:
                             "has_native_pdf": (
                                 bool(row.get("has_native_pdf")) if row.get("has_native_pdf") is not None else None
                             ),
-                            "item_type": row.get("item_type") or "altro",
+                            "item_type": row.get("item_type") or "non classificato",
                             "item_type_source": row.get("item_type_source") or "auto",
+                            "item_type_confidence": float(row.get("item_type_confidence") or 0.0),
+                            "item_type_reason": row.get("item_type_reason") or "",
+                            "catalog_title": row.get("catalog_title") or label,
+                            "reference_text": row.get("reference_text") or "",
+                            "user_notes": row.get("user_notes") or "",
                         }
                     )
         except Exception as e:
