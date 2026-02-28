@@ -388,7 +388,7 @@ class JobManager:
         """Safely update the Vault DB for a job, swallowing exceptions.
 
         - If status == 'completed' we attempt to preserve existing totals.
-        - Otherwise we write the provided current/total/status/error.
+        - Otherwise we preserve existing progress when current/total are omitted.
         """
         try:
             vm = VaultManager()
@@ -398,8 +398,11 @@ class JobManager:
                 total_val = int(existing.get("total", 0) or 0)
                 vm.update_download_job(db_job_id, current=curr, total=total_val, status="completed", error=None)
             else:
-                c = int(current or 0)
-                t = int(total if total is not None else c)
+                existing = vm.get_download_job(db_job_id) or {}
+                existing_current = int(existing.get("current", 0) or 0)
+                existing_total = int(existing.get("total", existing_current) or existing_current)
+                c = existing_current if current is None else int(current)
+                t = existing_total if total is None else int(total)
                 vm.update_download_job(db_job_id, current=c, total=t, status=(status or "running"), error=error)
         except Exception:
             logger.debug("_update_db_safe failed for %s", db_job_id, exc_info=True)
@@ -497,7 +500,7 @@ class JobManager:
     def _apply_pause_status_updates(
         to_mark_cancelling: list[str],
         to_mark_paused: list[str],
-        update_db_safe: Callable[[str], None],
+        update_db_safe: Callable[..., None],
     ) -> None:
         for db_id in to_mark_cancelling:
             try:

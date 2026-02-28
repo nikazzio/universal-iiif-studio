@@ -125,3 +125,27 @@ def test_resolve_manifest_institut_fallback_search(monkeypatch):
     result_str = repr(result)
     assert "Oeuvres de Brantôme" in result_str
     assert "12 pagine" in result_str
+
+
+def test_resolve_manifest_institut_fallback_derives_page_count_from_manifest(monkeypatch):
+    """Institut fallback should derive pages from raw IIIF manifest when page_count is missing."""
+    monkeypatch.setattr(discovery_handlers, "resolve_shelfmark", lambda _library, _shelfmark: (None, None))
+    monkeypatch.setattr(
+        discovery_handlers,
+        "search_institut",
+        lambda _query, max_results=10: [
+            {
+                "id": "17837",
+                "title": "Oeuvres de Brantôme",
+                "manifest": "https://bibnum.institutdefrance.fr/iiif/17837/manifest",
+                "description": "Test",
+                "thumbnail": "",
+                "raw": {"items": [{}, {}, {}, {}]},
+            }
+        ],
+    )
+
+    result = discovery_handlers.resolve_manifest("Institut de France", "Brantôme")
+    result_str = repr(result)
+    assert "Oeuvres de Brantôme" in result_str
+    assert "4 pagine" in result_str

@@ -24,6 +24,7 @@ from studio_ui.components.discovery import (
 from studio_ui.components.layout import base_layout
 from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloader_thread
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark, search_institut, smart_search
@@ -200,9 +201,28 @@ def _resolve_vatican_fallback(shelfmark: str):
         return None
     if len(results) == 1:
         first = results[0]
-        pages = int(first.get("raw", {}).get("page_count", 0) or 0)
+        pages = _page_count_from_result(first)
         return render_preview(_build_item_preview_data(first, "Vaticana", pages=pages))
     return render_search_results_list(results)
+
+
+def _page_count_from_result(item: dict) -> int:
+    raw = item.get("raw")
+    if not isinstance(raw, dict):
+        return 0
+
+    explicit = raw.get("page_count")
+    if explicit is not None:
+        try:
+            return int(explicit or 0)
+        except (TypeError, ValueError):
+            logger.debug("Invalid page_count in search result raw payload: %r", explicit, exc_info=True)
+
+    try:
+        return int(total_canvases(raw))
+    except Exception:
+        logger.debug("Failed to derive page count from manifest payload", exc_info=True)
+        return 0
 
 
 def _resolve_institut_fallback(shelfmark: str):
@@ -217,7 +237,7 @@ def _resolve_institut_fallback(shelfmark: str):
         return None
     if len(results) == 1:
         first = results[0]
-        pages = int(first.get("raw", {}).get("page_count", 0) or 0)
+        pages = _page_count_from_result(first)
         return render_preview(_build_item_preview_data(first, "Institut de France", pages=pages))
     return render_search_results_list(results)
 
