@@ -222,6 +222,7 @@ def render_export_page(jobs: list[dict], capabilities: dict[str, list[dict]]) ->
     formats = capabilities.get("formats") or []
     destinations = capabilities.get("destinations") or []
     has_active_jobs = any(str(job.get("status") or "").lower() in {"queued", "running"} for job in jobs)
+    active_jobs = sum(1 for job in jobs if str(job.get("status") or "").lower() in {"queued", "running"})
 
     format_rows = []
     for item in formats:
@@ -254,10 +255,25 @@ def render_export_page(jobs: list[dict], capabilities: dict[str, list[dict]]) ->
         )
 
     return Div(
-        H2("Export", cls="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1"),
-        P(
-            "Monitor della coda e dello storico esportazioni, con avvio dei job dal tab Studio del singolo item.",
-            cls="text-sm text-slate-600 dark:text-slate-300 mb-6",
+        Div(
+            Div(
+                H2("Export", cls="text-2xl font-bold text-slate-900 dark:text-slate-100"),
+                P(
+                    "Monitor della coda e dello storico esportazioni, "
+                    "con avvio dei job dal tab Studio del singolo item.",
+                    cls="text-sm text-slate-600 dark:text-slate-300",
+                ),
+                cls="space-y-1",
+            ),
+            Span(
+                f"Job attivi: {active_jobs}",
+                cls=(
+                    "app-chip app-chip-primary text-xs"
+                    if active_jobs > 0
+                    else "app-chip app-chip-neutral text-xs"
+                ),
+            ),
+            cls="flex flex-wrap items-start justify-between gap-3 mb-6",
         ),
         Div(
             Div(
@@ -279,5 +295,6 @@ def render_export_page(jobs: list[dict], capabilities: dict[str, list[dict]]) ->
             Div(render_export_jobs_panel(jobs, polling=True, has_active_jobs=has_active_jobs), cls="space-y-4"),
             cls="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start",
         ),
-        cls="pb-6",
+        cls="p-6 max-w-7xl mx-auto",
+        id="export-page",
     )
