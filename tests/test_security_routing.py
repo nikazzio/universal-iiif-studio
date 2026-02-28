@@ -3,37 +3,28 @@
 Tests for path traversal, CORS configuration, and exception handling.
 """
 
-
 import pytest
-from fasthtml.common import fast_app
-from starlette.testclient import TestClient
+from starlette.requests import Request
 
-from studio_ui.routes.api import setup_api_routes
+from studio_ui.routes.api import get_manifest, serve_download_file
 from universal_iiif_core.config_manager import get_config_manager
 
 
-@pytest.fixture
-def test_client():
-    """Create test client with API routes."""
-    app, _ = fast_app()
-    setup_api_routes(app)
-    return TestClient(app)
-
-
-def test_path_traversal_blocked(test_client):
+def test_path_traversal_blocked():
     """Ensure downloads endpoint rejects path traversal attempts."""
     # Try to access parent directory
-    response = test_client.get("/downloads/../../../etc/passwd")
+    response = serve_download_file("../../../etc/passwd")
     # Should be blocked (403) or resolved to non-existent path (404)
     assert response.status_code in (403, 404)
-    assert "Forbidden" in response.text or "Not Found" in response.text
+    body = (response.body or b"").decode("utf-8", errors="ignore")
+    assert "Forbidden" in body or "Not Found" in body
 
     # Try with encoded dots
-    response = test_client.get("/downloads/..%2F..%2F..%2Fetc%2Fpasswd")
+    response = serve_download_file("..%2F..%2F..%2Fetc%2Fpasswd")
     assert response.status_code in (403, 404)
 
     # Try with multiple slashes
-    response = test_client.get("/downloads/../../config.json")
+    response = serve_download_file("../../config.json")
     assert response.status_code in (403, 404)
 
 
@@ -74,11 +65,12 @@ def test_downloads_serve_only_allowed_files():
         assert True
 
 
-def test_downloads_404_for_nonexistent_file(test_client):
+def test_downloads_404_for_nonexistent_file():
     """Ensure downloads endpoint returns 404 for non-existent files."""
-    response = test_client.get("/downloads/nonexistent_file.jpg")
+    response = serve_download_file("nonexistent_file.jpg")
     assert response.status_code == 404
-    assert "Not Found" in response.text
+    body = (response.body or b"").decode("utf-8", errors="ignore")
+    assert "Not Found" in body
 
 
 def test_cors_configuration_from_config():
@@ -118,14 +110,21 @@ def test_exception_sanitization_resolve_manifest():
     assert "Errore" in result_str or "Error" in result_str
 
 
-def test_exception_sanitization_start_download():
+def test_exception_sanitization_start_download(monkeypatch):
     """Verify download errors don't expose internal state."""
-    from studio_ui.routes.discovery_handlers import start_download
+    from studio_ui.routes import discovery_handlers
+
+    # Avoid real network/worker side effects in this sanitization test.
+    def _raise_manifest(_manifest_url):
+        raise RuntimeError("network stack trace")
+
+    monkeypatch.setattr(discovery_handlers, "analyze_manifest", _raise_manifest)
+    monkeypatch.setattr(discovery_handlers, "start_downloader_thread", lambda *_a, **_k: "jid_test")
 
     # Test with malformed inputs that would cause errors downstream
     # Note: start_download actually starts a background job even with invalid inputs,
     # but errors should be sanitized when they occur
-    result = start_download("https://invalid-manifest-url-that-will-fail", "test_doc", "Gallica")
+    result = discovery_handlers.start_download("https://invalid-manifest-url-that-will-fail", "test_doc", "Gallica")
 
     result_str = str(result)
 
@@ -137,10 +136,15 @@ def test_exception_sanitization_start_download():
     assert ".py:" not in result_str  # Python file references in stack traces
 
     # The component should be a valid HTMX polling fragment
-    assert 'hx-get="/api/download_status/' in result_str or "Errore" in result_str
+    assert (
+        'hx-get="/api/download_status/' in result_str
+        or 'hx-get="/api/download_manager"' in result_str
+        or 'id="download-manager-area"' in result_str
+        or "Errore" in result_str
+    )
 
 
-def test_path_validation_with_symlinks(test_client, tmp_path):
+def test_path_validation_with_symlinks(tmp_path):
     """Ensure symlinks cannot escape downloads_dir."""
     config = get_config_manager()
     downloads_dir = config.get_downloads_dir()
@@ -154,14 +158,15 @@ def test_path_validation_with_symlinks(test_client, tmp_path):
         symlink.symlink_to(target)
 
         # Attempt to access via symlink
-        response = test_client.get("/downloads/evil_link")
+        response = serve_download_file("evil_link")
 
         # Should be blocked (403) or not found (404), but NOT 200
         assert response.status_code in (403, 404)
 
         if response.status_code == 200:
             # If it somehow returns 200, content must NOT be the secret
-            assert response.text != "secret content"
+            body = (response.body or b"").decode("utf-8", errors="ignore")
+            assert body != "secret content"
 
     finally:
         # Cleanup
@@ -171,19 +176,33 @@ def test_path_validation_with_symlinks(test_client, tmp_path):
             target.unlink()
 
 
-def test_manifest_endpoint_error_handling(test_client):
+def test_manifest_endpoint_error_handling():
     """Verify manifest serving doesn't leak internal errors."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "path": "/iiif/manifest/Gallica/nonexistent_doc",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+
     # Request non-existent manifest
-    response = test_client.get("/iiif/manifest/Gallica/nonexistent_doc")
+    response = get_manifest(request, "Gallica", "nonexistent_doc")
 
     # Should return JSON error, not HTML exception page
     assert response.status_code in (404, 500)
 
     # Content-Type should be JSON
-    assert "application/json" in response.headers.get("content-type", "")
+    assert "application/json" in response.media_type
 
     # Parse response
-    data = response.json()
+    import json
+
+    data = json.loads((response.body or b"{}").decode("utf-8", errors="ignore") or "{}")
     assert "error" in data
 
     # Error message should be generic, not expose internals

@@ -44,6 +44,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
     "settings": {
         "system": {
             "download_workers": 4,
+            "max_concurrent_downloads": 2,
             "ocr_concurrency": 1,
             "request_timeout": 30,
         },

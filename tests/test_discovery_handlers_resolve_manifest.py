@@ -28,7 +28,7 @@ def test_resolve_manifest_gallica_direct_match_renders_preview(monkeypatch):
     result = discovery_handlers.resolve_manifest("Gallica", "btv1b10033406t")
     result_str = repr(result)
     assert "Dante Manuscript" in result_str
-    assert "Avvia Download" in result_str
+    assert "Aggiungi + Download" in result_str
 
 
 def test_resolve_manifest_gallica_search_results_list(monkeypatch):

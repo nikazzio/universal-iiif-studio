@@ -6,6 +6,7 @@ from typing import Any
 
 import fitz  # PyMuPDF
 
+from ...library_catalog import normalize_item_type
 from ...logger import get_logger
 
 logger = get_logger(__name__)
@@ -65,12 +66,29 @@ class VaultManager:
                 id TEXT PRIMARY KEY,
                 display_title TEXT,
                 title TEXT,
+                catalog_title TEXT,
                 library TEXT,
                 manifest_url TEXT,
                 local_path TEXT,
                 status TEXT,
                 total_canvases INTEGER DEFAULT 0,
                 downloaded_canvases INTEGER DEFAULT 0,
+                asset_state TEXT DEFAULT 'saved',
+                has_native_pdf INTEGER,
+                pdf_local_available INTEGER DEFAULT 0,
+                item_type TEXT DEFAULT 'non classificato',
+                item_type_source TEXT DEFAULT 'auto',
+                item_type_confidence REAL,
+                item_type_reason TEXT,
+                missing_pages_json TEXT,
+                shelfmark TEXT,
+                date_label TEXT,
+                language_label TEXT,
+                source_detail_url TEXT,
+                reference_text TEXT,
+                user_notes TEXT,
+                metadata_json TEXT,
+                last_sync_at TIMESTAMP,
                 error_log TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -99,29 +117,93 @@ class VaultManager:
                 doc_id TEXT NOT NULL,
                 library TEXT NOT NULL,
                 manifest_url TEXT,
-                status TEXT DEFAULT 'pending',  -- pending, running, completed, error
+                status TEXT DEFAULT 'queued',  -- queued, running, completed, error, cancelled
                 current_page INTEGER DEFAULT 0,
                 total_pages INTEGER DEFAULT 0,
+                queue_position INTEGER DEFAULT 0,
+                priority INTEGER DEFAULT 0,
                 error_message TEXT,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
+        self._migrate_manuscripts_table(cursor)
+        self._migrate_download_jobs_table(cursor)
+
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def _ensure_column(cursor: sqlite3.Cursor, table_name: str, column_name: str, ddl_fragment: str) -> None:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = {row[1] for row in cursor.fetchall()}
+        if column_name in columns:
+            return
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl_fragment}")
+
+    def _migrate_manuscripts_table(self, cursor: sqlite3.Cursor) -> None:
+        self._ensure_column(cursor, "manuscripts", "asset_state", "TEXT DEFAULT 'saved'")
+        self._ensure_column(cursor, "manuscripts", "has_native_pdf", "INTEGER")
+        self._ensure_column(cursor, "manuscripts", "pdf_local_available", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "manuscripts", "item_type", "TEXT DEFAULT 'non classificato'")
+        self._ensure_column(cursor, "manuscripts", "item_type_source", "TEXT DEFAULT 'auto'")
+        self._ensure_column(cursor, "manuscripts", "item_type_confidence", "REAL")
+        self._ensure_column(cursor, "manuscripts", "item_type_reason", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "missing_pages_json", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "catalog_title", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "shelfmark", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "date_label", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "language_label", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "source_detail_url", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "reference_text", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "user_notes", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "metadata_json", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "last_sync_at", "TIMESTAMP")
+        cursor.execute(
+            """
+            UPDATE manuscripts
+            SET item_type = 'non classificato'
+            WHERE item_type IS NULL OR TRIM(item_type) = '' OR LOWER(TRIM(item_type)) = 'altro'
+            """
+        )
+
+    def _migrate_download_jobs_table(self, cursor: sqlite3.Cursor) -> None:
+        self._ensure_column(cursor, "download_jobs", "queue_position", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "download_jobs", "priority", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "download_jobs", "started_at", "TIMESTAMP")
+        self._ensure_column(cursor, "download_jobs", "finished_at", "TIMESTAMP")
 
     def upsert_manuscript(self, manuscript_id: str, **kwargs):
         """Insert or update a manuscript record."""
         valid_keys = (
             "display_title",
             "title",
+            "catalog_title",
             "library",
             "manifest_url",
             "local_path",
             "status",
             "total_canvases",
             "downloaded_canvases",
+            "asset_state",
+            "has_native_pdf",
+            "pdf_local_available",
+            "item_type",
+            "item_type_source",
+            "item_type_confidence",
+            "item_type_reason",
+            "missing_pages_json",
+            "shelfmark",
+            "date_label",
+            "language_label",
+            "source_detail_url",
+            "reference_text",
+            "user_notes",
+            "metadata_json",
+            "last_sync_at",
             "error_log",
         )
         updates = {k: v for k, v in kwargs.items() if k in valid_keys}
@@ -134,11 +216,15 @@ class VaultManager:
         if "title" in updates and "display_title" not in updates:
             updates["display_title"] = updates["title"]
 
+        if "item_type" in updates:
+            updates["item_type"] = normalize_item_type(str(updates.get("item_type") or ""))
+
         if not updates:
             self.register_manuscript(manuscript_id)
             return
 
         conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT * FROM manuscripts WHERE id = ?", (manuscript_id,))
@@ -151,30 +237,76 @@ class VaultManager:
                         id,
                         display_title,
                         title,
+                        catalog_title,
                         library,
                         manifest_url,
                         local_path,
                         status,
                         total_canvases,
                         downloaded_canvases,
+                        asset_state,
+                        has_native_pdf,
+                        pdf_local_available,
+                        item_type,
+                        item_type_source,
+                        item_type_confidence,
+                        item_type_reason,
+                        missing_pages_json,
+                        shelfmark,
+                        date_label,
+                        language_label,
+                        source_detail_url,
+                        reference_text,
+                        user_notes,
+                        metadata_json,
+                        last_sync_at,
                         error_log
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     values,
                 )
             else:
-                values = [updates.get(k, existing[idx + 1]) for idx, k in enumerate(valid_keys)]
+                existing_columns = tuple(existing.keys())
+                existing_map = {column: existing[column] for column in existing_columns}
+                if (
+                    existing_map.get("item_type_source") == "manual"
+                    and updates.get("item_type_source") == "auto"
+                    and "item_type" in updates
+                ):
+                    updates.pop("item_type", None)
+                    updates.pop("item_type_confidence", None)
+                    updates.pop("item_type_reason", None)
+                    updates.pop("item_type_source", None)
+
+                values = [updates.get(k, existing_map.get(k)) for k in valid_keys]
                 cursor.execute(
                     """
                     UPDATE manuscripts
                     SET display_title = ?,
                         title = ?,
+                        catalog_title = ?,
                         library = ?,
                         manifest_url = ?,
                         local_path = ?,
                         status = ?,
                         total_canvases = ?,
                         downloaded_canvases = ?,
+                        asset_state = ?,
+                        has_native_pdf = ?,
+                        pdf_local_available = ?,
+                        item_type = ?,
+                        item_type_source = ?,
+                        item_type_confidence = ?,
+                        item_type_reason = ?,
+                        missing_pages_json = ?,
+                        shelfmark = ?,
+                        date_label = ?,
+                        language_label = ?,
+                        source_detail_url = ?,
+                        reference_text = ?,
+                        user_notes = ?,
+                        metadata_json = ?,
+                        last_sync_at = ?,
                         error_log = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
@@ -186,6 +318,60 @@ class VaultManager:
             logger.error(f"DB Error upserting manuscript {manuscript_id}: {e}")
         finally:
             conn.close()
+
+    @staticmethod
+    def _compute_state(total: int, downloaded: int, status: str) -> str:
+        running_states = {"queued", "running", "downloading", "pending"}
+        if status in running_states:
+            return status
+        if status == "error":
+            return "error"
+        if downloaded <= 0:
+            return "saved"
+        if total <= 0 or downloaded >= total:
+            return "complete"
+        return "partial"
+
+    def normalize_asset_states(self, limit: int = 200) -> int:
+        """Backfill and normalize asset_state/item_type for existing rows."""
+        rows = self.get_all_manuscripts()[: max(1, limit)]
+        updated = 0
+        for row in rows:
+            local_path_raw = str(row.get("local_path") or "").strip()
+            local_path = Path(local_path_raw) if local_path_raw else None
+            scans_dir = local_path / "scans" if local_path else None
+            scans_count = 0
+            if scans_dir and scans_dir.exists():
+                scans_count = len(list(scans_dir.glob("pag_*.jpg")))
+            total = int(row.get("total_canvases") or 0)
+            downloaded = max(int(row.get("downloaded_canvases") or 0), scans_count)
+            if total <= 0 and downloaded > 0:
+                total = downloaded
+            status = str(row.get("status") or "").lower()
+            asset_state = str(row.get("asset_state") or "").lower()
+            target_state = self._compute_state(total, downloaded, status)
+            normalized_type = normalize_item_type(str(row.get("item_type") or ""))
+
+            if (
+                target_state == asset_state
+                and total == int(row.get("total_canvases") or 0)
+                and downloaded == int(row.get("downloaded_canvases") or 0)
+                and normalized_type == str(row.get("item_type") or "")
+            ):
+                continue
+
+            self.upsert_manuscript(
+                str(row.get("id") or ""),
+                status=(
+                    target_state if target_state in {"error", "downloading", "queued", "running"} else row.get("status")
+                ),
+                asset_state=target_state,
+                total_canvases=total,
+                downloaded_canvases=downloaded,
+                item_type=normalized_type,
+            )
+            updated += 1
+        return updated
 
     def get_all_manuscripts(self):
         """Returns all manuscripts from the database."""
@@ -221,10 +407,11 @@ class VaultManager:
         conn = self._get_conn()
         cursor = conn.cursor()
         try:
-            # Read recorded local_path for safety deletion later
-            cursor.execute("SELECT local_path FROM manuscripts WHERE id = ?", (ms_id,))
+            # Read recorded local_path/library for safety deletion and related job cleanup
+            cursor.execute("SELECT local_path, library FROM manuscripts WHERE id = ?", (ms_id,))
             row = cursor.fetchone()
             local_path = row[0] if row and row[0] else None
+            library = row[1] if row and len(row) > 1 and row[1] else None
 
             # 1. Get snippet paths for this manuscript
             cursor.execute("SELECT id, image_path FROM snippets WHERE ms_name = ?", (ms_id,))
@@ -242,6 +429,13 @@ class VaultManager:
             # 3. Delete the manuscript DB entry
             cursor.execute("DELETE FROM manuscripts WHERE id = ?", (ms_id,))
             deleted = cursor.rowcount > 0
+
+            # 3b. Remove historical download jobs for this manuscript to avoid stale
+            # cards in the Download Manager after deletion from Library.
+            if library:
+                cursor.execute("DELETE FROM download_jobs WHERE doc_id = ? AND library = ?", (ms_id, library))
+            else:
+                cursor.execute("DELETE FROM download_jobs WHERE doc_id = ?", (ms_id,))
             conn.commit()
 
             # 4. Remove manuscript folder from disk if it's under configured downloads dir
@@ -283,7 +477,10 @@ class VaultManager:
             q = f"%{query}%"
             sql = """
                 SELECT * FROM manuscripts
-                WHERE id LIKE ? OR label LIKE ? OR library LIKE ? OR attribution LIKE ?
+                WHERE id LIKE ?
+                   OR display_title LIKE ?
+                   OR title LIKE ?
+                   OR library LIKE ?
                 ORDER BY updated_at DESC
             """
             cursor.execute(sql, (q, q, q, q))
@@ -456,68 +653,96 @@ class VaultManager:
     def create_download_job(self, job_id: str, doc_id: str, library: str, manifest_url: str):
         """Crea traccia del download nel DB."""
         conn = self._get_conn()
-        cursor = conn.cursor()
-        # Creiamo la tabella al volo se non esiste (safety check)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS download_jobs (
-                job_id TEXT PRIMARY KEY, doc_id TEXT, library TEXT,
-                manifest_url TEXT, status TEXT, current_page INTEGER,
-                total_pages INTEGER, error_message TEXT, updated_at TIMESTAMP
+        try:
+            cursor = conn.cursor()
+            # Creiamo la tabella al volo se non esiste (safety check)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS download_jobs (
+                    job_id TEXT PRIMARY KEY, doc_id TEXT, library TEXT,
+                    manifest_url TEXT, status TEXT, current_page INTEGER,
+                    total_pages INTEGER, queue_position INTEGER DEFAULT 0,
+                    priority INTEGER DEFAULT 0, error_message TEXT, started_at TIMESTAMP,
+                    finished_at TIMESTAMP, updated_at TIMESTAMP
+                )
+            """)
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO download_jobs (
+                    job_id, doc_id, library, manifest_url, status,
+                    current_page, total_pages, queue_position, priority, started_at, finished_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, 'queued', 0, 0, 0, 0, NULL, NULL, CURRENT_TIMESTAMP)
+            """,
+                (job_id, doc_id, library, manifest_url),
             )
-        """)
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO download_jobs (
-                job_id, doc_id, library, manifest_url, status,
-                current_page, total_pages, updated_at
-            )
-            VALUES (?, ?, ?, ?, 'pending', 0, 0, CURRENT_TIMESTAMP)
-        """,
-            (job_id, doc_id, library, manifest_url),
-        )
-        conn.commit()
+            conn.commit()
+        finally:
+            conn.close()
 
     def update_download_job(
-        self, job_id: str, current: int, total: int, status: str = "running", error: str | None = None
+        self,
+        job_id: str,
+        current: int,
+        total: int,
+        status: str = "running",
+        error: str | None = None,
+        queue_position: int | None = None,
+        priority: int | None = None,
     ):
         """Aggiorna lo stato."""
         conn = self._get_conn()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE download_jobs
-            SET current_page = ?, total_pages = ?, status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE job_id = ?
-        """,
-            (current, total, status, error, job_id),
-        )
-        progress_key = (current, total, status)
-        cached = self._download_progress_cache.get(job_id)
-        if cached != progress_key:
-            try:
-                cursor.execute("SELECT doc_id FROM download_jobs WHERE job_id = ?", (job_id,))
-                row = cursor.fetchone()
-                doc_id = row[0] if row else None
-                title = None
-                if doc_id:
-                    try:
-                        ms = self.get_manuscript(doc_id)
-                        title = ms.get("title") if ms else None
-                    except Exception:
-                        title = None
+        try:
+            cursor = conn.cursor()
+            updates = [
+                "current_page = ?",
+                "total_pages = ?",
+                "status = ?",
+                "error_message = ?",
+                "updated_at = CURRENT_TIMESTAMP",
+            ]
+            params: list[Any] = [current, total, status, error]
+            if queue_position is not None:
+                updates.append("queue_position = ?")
+                params.append(int(queue_position))
+            if priority is not None:
+                updates.append("priority = ?")
+                params.append(int(priority))
+            if status == "running":
+                updates.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
+                updates.append("finished_at = NULL")
+            if status in {"completed", "error", "cancelled"}:
+                updates.append("finished_at = CURRENT_TIMESTAMP")
+            sql = f"UPDATE download_jobs SET {', '.join(updates)} WHERE job_id = ?"  # noqa: S608
+            params.append(job_id)
+            cursor.execute(sql, tuple(params))
+            progress_key = (current, total, status)
+            cached = self._download_progress_cache.get(job_id)
+            if cached != progress_key:
+                try:
+                    cursor.execute("SELECT doc_id FROM download_jobs WHERE job_id = ?", (job_id,))
+                    row = cursor.fetchone()
+                    doc_id = row[0] if row else None
+                    title = None
+                    if doc_id:
+                        try:
+                            ms = self.get_manuscript(doc_id)
+                            title = ms.get("title") if ms else None
+                        except Exception:
+                            title = None
 
-                log_message = "Download update: job=%s doc=%s title=%s %s/%s status=%s"
-                log_args = (job_id, doc_id or "-", title or "-", current, total, status)
-                if status in {"completed", "error", "cancelled", "cancelling"}:
-                    logger.info(log_message, *log_args)
-                else:
-                    logger.debug(log_message, *log_args)
-            except Exception:
-                logger.debug("Failed to log download update for job %s", job_id, exc_info=True)
-            finally:
-                self._download_progress_cache[job_id] = progress_key
-
-        conn.commit()
+                    log_message = "Download update: job=%s doc=%s title=%s %s/%s status=%s"
+                    log_args = (job_id, doc_id or "-", title or "-", current, total, status)
+                    if status in {"completed", "error", "cancelled", "cancelling"}:
+                        logger.info(log_message, *log_args)
+                    else:
+                        logger.debug(log_message, *log_args)
+                except Exception:
+                    logger.debug("Failed to log download update for job %s", job_id, exc_info=True)
+                finally:
+                    self._download_progress_cache[job_id] = progress_key
+            conn.commit()
+        finally:
+            conn.close()
 
     def get_active_download(self):
         """Trova un download attivo."""
@@ -531,8 +756,8 @@ class VaultManager:
         cursor.execute("""
             SELECT job_id, doc_id, library, status, current_page, total_pages, error_message
             FROM download_jobs
-            WHERE status = 'running' OR status = 'pending'
-            ORDER BY updated_at DESC LIMIT 1
+            WHERE status IN ('running', 'queued')
+            ORDER BY priority DESC, queue_position ASC, updated_at DESC LIMIT 1
         """)
         row = cursor.fetchone()
         if row:
@@ -560,10 +785,14 @@ class VaultManager:
 
         cursor.execute(
             """
-            SELECT job_id, doc_id, library, status, current_page, total_pages, error_message
+            SELECT job_id, doc_id, library, status, current_page, total_pages, error_message, queue_position, priority
             FROM download_jobs
-            WHERE status IN ('running', 'pending')
-            ORDER BY updated_at DESC
+            WHERE status IN ('running', 'queued', 'cancelling')
+            ORDER BY CASE
+                WHEN status = 'running' THEN 0
+                WHEN status = 'cancelling' THEN 1
+                ELSE 2
+            END, priority DESC, queue_position ASC, updated_at DESC
         """
         )
         rows = cursor.fetchall()
@@ -579,6 +808,8 @@ class VaultManager:
                     "current": row[4],
                     "total": row[5],
                     "error": row[6],
+                    "queue_position": row[7],
+                    "priority": row[8],
                 }
             )
         return results
@@ -593,7 +824,8 @@ class VaultManager:
             return None
         cursor.execute(
             """
-            SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages, error_message
+            SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages,
+                   error_message, queue_position, priority
             FROM download_jobs
             WHERE job_id = ?
         """,
@@ -612,7 +844,59 @@ class VaultManager:
             "current": row[5],
             "total": row[6],
             "error": row[7],
+            "queue_position": row[8],
+            "priority": row[9],
         }
+
+    def list_download_jobs(self, limit: int = 50):
+        """List recent download jobs with queue metadata."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages,
+                       queue_position, priority, error_message, updated_at, created_at, started_at, finished_at
+                FROM download_jobs dj
+                WHERE NOT (
+                    dj.status IN ('completed', 'error', 'cancelled')
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM manuscripts m
+                        WHERE m.id = dj.doc_id
+                    )
+                )
+                ORDER BY
+                    CASE
+                        WHEN status = 'running' THEN 0
+                        WHEN status = 'queued' THEN 1
+                        WHEN status = 'cancelling' THEN 2
+                        WHEN status = 'error' THEN 3
+                        ELSE 4
+                    END,
+                    priority DESC,
+                    queue_position ASC,
+                    updated_at DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def delete_download_job(self, job_id: str) -> bool:
+        """Delete one download job row by id."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM download_jobs WHERE job_id = ?", (job_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
 
     def reset_active_downloads(self, mark: str = "error", message: str = "Server restarted"):
         """Mark any downloads left in 'pending' or 'running' state as stopped.
@@ -633,7 +917,7 @@ class VaultManager:
                 SET status = ?,
                     error_message = COALESCE(error_message, ?) || ' (server restart)',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE status IN ('pending', 'running')
+                WHERE status IN ('queued', 'pending', 'running')
             """,
                 (mark, message),
             )

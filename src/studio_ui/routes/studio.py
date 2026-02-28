@@ -30,4 +30,3 @@ def setup_studio_routes(app):
 
     # Deletions
     app.delete("/api/delete_snippet/{snippet_id}")(handlers.delete_snippet)
-    app.delete("/studio/delete")(handlers.delete_document)

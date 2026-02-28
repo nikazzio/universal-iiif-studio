@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import time
 from collections import deque
@@ -18,6 +19,7 @@ from tqdm import tqdm
 from ..config_manager import get_config_manager
 from ..export_studio import build_professional_pdf
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
+from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
 from ..pdf_utils import convert_pdf_to_images
 from ..services.storage.vault_manager import VaultManager
@@ -102,6 +104,8 @@ class PageDownloader:
         self.index = index
         self.folder = Path(folder)
         self.filename = Path(downloader.temp_dir) / f"pag_{index:04d}.jpg"
+        scans_dir = getattr(downloader, "scans_dir", downloader.temp_dir)
+        self.final_filename = Path(scans_dir) / f"pag_{index:04d}.jpg"
         self.cm = downloader.cm
         self.base_url = CanvasServiceLocator.locate(canvas)
 
@@ -146,32 +150,36 @@ class PageDownloader:
         return cleaned
 
     def _resume_existing_scan(self, base_url: str) -> tuple[str, dict[str, Any]] | None:
-        if not self.filename.exists() or self.filename.stat().st_size == 0 or not base_url:
+        if not base_url:
             return None
-        try:
-            with Image.open(self.filename) as img:
-                img.verify()
+        candidates = [self.final_filename, self.filename]
+        for candidate in candidates:
+            if not candidate.exists() or candidate.stat().st_size == 0:
+                continue
+            try:
+                with Image.open(candidate) as img:
+                    img.verify()
 
-            with Image.open(self.filename) as img:
-                width, height = img.size
+                with Image.open(candidate) as img:
+                    width, height = img.size
 
-            stats = {
-                "page_index": self.index,
-                "filename": self.filename.name,
-                "original_url": f"{base_url} (cached)",
-                "thumbnail_url": self.downloader._get_thumbnail_url(self.canvas),
-                "size_bytes": self.filename.stat().st_size,
-                "width": width,
-                "height": height,
-                "resolution_category": "High" if width > 2500 else "Medium",
-            }
-            self.downloader.logger.info(f"Resuming valid file: {self.filename}")
-            return str(self.filename), stats
-        except Exception as exc:
-            self.downloader.logger.warning(
-                "Found corrupt file %s, re-downloading. Error: %s", self.filename, exc, exc_info=True
-            )
-            return None
+                stats = {
+                    "page_index": self.index,
+                    "filename": candidate.name,
+                    "original_url": f"{base_url} (cached)",
+                    "thumbnail_url": self.downloader._get_thumbnail_url(self.canvas),
+                    "size_bytes": candidate.stat().st_size,
+                    "width": width,
+                    "height": height,
+                    "resolution_category": "High" if width > 2500 else "Medium",
+                }
+                self.downloader.logger.info(f"Resuming valid file: {candidate}")
+                return str(candidate), stats
+            except Exception as exc:
+                self.downloader.logger.warning(
+                    "Found corrupt file %s, re-downloading. Error: %s", candidate, exc, exc_info=True
+                )
+        return None
 
     def resume_cached(self) -> tuple[str, dict[str, Any]] | None:
         """Expose resume logic so callers can avoid a full download."""
@@ -286,15 +294,31 @@ class IIIFDownloader:
         self.manifest_path = self.data_dir / "manifest.json"
 
     def _register_vault(self):
+        native_pdf_url = self.get_pdf_url()
+        catalog = parse_manifest_catalog(self.manifest, self.manifest_url, self.ms_id, enrich_external_reference=False)
         try:
             self.vault.upsert_manuscript(
                 self.ms_id,
-                display_title=str(self.label),  # Human-readable for UI
+                display_title=str(catalog.get("catalog_title") or self.label),  # Human-readable for UI
                 title=str(self.label),  # Legacy compat
+                catalog_title=str(catalog.get("catalog_title") or self.label),
                 library=self.library,
                 manifest_url=self.manifest_url,
                 local_path=str(self.doc_dir),
-                status="pending",
+                status="queued",
+                asset_state="queued",
+                has_native_pdf=1 if native_pdf_url else 0,
+                pdf_local_available=1 if self.output_path.exists() else 0,
+                shelfmark=str(catalog.get("shelfmark") or ""),
+                date_label=str(catalog.get("date_label") or ""),
+                language_label=str(catalog.get("language_label") or ""),
+                source_detail_url=str(catalog.get("source_detail_url") or ""),
+                reference_text=str(catalog.get("reference_text") or ""),
+                item_type=str(catalog.get("item_type") or "non classificato"),
+                item_type_source="auto",
+                item_type_confidence=float(catalog.get("item_type_confidence") or 0.0),
+                item_type_reason=str(catalog.get("item_type_reason") or ""),
+                metadata_json=str(catalog.get("metadata_json") or "{}"),
             )
         except Exception as e:
             with suppress(Exception):
@@ -322,16 +346,43 @@ class IIIFDownloader:
 
     def extract_metadata(self):
         """Extract and save basic metadata from the manifest."""
+        catalog = parse_manifest_catalog(self.manifest, self.manifest_url, self.ms_id, enrich_external_reference=True)
+        display_title = str(catalog.get("catalog_title") or self.label)
         metadata = {
             "id": self.ms_id,
-            "title": self.label,
+            "title": display_title,
             "attribution": self.manifest.get("attribution"),
             "description": self.manifest.get("description"),
             "manifest_url": self.manifest_url,
             "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "shelfmark": catalog.get("shelfmark"),
+            "date_label": catalog.get("date_label"),
+            "language_label": catalog.get("language_label"),
+            "source_detail_url": catalog.get("source_detail_url"),
+            "reference_text": catalog.get("reference_text"),
+            "item_type": catalog.get("item_type"),
+            "item_type_confidence": catalog.get("item_type_confidence"),
+            "item_type_reason": catalog.get("item_type_reason"),
+            "metadata_map": catalog.get("metadata_map", {}),
         }
         save_json(self.meta_path, metadata)
         save_json(self.manifest_path, self.manifest)
+        self.vault.upsert_manuscript(
+            self.ms_id,
+            display_title=display_title,
+            title=str(self.label),
+            catalog_title=display_title,
+            shelfmark=str(catalog.get("shelfmark") or ""),
+            date_label=str(catalog.get("date_label") or ""),
+            language_label=str(catalog.get("language_label") or ""),
+            source_detail_url=str(catalog.get("source_detail_url") or ""),
+            reference_text=str(catalog.get("reference_text") or ""),
+            item_type=str(catalog.get("item_type") or "non classificato"),
+            item_type_source="auto",
+            item_type_confidence=float(catalog.get("item_type_confidence") or 0.0),
+            item_type_reason=str(catalog.get("item_type_reason") or ""),
+            metadata_json=str(catalog.get("metadata_json") or "{}"),
+        )
 
     def get_canvases(self):
         """Retrieve the list of canvases from the manifest."""
@@ -424,6 +475,12 @@ class IIIFDownloader:
                 total=self.total_canvases,
                 status="error",
                 error=message,
+            )
+            self.vault.upsert_manuscript(
+                self.ms_id,
+                status="error",
+                asset_state="error",
+                error_log=message,
             )
         except Exception:
             self.logger.debug("Failed to mark job %s as error: %s", self.job_id, message, exc_info=True)
@@ -645,7 +702,16 @@ class IIIFDownloader:
         page_stats = self._collect_scan_stats(f"{native_pdf_url} (native-pdf)")
         self._store_page_stats(page_stats)
         final_files = [str(path) for path in sorted(self.scans_dir.glob("pag_*.jpg"))]
-        self.vault.upsert_manuscript(self.ms_id, status="complete", downloaded_canvases=len(final_files))
+        self.vault.upsert_manuscript(
+            self.ms_id,
+            status="complete",
+            asset_state="complete",
+            downloaded_canvases=len(final_files),
+            total_canvases=len(final_files),
+            pdf_local_available=1 if self.output_path.exists() else 0,
+            missing_pages_json="[]",
+            last_sync_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+        )
         try:
             clean_dir(self.temp_dir)
         except Exception:
@@ -655,10 +721,44 @@ class IIIFDownloader:
             self.run_batch_ocr(final_files, self.ocr_model)
         return bool(final_files)
 
+    @staticmethod
+    def _build_canvas_plan(canvases: list[dict[str, Any]], target_pages: set[int] | None) -> tuple[set[int], list]:
+        selected_pages = set(target_pages or set())
+        plan: list[tuple[int, dict[str, Any]]] = []
+        for idx, canvas in enumerate(canvases):
+            if selected_pages and (idx + 1) not in selected_pages:
+                continue
+            plan.append((idx, canvas))
+        return selected_pages, plan
+
+    def _mark_downloading_state(self, total_pages: int) -> None:
+        self.vault.upsert_manuscript(
+            self.ms_id,
+            status="downloading",
+            asset_state="downloading",
+            total_canvases=total_pages,
+        )
+
+    def _maybe_run_native_pdf(
+        self,
+        native_pdf_url: str | None,
+        selected_pages: set[int],
+        progress_callback: Callable[[int, int], None] | None,
+    ) -> bool:
+        should_prefer_native_pdf = self._should_prefer_native_pdf()
+        if native_pdf_url and should_prefer_native_pdf and not selected_pages:
+            return self._try_native_pdf_flow(native_pdf_url, progress_callback=progress_callback)
+        if native_pdf_url and not should_prefer_native_pdf:
+            self.logger.info("Native PDF found but preference disabled; proceeding canvas-by-canvas download.")
+        else:
+            self.logger.info("No native PDF rendering found; proceeding canvas-by-canvas download.")
+        return False
+
     def run(
         self,
         progress_callback: Callable[[int, int], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        target_pages: set[int] | None = None,
     ):
         """Execute the download workflow for the manifest.
 
@@ -669,13 +769,18 @@ class IIIFDownloader:
             should_cancel: Optional callable returning True to request cancellation.
                 It is polled during the run; when True, the method should abort
                 further processing and perform any necessary cleanup.
+            target_pages: Optional 1-based page numbers to retry/download.
+                When omitted, the full manuscript is processed.
         """
         self.extract_metadata()
         canvases = self.get_canvases()
-
         total_pages = len(canvases)
-        # Register total pages upfront so the DB/UI can display a stable total
-        self.vault.upsert_manuscript(self.ms_id, status="downloading", total_canvases=total_pages)
+        selected_pages, canvas_plan = self._build_canvas_plan(canvases, target_pages)
+        operation_total = len(canvas_plan)
+        if operation_total == 0:
+            self._sync_asset_state(total_pages)
+            return
+        self._mark_downloading_state(total_pages)
 
         if self.clean_cache:
             clean_dir(self.temp_dir)
@@ -683,17 +788,15 @@ class IIIFDownloader:
         # Prefer runtime provided callback over instance attribute
         cb = progress_callback or self.progress_callback
 
-        native_pdf_url = self.get_pdf_url()
-        should_prefer_native_pdf = self._should_prefer_native_pdf()
-        if native_pdf_url and should_prefer_native_pdf:
-            if self._try_native_pdf_flow(native_pdf_url, progress_callback=cb):
-                return
-        elif native_pdf_url and not should_prefer_native_pdf:
-            self.logger.info("Native PDF found but preference disabled; proceeding canvas-by-canvas download.")
-        else:
-            self.logger.info("No native PDF rendering found; proceeding canvas-by-canvas download.")
+        if self._maybe_run_native_pdf(self.get_pdf_url(), selected_pages, cb):
+            return
 
-        downloaded, page_stats = self._download_canvases(canvases, progress_callback=cb, should_cancel=should_cancel)
+        downloaded, page_stats = self._download_canvases(
+            canvas_plan,
+            progress_callback=cb,
+            should_cancel=should_cancel,
+            total_for_progress=operation_total,
+        )
         self._store_page_stats(page_stats)
 
         valid = [f for f in downloaded if f]
@@ -703,54 +806,61 @@ class IIIFDownloader:
             self.vault.update_status(self.ms_id, "error", str(exc))
             raise
 
-        if self._should_create_pdf_from_images() and final_files:
+        if self._should_create_pdf_from_images() and final_files and not selected_pages:
             self.create_pdf(files=final_files)
 
         if final_files and self.ocr_model:
             self.run_batch_ocr(final_files, self.ocr_model)
+        self._sync_asset_state(total_pages)
 
     def _download_canvases(
         self,
-        canvases: list[dict[str, Any]],
+        canvas_plan: list[tuple[int, dict[str, Any]]],
         progress_callback: Callable[[int, int], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        total_for_progress: int = 0,
     ):
-        downloaded, page_stats, to_download = self._prescan_canvases(canvases)
+        downloaded, page_stats, to_download = self._prescan_canvases(canvas_plan)
 
         # Initial progress reflecting pre-existing files
         if progress_callback:
             try:
                 completed = sum(1 for f in downloaded if f)
-                progress_callback(completed, len(canvases))
+                progress_callback(completed, total_for_progress or len(canvas_plan))
             except Exception:
                 self.logger.debug("Initial progress callback failed", exc_info=True)
 
-        self.total_canvases = len(canvases)
+        self.total_canvases = total_for_progress or len(canvas_plan)
         downloaded, page_stats = self._download_missing_canvases(
-            to_download, downloaded, page_stats, progress_callback, should_cancel, len(canvases)
+            to_download,
+            downloaded,
+            page_stats,
+            progress_callback,
+            should_cancel,
+            total_for_progress or len(canvas_plan),
         )
         return downloaded, page_stats
 
-    def _prescan_canvases(self, canvases: list[dict[str, Any]]):
+    def _prescan_canvases(self, canvas_plan: list[tuple[int, dict[str, Any]]]):
         """Check temp dir for existing valid images and build download list."""
-        downloaded: list[str | None] = [None] * len(canvases)
+        downloaded: list[str | None] = [None] * len(canvas_plan)
         page_stats: list[dict[str, Any]] = []
-        to_download: list[tuple[int, dict[str, Any]]] = []
-        for i, canvas in enumerate(canvases):
-            downloader = PageDownloader(self, canvas, i, self.temp_dir)
+        to_download: list[tuple[int, int, dict[str, Any]]] = []
+        for local_idx, (canvas_idx, canvas) in enumerate(canvas_plan):
+            downloader = PageDownloader(self, canvas, canvas_idx, self.temp_dir)
             resumed = downloader.resume_cached()
             if resumed:
                 fname, stats = resumed
-                downloaded[i] = fname
+                downloaded[local_idx] = fname
                 if stats:
                     page_stats.append(stats)
             else:
-                to_download.append((i, canvas))
+                to_download.append((local_idx, canvas_idx, canvas))
         return downloaded, page_stats, to_download
 
     def _download_missing_canvases(
         self,
-        to_download: list[tuple[int, dict[str, Any]]],
+        to_download: list[tuple[int, int, dict[str, Any]]],
         downloaded: list[str | None],
         page_stats: list[dict[str, Any]],
         progress_callback: Callable[[int, int], None] | None,
@@ -763,7 +873,8 @@ class IIIFDownloader:
 
         with ThreadPoolExecutor(max_workers=self.workers) as executor:
             future_to_index = {
-                executor.submit(self.download_page, canvas, i, self.temp_dir): i for i, canvas in to_download
+                executor.submit(self.download_page, canvas, canvas_idx, self.temp_dir): local_idx
+                for local_idx, canvas_idx, canvas in to_download
             }
             for future in self._iter_download_futures(future_to_index, len(to_download)):
                 idx = future_to_index[future]
@@ -788,7 +899,7 @@ class IIIFDownloader:
                     completed = sum(1 for f in downloaded if f)
                     try:
                         self.vault.update_download_job(
-                            self.ms_id,
+                            self.job_id or self.ms_id,
                             current=completed,
                             total=total_canvases,
                             status="cancelled",
@@ -822,7 +933,6 @@ class IIIFDownloader:
                 # In case of partial resume or overwrite
                 pass
             final_files.append(str(dest))
-        self.vault.upsert_manuscript(self.ms_id, status="complete", downloaded_canvases=len(final_files))
         # Clean up the temporary directory that held the downloaded images.
         # This removes the folder that contained the images (and any remaining files).
         try:
@@ -833,6 +943,30 @@ class IIIFDownloader:
                 self.logger.debug("Failed to clean temp dir %s", self.temp_dir, exc_info=True)
 
         return final_files
+
+    def _sync_asset_state(self, total_expected: int) -> None:
+        scan_count = len(list(self.scans_dir.glob("pag_*.jpg")))
+        pdf_available = 1 if any(self.pdf_dir.glob("*.pdf")) else 0
+        if scan_count <= 0 and total_expected > 0:
+            state = "saved"
+        elif total_expected <= 0 or scan_count >= total_expected:
+            state = "complete"
+        else:
+            state = "partial"
+        missing = []
+        if total_expected > 0 and scan_count < total_expected:
+            existing = {int(p.stem.split("_")[-1]) + 1 for p in self.scans_dir.glob("pag_*.jpg")}
+            missing = [i for i in range(1, total_expected + 1) if i not in existing]
+        self.vault.upsert_manuscript(
+            self.ms_id,
+            status=state,
+            asset_state=state,
+            total_canvases=total_expected,
+            downloaded_canvases=scan_count,
+            pdf_local_available=pdf_available,
+            missing_pages_json=json.dumps(missing),
+            last_sync_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+        )
 
     def run_batch_ocr(self, image_files: list[str], model_name: str):
         """Run OCR processing on the finalized image files."""

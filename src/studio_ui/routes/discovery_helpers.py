@@ -6,11 +6,13 @@ complexity checks remain satisfied.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from urllib.parse import unquote
 
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.jobs import job_manager
+from universal_iiif_core.library_catalog import parse_manifest_catalog
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.logic.downloader import IIIFDownloader
 from universal_iiif_core.resolvers.parsers import IIIFManifestParser
@@ -33,6 +35,12 @@ def analyze_manifest(manifest_url: str) -> dict[str, Any]:
     # Usa il parser centralizzato per metadati robusti
     parser = IIIFManifestParser()
     result = parser.parse_manifest(manifest_data, manifest_url=manifest_url)
+    catalog = parse_manifest_catalog(
+        manifest_data,
+        manifest_url=manifest_url,
+        doc_id=str(result.get("id") or ""),
+        enrich_external_reference=True,
+    )
 
     # Calcolo pagine manuale se il parser non lo espone direttamente
     # (IIIF v2 sequences o IIIF v3 items)
@@ -42,16 +50,39 @@ def analyze_manifest(manifest_url: str) -> dict[str, Any]:
         canvases = seq.get("canvases", [])
     elif "items" in manifest_data:
         canvases = manifest_data["items"]
+    rendering = manifest_data.get("rendering") or []
+    if isinstance(rendering, dict):
+        rendering = [rendering]
+    has_native_pdf = False
+    for item in rendering:
+        if not isinstance(item, dict):
+            continue
+        fmt = str(item.get("format") or "").lower()
+        url = str(item.get("@id") or item.get("id") or "").lower()
+        if fmt == "application/pdf" or url.endswith(".pdf"):
+            has_native_pdf = True
+            break
 
     return {
-        "label": result.get("title", "Senza Titolo"),
-        "description": result.get("description", ""),
+        "label": catalog.get("label") or result.get("title", "Senza Titolo"),
+        "description": catalog.get("description") or result.get("description", ""),
         "pages": len(canvases),
         "thumbnail": result.get("thumbnail"),
+        "has_native_pdf": has_native_pdf,
+        "catalog_title": catalog.get("catalog_title") or result.get("title", "Senza Titolo"),
+        "shelfmark": catalog.get("shelfmark") or "",
+        "date_label": catalog.get("date_label") or "",
+        "language_label": catalog.get("language_label") or "",
+        "source_detail_url": catalog.get("source_detail_url") or "",
+        "reference_text": catalog.get("reference_text") or "",
+        "item_type": catalog.get("item_type") or "non classificato",
+        "item_type_confidence": float(catalog.get("item_type_confidence") or 0.0),
+        "item_type_reason": catalog.get("item_type_reason") or "",
+        "metadata_json": catalog.get("metadata_json") or "{}",
     }
 
 
-def start_downloader_thread(manifest_url: str, doc_id: str, library: str) -> str:
+def start_downloader_thread(manifest_url: str, doc_id: str, library: str, target_pages: set[int] | None = None) -> str:
     """Start a background IIIF download and persist progress into the DB.
 
     The function returns a stable download_id (HASH) which can be used by the UI
@@ -61,8 +92,10 @@ def start_downloader_thread(manifest_url: str, doc_id: str, library: str) -> str
     doc_id = unquote(doc_id)
     library = unquote(library)
 
-    # 1. GENERA ID ROBUSTO (Hash) per evitare 404 sulle API
-    job_id = generate_job_id(library, manifest_url)
+    # 1. GENERA ID ROBUSTO + univoco per consentire retry multipli in parallelo.
+    #    Manteniamo il prefisso hash per traceability e aggiungiamo un suffisso corto random.
+    base_job_id = generate_job_id(library, manifest_url)
+    job_id = f"{base_job_id}_{uuid.uuid4().hex[:8]}"
 
     # 2. Usa doc_id direttamente come nome cartella (senza abbellimenti)
     # Il doc_id dovrebbe già essere l'ID tecnico pulito dal resolver
@@ -78,6 +111,7 @@ def start_downloader_thread(manifest_url: str, doc_id: str, library: str) -> str
             "library": library,
             "db_job_id": job_id,  # Chiave per API/DB
             "folder_name": doc_id,  # Usa doc_id direttamente come nome cartella
+            "target_pages": set(target_pages or set()),
         },
         job_type="download",
     )
@@ -92,6 +126,7 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
     library = str(kwargs.get("library") or "")
     db_job_id = str(kwargs.get("db_job_id") or "")
     folder_name = kwargs.get("folder_name")
+    target_pages = kwargs.get("target_pages")
 
     # Thread-local DB manager for safety
     vault = VaultManager()
@@ -133,7 +168,7 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
         )
 
         # Pass DB hook and cancellation checker to the runtime `run` call
-        downloader.run(should_cancel=should_cancel)
+        downloader.run(should_cancel=should_cancel, target_pages=target_pages)
 
         # Mark completed only when no external callback tracks finalization.
         if progress_callback is None:
@@ -145,8 +180,22 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
             )
 
         # Register manuscript in the main table
-        # Ora usiamo il titolo estratto dal manifest reale
-        vault.upsert_manuscript(doc_id, library=library, title=downloader.label, local_path=str(downloader.doc_dir))
+        existing = vault.get_manuscript(doc_id) or {}
+        preferred_title = (
+            str(existing.get("catalog_title") or "").strip()
+            or str(existing.get("display_title") or "").strip()
+            or str(downloader.label)
+        )
+        vault.upsert_manuscript(
+            doc_id,
+            library=library,
+            title=downloader.label,
+            local_path=str(downloader.doc_dir),
+            display_title=preferred_title,
+            catalog_title=preferred_title,
+            has_native_pdf=1 if downloader.get_pdf_url() else 0,
+            pdf_local_available=1 if any(downloader.pdf_dir.glob("*.pdf")) else 0,
+        )
 
     except Exception as exc:  # pragma: no cover - runtime safety
         logger.error(f"Download failed for {doc_id}: {exc}", exc_info=True)

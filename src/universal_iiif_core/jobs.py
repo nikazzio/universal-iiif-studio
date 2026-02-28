@@ -1,9 +1,11 @@
 import threading
 import time
 import uuid
+from collections import deque
 from collections.abc import Callable
 from typing import Any
 
+from .config_manager import get_config_manager
 from .logger import get_logger
 from .services.storage.vault_manager import VaultManager
 
@@ -19,6 +21,8 @@ class JobManager:
     _instance = None
     _jobs: dict[str, dict[str, Any]] = {}
     _lock = threading.Lock()
+    _download_queue: deque[str] = deque()
+    _active_downloads: set[str] = set()
 
     def __new__(cls):
         """Ensure only one JobManager instance exists."""
@@ -35,36 +39,144 @@ class JobManager:
         job_id = str(uuid.uuid4())[:8]
         db_job_id = job_kwargs.get("db_job_id")
 
-        self._register_pending_job(job_id, job_type, db_job_id)
+        self._register_pending_job(job_id, task_func, args, job_kwargs, job_type, db_job_id)
         try:
             if job_type == "download":
                 self._maybe_create_db_record(job_id, db_job_id, job_kwargs)
         except Exception:
             logger.exception("Failed to record download job %s in vault DB", db_job_id or job_id)
-
-        thread = threading.Thread(
-            target=self._worker_wrapper,
-            args=(job_id, task_func, args, job_kwargs, job_type, db_job_id),
-            daemon=True,
-        )
-        thread.start()
-
+        if job_type == "download":
+            self._enqueue_download_job(job_id, db_job_id)
+        else:
+            self._start_job_thread(job_id)
         return job_id
 
-    def _register_pending_job(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
+    def _register_pending_job(
+        self,
+        job_id: str,
+        task_func: Callable,
+        args: tuple,
+        kwargs: dict[str, Any],
+        job_type: str,
+        db_job_id: str | None,
+    ) -> None:
         with self._lock:
             self._jobs[job_id] = {
                 "id": job_id,
                 "type": job_type,
-                "status": "pending",
+                "status": "queued" if job_type == "download" else "pending",
                 "progress": 0.0,
-                "message": "Initializing...",
+                "message": "Queued..." if job_type == "download" else "Initializing...",
                 "result": None,
                 "error": None,
                 "created_at": time.time(),
                 "cancel_requested": False,
                 "db_job_id": db_job_id,
+                "task_func": task_func,
+                "args": args,
+                "kwargs": kwargs,
+                "thread": None,
             }
+
+    def _start_job_thread(self, job_id: str, *, locked: bool = False) -> bool:
+        if locked:
+            info = self._jobs.get(job_id)
+            if not info:
+                return False
+            if info.get("thread") is not None:
+                return False
+            thread = threading.Thread(
+                target=self._worker_wrapper,
+                args=(
+                    job_id,
+                    info.get("task_func"),
+                    tuple(info.get("args") or ()),
+                    dict(info.get("kwargs") or {}),
+                    str(info.get("type") or "generic"),
+                    info.get("db_job_id"),
+                ),
+                daemon=True,
+            )
+            info["thread"] = thread
+        else:
+            with self._lock:
+                info = self._jobs.get(job_id)
+                if not info:
+                    return False
+                if info.get("thread") is not None:
+                    return False
+                thread = threading.Thread(
+                    target=self._worker_wrapper,
+                    args=(
+                        job_id,
+                        info.get("task_func"),
+                        tuple(info.get("args") or ()),
+                        dict(info.get("kwargs") or {}),
+                        str(info.get("type") or "generic"),
+                        info.get("db_job_id"),
+                    ),
+                    daemon=True,
+                )
+                info["thread"] = thread
+        thread.start()
+        return True
+
+    def _enqueue_download_job(self, job_id: str, db_job_id: str | None) -> None:
+        try:
+            self._update_db_safe(
+                db_job_id or job_id,
+                status="queued",
+                current=0,
+                total=0,
+            )
+        except Exception:
+            logger.debug("Failed to mark queued for %s", db_job_id or job_id, exc_info=True)
+        with self._lock:
+            self._download_queue.append(job_id)
+            self._refresh_queue_positions_locked()
+            self._dispatch_queued_downloads_locked()
+
+    def _max_concurrent_downloads(self) -> int:
+        try:
+            cm = get_config_manager()
+            configured = int(cm.get_setting("system.max_concurrent_downloads", 2) or 2)
+            return max(1, min(configured, 8))
+        except Exception:
+            return 2
+
+    def _dispatch_queued_downloads_locked(self) -> None:
+        max_jobs = self._max_concurrent_downloads()
+        while len(self._active_downloads) < max_jobs and self._download_queue:
+            next_job = self._download_queue.popleft()
+            info = self._jobs.get(next_job)
+            if not info:
+                continue
+            if info.get("cancel_requested"):
+                info["status"] = "cancelled"
+                info["message"] = "Cancelled before start"
+                continue
+            self._active_downloads.add(next_job)
+            info["message"] = "Starting..."
+            self._start_job_thread(next_job, locked=True)
+        self._refresh_queue_positions_locked()
+
+    def _refresh_queue_positions_locked(self) -> None:
+        queue_ids = list(self._download_queue)
+        for idx, job_id in enumerate(queue_ids, start=1):
+            info = self._jobs.get(job_id) or {}
+            info["queue_position"] = idx
+            db_job_id = info.get("db_job_id") or job_id
+            try:
+                VaultManager().update_download_job(
+                    db_job_id,
+                    current=0,
+                    total=0,
+                    status="queued",
+                    queue_position=idx,
+                    priority=int(info.get("priority") or 0),
+                )
+            except Exception:
+                logger.debug("Failed queue position update for %s", db_job_id, exc_info=True)
 
     def _worker_wrapper(
         self,
@@ -81,12 +193,23 @@ class JobManager:
 
         try:
             result = task_func(*args, **job_kwargs)
-            self._mark_success(job_id, result, job_type, db_job_id)
-            completed_successfully = True
+            if self.is_cancel_requested(job_id):
+                self._mark_cancelled(job_id, job_type, db_job_id)
+            else:
+                self._mark_success(job_id, result, job_type, db_job_id)
+                completed_successfully = True
         except Exception as exc:
             self._mark_failure(job_id, exc, job_type, db_job_id)
         finally:
             self._finalize_incomplete_download(job_id, job_type, db_job_id, completed_successfully)
+            self._on_worker_finished(job_id, job_type)
+
+    def _on_worker_finished(self, job_id: str, job_type: str) -> None:
+        if job_type != "download":
+            return
+        with self._lock:
+            self._active_downloads.discard(job_id)
+            self._dispatch_queued_downloads_locked()
 
     def _inject_worker_callbacks(
         self,
@@ -123,11 +246,13 @@ class JobManager:
     def _mark_running(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
         with self._lock:
             self._jobs[job_id]["status"] = "running"
+            self._jobs[job_id]["queue_position"] = 0
 
         if job_type != "download":
             return
         try:
             self._update_db_safe(db_job_id or job_id, status="running")
+            VaultManager().update_download_job(db_job_id or job_id, 0, 0, status="running", queue_position=0)
         except Exception:
             logger.debug("_update_db_safe failed to mark running for %s", db_job_id or job_id, exc_info=True)
 
@@ -143,6 +268,17 @@ class JobManager:
             self._jobs[job_id]["progress"] = 1.0
             self._jobs[job_id]["message"] = "Done"
             self._jobs[job_id]["result"] = result
+
+    def _mark_cancelled(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
+        if job_type == "download":
+            try:
+                self._update_db_safe(db_job_id or job_id, status="cancelled", error="Cancelled by user")
+            except Exception:
+                logger.debug("Failed to mark cancelled in vault DB: %s", db_job_id or job_id, exc_info=True)
+        with self._lock:
+            self._jobs[job_id]["status"] = "cancelled"
+            self._jobs[job_id]["message"] = "Cancelled by user"
+            self._jobs[job_id]["error"] = "Cancelled by user"
 
     def _mark_failure(self, job_id: str, exc: Exception, job_type: str, db_job_id: str | None) -> None:
         logger.exception("Job %s failed", job_id)
@@ -173,7 +309,16 @@ class JobManager:
 
         try:
             snapshot = self.get_job(job_id) or {}
-            final_error = "Cancelled by user" if snapshot.get("cancel_requested") else snapshot.get("message")
+            cancelled = bool(snapshot.get("cancel_requested") or snapshot.get("status") == "cancelled")
+            if cancelled:
+                self._update_db_safe(
+                    db_job_id or job_id,
+                    status="cancelled",
+                    error="Cancelled by user",
+                    current=snapshot.get("progress", 0),
+                )
+                return
+            final_error = snapshot.get("message")
             self._update_db_safe(
                 db_job_id or job_id,
                 status="error",
@@ -257,17 +402,58 @@ class JobManager:
 
         Returns True if a matching job was found and cancel requested.
         """
+        to_mark_cancelled: list[str] = []
+        found = False
         with self._lock:
             # Direct match
             if id_or_db_id in self._jobs:
                 self._jobs[id_or_db_id]["cancel_requested"] = True
-                return True
+                found = True
+                if id_or_db_id in self._download_queue:
+                    self._download_queue.remove(id_or_db_id)
+                    self._jobs[id_or_db_id]["status"] = "cancelled"
+                    self._jobs[id_or_db_id]["message"] = "Cancelled before start"
+                    self._refresh_queue_positions_locked()
+                    to_mark_cancelled.append(self._jobs[id_or_db_id].get("db_job_id") or id_or_db_id)
             # Search by db_job_id
-            for _, info in self._jobs.items():
-                if info.get("db_job_id") == id_or_db_id:
+            if not found:
+                for jid, info in self._jobs.items():
+                    if info.get("db_job_id") != id_or_db_id:
+                        continue
                     info["cancel_requested"] = True
-                    return True
-        return False
+                    found = True
+                    if jid in self._download_queue:
+                        self._download_queue.remove(jid)
+                        info["status"] = "cancelled"
+                        info["message"] = "Cancelled before start"
+                        self._refresh_queue_positions_locked()
+                        to_mark_cancelled.append(info.get("db_job_id") or jid)
+        for db_id in to_mark_cancelled:
+            try:
+                self._update_db_safe(db_id, status="cancelled", error="Cancelled by user")
+            except Exception:
+                logger.debug("Failed to mark queued job cancelled: %s", db_id, exc_info=True)
+        return found
+
+    def prioritize_download(self, id_or_db_id: str) -> bool:
+        """Move a queued download to the front of the queue."""
+        with self._lock:
+            target_job_id = None
+            if id_or_db_id in self._jobs:
+                target_job_id = id_or_db_id
+            else:
+                for jid, info in self._jobs.items():
+                    if info.get("db_job_id") == id_or_db_id:
+                        target_job_id = jid
+                        break
+            if not target_job_id or target_job_id not in self._download_queue:
+                return False
+            self._download_queue.remove(target_job_id)
+            self._download_queue.appendleft(target_job_id)
+            self._jobs[target_job_id]["priority"] = int(self._jobs[target_job_id].get("priority") or 0) + 1
+            self._refresh_queue_positions_locked()
+            self._dispatch_queued_downloads_locked()
+            return True
 
     def is_cancel_requested(self, job_id: str) -> bool:
         """Check if cancellation has been requested for a given job_id."""
@@ -294,7 +480,7 @@ class JobManager:
         """List all tracked jobs, optionally filtering to active work."""
         with self._lock:
             if active_only:
-                return {k: v for k, v in self._jobs.items() if v["status"] in ["pending", "running"]}
+                return {k: v for k, v in self._jobs.items() if v["status"] in ["pending", "queued", "running"]}
             return self._jobs.copy()
 
 

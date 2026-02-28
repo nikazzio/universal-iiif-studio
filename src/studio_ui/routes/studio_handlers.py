@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from fasthtml.common import Div, Request, Script
+from fasthtml.common import Div, RedirectResponse, Request, Script
 
 from studio_ui.common.htmx import history_refresh_script
 from studio_ui.common.toasts import build_toast
@@ -19,11 +19,12 @@ from studio_ui.components.studio.tabs import render_studio_tabs
 from studio_ui.components.studio.transcription import transcription_tab_content
 from studio_ui.config import get_api_key, get_snippets_dir
 from studio_ui.ocr_state import OCR_JOBS_STATE, get_ocr_job_state, is_ocr_job_running
-from studio_ui.pages.studio import document_picker, studio_layout
+from studio_ui.pages.studio import studio_layout
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.services.ocr.processor import OCRProcessor
 from universal_iiif_core.services.ocr.storage import OCRStorage
+from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.utils import load_json
 
 logger = get_logger(__name__)
@@ -70,6 +71,16 @@ def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int) -> Sc
     )
 
 
+def _normalized_studio_context(doc_id: str, library: str) -> tuple[str, str]:
+    """Normalize doc and library query params from URL-encoded values."""
+    return unquote(doc_id) if doc_id else "", unquote(library) if library else ""
+
+
+def _library_redirect() -> RedirectResponse:
+    """Redirect to Library when Studio is requested without document context."""
+    return RedirectResponse(url="/library", status_code=303)
+
+
 def build_studio_tab_content(
     doc_id: str,
     library: str,
@@ -101,15 +112,11 @@ def build_studio_tab_content(
 
 def studio_page(request: Request, doc_id: str = "", library: str = "", page: int = 1):
     """Render Main Studio Layout."""
-    doc_id = unquote(doc_id) if doc_id else ""
-    library = unquote(library) if library else ""
+    doc_id, library = _normalized_studio_context(doc_id, library)
     is_hx = request.headers.get("HX-Request") == "true"
 
     if not doc_id or not library:
-        content = document_picker()
-        if is_hx:
-            return content
-        return base_layout("Studio - Seleziona Documento", content, active_page="studio")
+        return _library_redirect()
 
     try:
         storage = OCRStorage()
@@ -136,6 +143,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             return panel
 
         manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
+        ms_row = VaultManager().get_manuscript(doc_id) or {}
 
         content = studio_layout(
             title,
@@ -147,10 +155,13 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             manifest_json,
             total_pages,
             meta or {},
+            asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
+            has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
+            pdf_local_available=bool(ms_row.get("pdf_local_available")),
         )
         if is_hx:
             return content
-        return base_layout(f"Studio - {title}", content, active_page="studio")
+        return base_layout(f"Studio - {title}", content, active_page="library")
 
     except Exception as e:
         logger.exception("Studio Error")
@@ -439,14 +450,3 @@ def delete_snippet(snippet_id: int):
     except Exception as exc:
         logger.exception("Snippet delete error for id=%s", snippet_id)
         return _toast_only(f"Errore durante l'eliminazione dello snippet: {exc}", tone="danger")
-
-
-def delete_document(doc_id: str, library: str):
-    """Delete an entire document and its data."""
-    doc_id, library = unquote(doc_id), unquote(library)
-    if OCRStorage().delete_document(doc_id, library):
-        return [document_picker(), build_toast(f"Documento '{doc_id}' eliminato.", tone="success")]
-    return [
-        document_picker(),
-        build_toast(f"Errore durante la rimozione di '{doc_id}'.", tone="danger"),
-    ]

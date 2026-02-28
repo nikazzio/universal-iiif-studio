@@ -28,6 +28,8 @@ def test_delete_manuscript_removes_folder_and_snippets(tmp_path):
     # Register manuscript and snippet in DB
     vm.upsert_manuscript(ms_id, library=lib, title="T", local_path=str(candidate), status="complete")
     snippet_id = vm.save_snippet(ms_id, 1, str(sfile))
+    vm.create_download_job("job_test_ms", ms_id, lib, "https://example.org/manifest.json")
+    vm.update_download_job("job_test_ms", current=1, total=2, status="error", error="boom")
     assert snippet_id is not None
 
     # Sanity: DB record exists
@@ -43,3 +45,17 @@ def test_delete_manuscript_removes_folder_and_snippets(tmp_path):
     assert not sfile.exists()
     # DB should not have manuscript
     assert vm.get_manuscript(ms_id) is None
+    # Related download jobs should be removed too
+    assert vm.get_download_job("job_test_ms") is None
+
+
+def test_list_download_jobs_hides_terminal_orphans(tmp_path):
+    """Terminal jobs without a manuscript row should not appear in manager list."""
+    db_path = tmp_path / "vault.db"
+    vm = VaultManager(db_path=str(db_path))
+
+    vm.create_download_job("job_orphan", "DOC_ORPHAN", "TestLib", "https://example.org/orphan.json")
+    vm.update_download_job("job_orphan", current=0, total=0, status="error", error="boom")
+
+    jobs = vm.list_download_jobs(limit=20)
+    assert all(j.get("job_id") != "job_orphan" for j in jobs)

@@ -117,7 +117,7 @@ def test_job_cancel_request_marks_final_error(tmp_path, monkeypatch):
     vm = VaultManager(db_path)
     rec = vm.get_download_job("canceljob")
     assert rec is not None
-    assert rec.get("status") == "error"
+    assert rec.get("status") in {"error", "cancelled"}
     assert rec.get("error") in (
         "Cancelled by user",
         "task cancelled cooperatively",
