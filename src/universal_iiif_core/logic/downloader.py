@@ -343,6 +343,19 @@ class IIIFDownloader:
                 )
             except Exception:
                 self.logger.debug("Unable to pre-warm Vatican viewer session", exc_info=True)
+        elif "gallica.bnf.fr" in self.manifest_url.lower():
+            viewer_url = self.manifest_url.replace("/iiif/ark:/12148/", "/ark:/12148/").replace("/manifest.json", "")
+            try:
+                self.session.get(viewer_url, timeout=20)
+                self.session.headers.update(
+                    {
+                        "Referer": viewer_url,
+                        "Origin": "https://gallica.bnf.fr",
+                        "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    }
+                )
+            except Exception:
+                self.logger.debug("Unable to pre-warm Gallica viewer session", exc_info=True)
 
     def extract_metadata(self):
         """Extract and save basic metadata from the manifest."""
@@ -449,7 +462,7 @@ class IIIFDownloader:
                             url,
                             r.text[:200],
                         )
-                    if r.status_code == 429:
+                    if r.status_code in {403, 429}:
                         with self._lock:
                             wait = (2**attempt) * THROTTLE_BASE_WAIT
                             self._backoff_until = time.time() + wait

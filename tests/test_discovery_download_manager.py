@@ -1,4 +1,4 @@
-from studio_ui.routes import discovery_handlers
+from studio_ui.routes import discovery_handlers, discovery_helpers
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 
@@ -91,3 +91,25 @@ def test_remove_download_rejects_active_job():
     rendered = repr(result)
     assert "Rimozione non disponibile" in rendered
     assert vm.get_download_job("remove_job_2") is not None
+
+
+def test_start_downloader_thread_reuses_existing_active_job(monkeypatch):
+    """Starting the same doc/library twice should reuse the active job id."""
+    vm = VaultManager()
+    vm.create_download_job("active_job_1", "DOC_ACTIVE", "Gallica", "https://example.org/manifest.json")
+    vm.update_download_job("active_job_1", current=1, total=10, status="running")
+
+    called = {"submit": 0}
+
+    def _fake_submit(*_a, **_k):
+        called["submit"] += 1
+        return "new_job"
+
+    monkeypatch.setattr(discovery_helpers.job_manager, "submit_job", _fake_submit)
+    jid = discovery_helpers.start_downloader_thread(
+        "https://example.org/manifest.json",
+        "DOC_ACTIVE",
+        "Gallica",
+    )
+    assert jid == "active_job_1"
+    assert called["submit"] == 0
