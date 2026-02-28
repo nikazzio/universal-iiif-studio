@@ -92,6 +92,17 @@ def start_downloader_thread(manifest_url: str, doc_id: str, library: str, target
     doc_id = unquote(doc_id)
     library = unquote(library)
 
+    # Prevent duplicate concurrent jobs for the same manuscript/library pair.
+    try:
+        for active in VaultManager().get_active_downloads():
+            if str(active.get("doc_id") or "") == doc_id and str(active.get("library") or "") == library:
+                existing_job_id = str(active.get("job_id") or "").strip()
+                if existing_job_id:
+                    logger.info("Download already active for %s (%s): reusing job %s", doc_id, library, existing_job_id)
+                    return existing_job_id
+    except Exception:
+        logger.debug("Failed to check active downloads before enqueue", exc_info=True)
+
     # 1. GENERA ID ROBUSTO + univoco per consentire retry multipli in parallelo.
     #    Manteniamo il prefisso hash per traceability e aggiungiamo un suffisso corto random.
     base_job_id = generate_job_id(library, manifest_url)

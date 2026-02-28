@@ -1,3 +1,4 @@
+import json
 import shutil
 import sqlite3
 from contextlib import suppress
@@ -332,43 +333,102 @@ class VaultManager:
             return "complete"
         return "partial"
 
+    @staticmethod
+    def _fallback_status_from_counts(total: int, downloaded: int) -> str:
+        if downloaded <= 0:
+            return "saved"
+        if total <= 0 or downloaded >= total:
+            return "complete"
+        return "partial"
+
+    @staticmethod
+    def _scan_page_numbers(directory: Path | None) -> set[int]:
+        if not directory or not directory.exists():
+            return set()
+        pages: set[int] = set()
+        for image in directory.glob("pag_*.jpg"):
+            stem = image.stem or ""
+            try:
+                pages.add(int(stem.split("_")[-1]) + 1)
+            except ValueError:
+                logger.debug("Skipping malformed page filename while scanning %s: %s", directory, image.name)
+        return pages
+
     def normalize_asset_states(self, limit: int = 200) -> int:
         """Backfill and normalize asset_state/item_type for existing rows."""
         rows = self.get_all_manuscripts()[: max(1, limit)]
         updated = 0
+        active_keys = {
+            (
+                str(job.get("doc_id") or ""),
+                str(job.get("library") or ""),
+            )
+            for job in self.get_active_downloads()
+        }
+        temp_root: Path | None = None
+        try:
+            from ...config_manager import get_config_manager
+
+            temp_root = Path(get_config_manager().get_temp_dir())
+        except Exception:
+            temp_root = None
+
         for row in rows:
+            manuscript_id = str(row.get("id") or "")
+            library = str(row.get("library") or "")
             local_path_raw = str(row.get("local_path") or "").strip()
             local_path = Path(local_path_raw) if local_path_raw else None
             scans_dir = local_path / "scans" if local_path else None
-            scans_count = 0
-            if scans_dir and scans_dir.exists():
-                scans_count = len(list(scans_dir.glob("pag_*.jpg")))
+            scans_pages = self._scan_page_numbers(scans_dir)
+            temp_pages = self._scan_page_numbers((temp_root / manuscript_id) if temp_root and manuscript_id else None)
+            known_pages = scans_pages or temp_pages
+            scans_count = len(scans_pages)
+            temp_count = len(temp_pages)
             total = int(row.get("total_canvases") or 0)
-            downloaded = max(int(row.get("downloaded_canvases") or 0), scans_count)
+            downloaded = max(int(row.get("downloaded_canvases") or 0), scans_count, temp_count)
             if total <= 0 and downloaded > 0:
                 total = downloaded
             status = str(row.get("status") or "").lower()
             asset_state = str(row.get("asset_state") or "").lower()
+            if status == "cancelling":
+                status = "running"
+            is_stale_running = status in {"queued", "running", "downloading", "pending"} and (
+                manuscript_id,
+                library,
+            ) not in active_keys
+            if is_stale_running:
+                status = self._fallback_status_from_counts(total, downloaded)
+
             target_state = self._compute_state(total, downloaded, status)
+            allowed_statuses = {"saved", "partial", "complete", "error", "downloading", "queued", "running"}
+            status_to_store = status if status in allowed_statuses else str(row.get("status") or "")
             normalized_type = normalize_item_type(str(row.get("item_type") or ""))
+            missing_pages: list[int] = []
+            if total > 0 and known_pages:
+                missing_pages = [i for i in range(1, total + 1) if i not in known_pages]
+            elif total > 0 and downloaded < total:
+                missing_pages = [i for i in range(downloaded + 1, total + 1)] if downloaded > 0 else []
+            missing_pages_json = json.dumps(missing_pages)
 
             if (
+                status_to_store == str(row.get("status") or "")
+                and
                 target_state == asset_state
                 and total == int(row.get("total_canvases") or 0)
                 and downloaded == int(row.get("downloaded_canvases") or 0)
                 and normalized_type == str(row.get("item_type") or "")
+                and missing_pages_json == str(row.get("missing_pages_json") or "[]")
             ):
                 continue
 
             self.upsert_manuscript(
-                str(row.get("id") or ""),
-                status=(
-                    target_state if target_state in {"error", "downloading", "queued", "running"} else row.get("status")
-                ),
+                manuscript_id,
+                status=status_to_store,
                 asset_state=target_state,
                 total_canvases=total,
                 downloaded_canvases=downloaded,
                 item_type=normalized_type,
+                missing_pages_json=missing_pages_json,
             )
             updated += 1
         return updated

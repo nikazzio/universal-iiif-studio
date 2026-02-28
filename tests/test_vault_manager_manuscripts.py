@@ -1,3 +1,5 @@
+import json
+
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
@@ -55,3 +57,46 @@ def test_normalize_asset_states_updates_legacy_item_type(tmp_path):
         assert row.get("item_type") == "non classificato"
     finally:
         cm.set_downloads_dir(str(old_downloads))
+
+
+def test_normalize_asset_states_recovers_stale_downloading_from_temp_pages(tmp_path):
+    """Stale downloading rows without active jobs should be normalized using temp pages."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    old_temp = cm.get_temp_dir()
+    try:
+        downloads = tmp_path / "downloads"
+        temp_images = tmp_path / "temp_images"
+        cm.set_downloads_dir(str(downloads))
+        cm.set_temp_dir(str(temp_images))
+
+        local_root = downloads / "Gallica" / "DOC_STALE"
+        (local_root / "scans").mkdir(parents=True, exist_ok=True)
+        temp_doc_dir = temp_images / "DOC_STALE"
+        temp_doc_dir.mkdir(parents=True, exist_ok=True)
+        for idx in (0, 1):
+            (temp_doc_dir / f"pag_{idx:04d}.jpg").write_text("x", encoding="utf-8")
+
+        vm = VaultManager()
+        vm.upsert_manuscript(
+            "DOC_STALE",
+            library="Gallica",
+            local_path=str(local_root),
+            status="downloading",
+            asset_state="downloading",
+            total_canvases=5,
+            downloaded_canvases=0,
+            missing_pages_json="[]",
+        )
+
+        updated = vm.normalize_asset_states(limit=10)
+        row = vm.get_manuscript("DOC_STALE") or {}
+        assert updated >= 1
+        assert row.get("status") == "partial"
+        assert row.get("asset_state") == "partial"
+        assert int(row.get("downloaded_canvases") or 0) == 2
+        missing = json.loads(str(row.get("missing_pages_json") or "[]"))
+        assert missing == [3, 4, 5]
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+        cm.set_temp_dir(str(old_temp))
