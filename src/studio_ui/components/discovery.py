@@ -22,6 +22,8 @@ from fasthtml.common import (
     Span,
 )
 
+from studio_ui.common.title_utils import resolve_preferred_title, truncate_title
+
 
 def render_search_results_list(results: list) -> Div:
     """Renderizza una lista di risultati di ricerca con metadati estesi."""
@@ -53,6 +55,8 @@ def render_search_results_list(results: list) -> Div:
             viewer_url = f"https://gallica.bnf.fr/ark:/12148/{doc_id}"
         elif library == "Vaticana" and doc_id:
             viewer_url = f"https://digi.vatlib.it/view/{doc_id}"
+        elif library == "Institut de France" and doc_id:
+            viewer_url = f"https://bibnum.institutdefrance.fr/viewer/{doc_id}"
 
         # Azioni: salva in Libreria / salva+download
         hx_vals = f'{{"manifest_url": "{manifest_url}", "doc_id": "{doc_id}", "library": "{library}"}}'
@@ -209,6 +213,7 @@ def discovery_form() -> Div:
     libraries = [
         ("Vaticana (BAV)", "Vaticana"),
         ("Gallica (BnF)", "Gallica"),
+        ("Institut de France (Bibnum)", "Institut de France"),
         ("Bodleian (Oxford)", "Bodleian"),
         ("Altro / URL Diretto", "Unknown"),
     ]
@@ -340,6 +345,8 @@ def render_preview(data: dict) -> Div:
         viewer_url = f"https://gallica.bnf.fr/ark:/12148/{doc_id}"
     elif library == "Vaticana":
         viewer_url = f"https://digi.vatlib.it/view/{doc_id}"
+    elif library == "Institut de France":
+        viewer_url = f"https://bibnum.institutdefrance.fr/viewer/{doc_id}"
     elif library == "Bodleian":
         viewer_url = f"https://digital.bodleian.ox.ac.uk/objects/{doc_id}"
 
@@ -622,6 +629,148 @@ def render_download_manager(jobs: list[dict]) -> Div:
     return Div(body, **attrs)
 
 
+def _download_job_badge(status: str, queue_position: int) -> tuple[str, str]:
+    badge_map = {
+        "running": "bg-indigo-800 text-indigo-100",
+        "queued": "bg-slate-700 text-slate-100",
+        "cancelling": "bg-amber-700 text-amber-100",
+        "paused": "bg-violet-800 text-violet-100",
+        "completed": "bg-emerald-700 text-emerald-100",
+        "cancelled": "bg-slate-700 text-slate-200",
+        "error": "bg-rose-700 text-rose-100",
+    }
+    badge_cls = badge_map.get(status, "bg-slate-700 text-slate-100")
+    badge_text = status.upper()
+    if status == "queued" and queue_position > 0:
+        badge_text = f"QUEUED #{queue_position}"
+    return badge_cls, badge_text
+
+
+def _download_job_actions(status: str, job_id: str, doc_id: str, library: str) -> tuple[list, list]:
+    left_actions: list = []
+    right_actions: list = []
+
+    if status in {"running", "queued"}:
+        left_actions.append(
+            Button(
+                "⏸️ Pausa",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-md "
+                    "border border-amber-500/60 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/pause/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status == "queued":
+        left_actions.append(
+            Button(
+                "⬆️ Priorità",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md "
+                    "border border-slate-500/60 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/prioritize/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status == "paused":
+        left_actions.append(
+            Button(
+                "▶️ Riprendi",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md "
+                    "border border-emerald-500/60 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/resume/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status in {"error", "cancelled"}:
+        left_actions.append(
+            Button(
+                "🔁 Retry",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md "
+                    "border border-emerald-500/60 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/retry/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status == "completed":
+        left_actions.append(
+            A(
+                Button(
+                    "📖 Vai allo Studio",
+                    cls=(
+                        "inline-flex items-center gap-1.5 text-xs font-semibold "
+                        "bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-md "
+                        "border border-indigo-500/60 shadow-sm transition-colors"
+                    ),
+                ),
+                href=f"/studio?doc_id={quote(doc_id)}&library={quote(library)}",
+                cls="inline-block",
+            )
+        )
+
+    if status in {"running", "queued", "cancelling"}:
+        right_actions.append(
+            Button(
+                "⛔ Annulla",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-rose-700 hover:bg-rose-600 text-white px-3 py-1.5 rounded-md "
+                    "border border-rose-500/60 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/cancel/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    if status in {"error", "cancelled", "completed", "paused"}:
+        right_actions.append(
+            Button(
+                "🗑️ Rimuovi",
+                cls=(
+                    "inline-flex items-center gap-1.5 text-xs font-semibold "
+                    "bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-md "
+                    "border border-slate-600 shadow-sm transition-colors"
+                ),
+                hx_post=f"/api/download_manager/remove/{job_id}",
+                hx_target="#download-manager-area",
+                hx_swap="outerHTML",
+            )
+        )
+    return left_actions, right_actions
+
+
+def _download_job_progress(status: str, current: int, total: int, percent: int, error: str) -> Div:
+    progress = Div(
+        Div(
+            Div(cls="h-2 rounded bg-indigo-500", style=f"width: {percent}%"),
+            cls="w-full bg-slate-700 rounded h-2",
+        ),
+        P(f"{current}/{total} ({percent}%)", cls="text-[11px] text-slate-400 mt-1") if total > 0 else "",
+        cls="mt-2",
+    )
+    if status == "queued":
+        return Div(P("In attesa di uno slot libero...", cls="text-[11px] text-slate-400 mt-2"), cls="mt-1")
+    if status == "paused":
+        return Div(P("Download in pausa.", cls="text-[11px] text-violet-300 mt-2"), cls="mt-1")
+    if status in {"error", "cancelled"} and error:
+        return Div(P(error, cls="text-[11px] text-rose-300 mt-2"), cls="mt-1")
+    return progress
+
+
 def render_download_job_card(job: dict) -> Div:
     """Render a single card inside the Download Manager list."""
     status = str(job.get("status") or "queued")
@@ -632,92 +781,25 @@ def render_download_job_card(job: dict) -> Div:
     total = int(job.get("total", 0) or 0)
     queue_position = int(job.get("queue_position", 0) or 0)
     error = str(job.get("error") or "")
+    title = truncate_title(resolve_preferred_title(job, fallback_doc_id=doc_id), max_len=70, suffix="[...]")
     percent = int((current / total * 100) if total > 0 else 0)
 
-    badge_map = {
-        "running": "bg-indigo-800 text-indigo-100",
-        "queued": "bg-slate-700 text-slate-100",
-        "cancelling": "bg-amber-700 text-amber-100",
-        "completed": "bg-emerald-700 text-emerald-100",
-        "cancelled": "bg-slate-700 text-slate-200",
-        "error": "bg-rose-700 text-rose-100",
-    }
-    badge_cls = badge_map.get(status, "bg-slate-700 text-slate-100")
-    badge_text = status.upper()
-    if status == "queued" and queue_position > 0:
-        badge_text = f"QUEUED #{queue_position}"
-
-    actions = []
-    if status in {"running", "queued", "cancelling"}:
-        actions.append(
-            Button(
-                "⛔ Cancella",
-                cls="text-xs bg-rose-700 hover:bg-rose-600 text-white px-2 py-1 rounded",
-                hx_post=f"/api/download_manager/cancel/{job_id}",
-                hx_target="#download-manager-area",
-                hx_swap="outerHTML",
-            )
-        )
-    if status == "queued":
-        actions.append(
-            Button(
-                "⬆️ Priorità",
-                cls="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded",
-                hx_post=f"/api/download_manager/prioritize/{job_id}",
-                hx_target="#download-manager-area",
-                hx_swap="outerHTML",
-            )
-        )
-    if status in {"error", "cancelled"}:
-        actions.append(
-            Button(
-                "🔁 Retry",
-                cls="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded",
-                hx_post=f"/api/download_manager/retry/{job_id}",
-                hx_target="#download-manager-area",
-                hx_swap="outerHTML",
-            )
-        )
-    if status in {"error", "cancelled", "completed"}:
-        actions.append(
-            Button(
-                "🗑️ Rimuovi",
-                cls="text-xs bg-slate-800 hover:bg-slate-700 text-slate-100 px-2 py-1 rounded border border-slate-600",
-                hx_post=f"/api/download_manager/remove/{job_id}",
-                hx_target="#download-manager-area",
-                hx_swap="outerHTML",
-            )
-        )
-    if status == "completed":
-        actions.append(
-            A(
-                "📖 Studio",
-                href=f"/studio?doc_id={quote(doc_id)}&library={quote(library)}",
-                cls="text-xs text-indigo-300 hover:text-indigo-200 underline",
-            )
-        )
-
-    progress = Div(
-        Div(
-            Div(cls="h-2 rounded bg-indigo-500", style=f"width: {percent}%"),
-            cls="w-full bg-slate-700 rounded h-2",
-        ),
-        P(f"{current}/{total} ({percent}%)", cls="text-[11px] text-slate-400 mt-1") if total > 0 else "",
-        cls="mt-2",
-    )
-    if status == "queued":
-        progress = Div(P("In attesa di uno slot libero...", cls="text-[11px] text-slate-400 mt-2"), cls="mt-1")
-    if status in {"error", "cancelled"} and error:
-        progress = Div(P(error, cls="text-[11px] text-rose-300 mt-2"), cls="mt-1")
+    badge_cls, badge_text = _download_job_badge(status, queue_position)
+    left_actions, right_actions = _download_job_actions(status, job_id, doc_id, library)
+    progress = _download_job_progress(status, current, total, percent, error)
 
     return Div(
         Div(
-            H3(doc_id, cls="text-sm font-bold text-slate-100 truncate"),
+            H3(title, cls="text-sm font-bold text-slate-100 truncate"),
             Span(badge_text, cls=f"text-[10px] px-2 py-1 rounded {badge_cls}"),
             cls="flex items-start justify-between gap-2",
         ),
         P(library, cls="text-xs text-slate-400"),
         progress,
-        Div(*actions, cls="mt-2 flex flex-wrap gap-2"),
+        Div(
+            Div(*left_actions, cls="flex flex-wrap gap-2"),
+            Div(*right_actions, cls="flex flex-wrap gap-2 ml-auto"),
+            cls="mt-2 flex items-start gap-2",
+        ),
         cls="bg-slate-900/50 border border-slate-700 rounded-lg p-3",
     )

@@ -29,3 +29,15 @@ def test_discovery_oxford_integration():
     m2, d2 = resolve_shelfmark("Oxford", uuid.upper())
     assert d2 == uuid  # Should be lowercased by logic if implemented, or just match
     assert m2 == m1
+
+
+def test_discovery_institut_integration():
+    """Test Institut de France resolution via the main dispatcher."""
+    manifest, doc_id = resolve_shelfmark("Institut de France", "17837")
+    assert manifest == "https://bibnum.institutdefrance.fr/iiif/17837/manifest"
+    assert doc_id == "17837"
+
+    viewer = "https://bibnum.institutdefrance.fr/viewer/17837?viewer=picture"
+    m2, d2 = resolve_shelfmark("Institut de France", viewer)
+    assert m2 == "https://bibnum.institutdefrance.fr/iiif/17837/manifest"
+    assert d2 == "17837"

@@ -195,7 +195,12 @@ def _render_providers(entries):
 def info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library):
     """Render the Info tab content."""
     manifest = manifest_json or {}
-    title = _flatten_text(manifest.get("label")) or meta.get("title") or doc_id
+    title = (
+        _flatten_text(meta.get("full_display_title"))
+        or _flatten_text(manifest.get("label"))
+        or meta.get("title")
+        or doc_id
+    )
     description = _flatten_text(manifest.get("description")) or meta.get("description") or ""
     attribution = _flatten_text(manifest.get("attribution") or meta.get("attribution") or library)
     manifest_id = _resolve_url(manifest.get("@id") or manifest.get("id"))

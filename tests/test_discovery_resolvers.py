@@ -11,6 +11,7 @@ sys.path.insert(0, str(project_root))
 
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark
 from universal_iiif_core.resolvers.gallica import GallicaResolver
+from universal_iiif_core.resolvers.institut import InstitutResolver
 from universal_iiif_core.resolvers.oxford import OxfordResolver
 from universal_iiif_core.resolvers.vatican import normalize_shelfmark
 
@@ -48,3 +49,18 @@ def test_oxford_uuid_case_insensitive():
     manifest, uid = r.get_manifest_url(upper)
     assert uid == "080f88f5-7586-4b8a-8064-63ab3495393c"
     assert manifest.endswith(f"{uid}.json")
+
+
+def test_institut_resolver_id_and_viewer_url():
+    """Test Institut resolver with numeric id and viewer URL."""
+    resolver = InstitutResolver()
+
+    manifest_url, doc_id = resolver.get_manifest_url("17837")
+    assert manifest_url == "https://bibnum.institutdefrance.fr/iiif/17837/manifest"
+    assert doc_id == "17837"
+
+    manifest_url2, doc_id2 = resolver.get_manifest_url(
+        "https://bibnum.institutdefrance.fr/viewer/17837?viewer=picture#page=7"
+    )
+    assert manifest_url2 == "https://bibnum.institutdefrance.fr/iiif/17837/manifest"
+    assert doc_id2 == "17837"

@@ -4,6 +4,7 @@ from pathlib import Path
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import studio_handlers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
@@ -79,3 +80,45 @@ def test_studio_renders_workspace_with_doc_context():
     rendered = str(response)
     assert "Urb lat 1779" in rendered
     assert "mirador-viewer" in rendered
+
+
+def test_studio_uses_library_title_and_shows_full_title_in_info():
+    """Studio header should use truncated library title while Info keeps full value."""
+    doc_id = "MSS_Urb.lat.1888"
+    library = "Vaticana"
+    long_title = (
+        "Oeuvres de Pierre de Bourdeille, sieur de Brantôme. XVIe et XVIIe siècles. "
+        "XII Rodomontades espagnoles et Discours sur les Duels."
+    )
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    (scans_dir / "pag_0000.jpg").write_bytes(b"stub")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Urb lat 1888"}),
+        encoding="utf-8",
+    )
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+        title=long_title,
+        display_title=long_title,
+        catalog_title=long_title,
+    )
+
+    response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
+    rendered = str(response)
+    assert truncate_title(long_title, max_len=70, suffix="[...]") in rendered
+    assert long_title in rendered

@@ -71,6 +71,7 @@ class JobManager:
                 "error": None,
                 "created_at": time.time(),
                 "cancel_requested": False,
+                "pause_requested": False,
                 "db_job_id": db_job_id,
                 "task_func": task_func,
                 "args": args,
@@ -152,8 +153,12 @@ class JobManager:
             if not info:
                 continue
             if info.get("cancel_requested"):
-                info["status"] = "cancelled"
-                info["message"] = "Cancelled before start"
+                if info.get("pause_requested"):
+                    info["status"] = "paused"
+                    info["message"] = "Paused by user"
+                else:
+                    info["status"] = "cancelled"
+                    info["message"] = "Cancelled before start"
                 continue
             self._active_downloads.add(next_job)
             info["message"] = "Starting..."
@@ -270,15 +275,20 @@ class JobManager:
             self._jobs[job_id]["result"] = result
 
     def _mark_cancelled(self, job_id: str, job_type: str, db_job_id: str | None) -> None:
+        with self._lock:
+            paused = bool(self._jobs.get(job_id, {}).get("pause_requested"))
+
+        target_status = "paused" if paused else "cancelled"
+        target_message = "Paused by user" if paused else "Cancelled by user"
         if job_type == "download":
             try:
-                self._update_db_safe(db_job_id or job_id, status="cancelled", error="Cancelled by user")
+                self._update_db_safe(db_job_id or job_id, status=target_status, error=target_message)
             except Exception:
-                logger.debug("Failed to mark cancelled in vault DB: %s", db_job_id or job_id, exc_info=True)
+                logger.debug("Failed to mark %s in vault DB: %s", target_status, db_job_id or job_id, exc_info=True)
         with self._lock:
-            self._jobs[job_id]["status"] = "cancelled"
-            self._jobs[job_id]["message"] = "Cancelled by user"
-            self._jobs[job_id]["error"] = "Cancelled by user"
+            self._jobs[job_id]["status"] = target_status
+            self._jobs[job_id]["message"] = target_message
+            self._jobs[job_id]["error"] = target_message
 
     def _mark_failure(self, job_id: str, exc: Exception, job_type: str, db_job_id: str | None) -> None:
         logger.exception("Job %s failed", job_id)
@@ -309,13 +319,27 @@ class JobManager:
 
         try:
             snapshot = self.get_job(job_id) or {}
+            existing = VaultManager().get_download_job(db_job_id or job_id) or {}
+            curr = int(existing.get("current", 0) or 0)
+            total = int(existing.get("total", 0) or 0)
+            if bool(snapshot.get("pause_requested") or snapshot.get("status") == "paused"):
+                self._update_db_safe(
+                    db_job_id or job_id,
+                    status="paused",
+                    error="Paused by user",
+                    current=curr,
+                    total=total,
+                )
+                return
+
             cancelled = bool(snapshot.get("cancel_requested") or snapshot.get("status") == "cancelled")
             if cancelled:
                 self._update_db_safe(
                     db_job_id or job_id,
                     status="cancelled",
                     error="Cancelled by user",
-                    current=snapshot.get("progress", 0),
+                    current=curr,
+                    total=total,
                 )
                 return
             final_error = snapshot.get("message")
@@ -323,7 +347,8 @@ class JobManager:
                 db_job_id or job_id,
                 status="error",
                 error=final_error,
-                current=snapshot.get("progress", 0),
+                current=curr,
+                total=total,
             )
         except Exception:
             logger.exception("Failed to write final state for %s", db_job_id or job_id)
@@ -434,6 +459,79 @@ class JobManager:
             except Exception:
                 logger.debug("Failed to mark queued job cancelled: %s", db_id, exc_info=True)
         return found
+
+    def _target_job_ids_locked(self, id_or_db_id: str) -> list[str]:
+        if id_or_db_id in self._jobs:
+            return [id_or_db_id]
+        for jid, info in self._jobs.items():
+            if info.get("db_job_id") == id_or_db_id:
+                return [jid]
+        return []
+
+    def _pause_queued_job_locked(self, jid: str, info: dict[str, Any], db_id: str, to_mark_paused: list[str]) -> None:
+        self._download_queue.remove(jid)
+        info["status"] = "paused"
+        info["message"] = "Paused by user"
+        info["error"] = "Paused by user"
+        to_mark_paused.append(db_id)
+        self._refresh_queue_positions_locked()
+
+    @staticmethod
+    def _pause_snapshot_locked(
+        info: dict[str, Any],
+        db_id: str,
+        to_mark_cancelling: list[str],
+        to_mark_paused: list[str],
+    ) -> None:
+        if info.get("status") == "running":
+            info["status"] = "cancelling"
+            info["message"] = "Pausing..."
+            to_mark_cancelling.append(db_id)
+        elif info.get("status") == "queued":
+            info["status"] = "paused"
+            info["message"] = "Paused by user"
+            info["error"] = "Paused by user"
+            to_mark_paused.append(db_id)
+
+    @staticmethod
+    def _apply_pause_status_updates(
+        to_mark_cancelling: list[str],
+        to_mark_paused: list[str],
+        update_db_safe: Callable[[str], None],
+    ) -> None:
+        for db_id in to_mark_cancelling:
+            try:
+                update_db_safe(db_id, status="cancelling", error="Pausing")
+            except Exception:
+                logger.debug("Failed to mark job cancelling while pausing: %s", db_id, exc_info=True)
+        for db_id in to_mark_paused:
+            try:
+                update_db_safe(db_id, status="paused", error="Paused by user")
+            except Exception:
+                logger.debug("Failed to mark job paused: %s", db_id, exc_info=True)
+
+    def request_pause(self, id_or_db_id: str) -> bool:
+        """Request pause for a job by either job_id or external db_job_id."""
+        to_mark_paused: list[str] = []
+        to_mark_cancelling: list[str] = []
+
+        with self._lock:
+            target_job_ids = self._target_job_ids_locked(id_or_db_id)
+            for jid in target_job_ids:
+                info = self._jobs.get(jid)
+                if not info:
+                    continue
+                db_id = info.get("db_job_id") or jid
+                info["pause_requested"] = True
+                info["cancel_requested"] = True
+
+                if jid in self._download_queue:
+                    self._pause_queued_job_locked(jid, info, db_id, to_mark_paused)
+                else:
+                    self._pause_snapshot_locked(info, db_id, to_mark_cancelling, to_mark_paused)
+
+        self._apply_pause_status_updates(to_mark_cancelling, to_mark_paused, self._update_db_safe)
+        return bool(to_mark_cancelling or to_mark_paused)
 
     def prioritize_download(self, id_or_db_id: str) -> bool:
         """Move a queued download to the front of the queue."""

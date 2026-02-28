@@ -392,10 +392,14 @@ class VaultManager:
             asset_state = str(row.get("asset_state") or "").lower()
             if status == "cancelling":
                 status = "running"
-            is_stale_running = status in {"queued", "running", "downloading", "pending"} and (
-                manuscript_id,
-                library,
-            ) not in active_keys
+            is_stale_running = (
+                status in {"queued", "running", "downloading", "pending"}
+                and (
+                    manuscript_id,
+                    library,
+                )
+                not in active_keys
+            )
             if is_stale_running:
                 status = self._fallback_status_from_counts(total, downloaded)
 
@@ -412,8 +416,7 @@ class VaultManager:
 
             if (
                 status_to_store == str(row.get("status") or "")
-                and
-                target_state == asset_state
+                and target_state == asset_state
                 and total == int(row.get("total_canvases") or 0)
                 and downloaded == int(row.get("downloaded_canvases") or 0)
                 and normalized_type == str(row.get("item_type") or "")
@@ -770,7 +773,7 @@ class VaultManager:
             if status == "running":
                 updates.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
                 updates.append("finished_at = NULL")
-            if status in {"completed", "error", "cancelled"}:
+            if status in {"completed", "error", "cancelled", "paused"}:
                 updates.append("finished_at = CURRENT_TIMESTAMP")
             sql = f"UPDATE download_jobs SET {', '.join(updates)} WHERE job_id = ?"  # noqa: S608
             params.append(job_id)
@@ -792,7 +795,7 @@ class VaultManager:
 
                     log_message = "Download update: job=%s doc=%s title=%s %s/%s status=%s"
                     log_args = (job_id, doc_id or "-", title or "-", current, total, status)
-                    if status in {"completed", "error", "cancelled", "cancelling"}:
+                    if status in {"completed", "error", "cancelled", "cancelling", "paused"}:
                         logger.info(log_message, *log_args)
                     else:
                         logger.debug(log_message, *log_args)
@@ -916,28 +919,30 @@ class VaultManager:
         try:
             cursor.execute(
                 """
-                SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages,
-                       queue_position, priority, error_message, updated_at, created_at, started_at, finished_at
+                SELECT dj.job_id, dj.doc_id, dj.library, dj.manifest_url, dj.status,
+                       current_page AS current, total_pages AS total,
+                       dj.queue_position, dj.priority, dj.error_message AS error,
+                       dj.updated_at, dj.created_at, dj.started_at, dj.finished_at,
+                       m.display_title, m.catalog_title, m.shelfmark
                 FROM download_jobs dj
+                LEFT JOIN manuscripts m
+                    ON m.id = dj.doc_id AND COALESCE(m.library, '') = COALESCE(dj.library, '')
                 WHERE NOT (
-                    dj.status IN ('completed', 'error', 'cancelled')
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM manuscripts m
-                        WHERE m.id = dj.doc_id
-                    )
+                    dj.status IN ('completed', 'error', 'cancelled', 'paused')
+                    AND m.id IS NULL
                 )
                 ORDER BY
                     CASE
-                        WHEN status = 'running' THEN 0
-                        WHEN status = 'queued' THEN 1
-                        WHEN status = 'cancelling' THEN 2
-                        WHEN status = 'error' THEN 3
-                        ELSE 4
+                        WHEN dj.status = 'running' THEN 0
+                        WHEN dj.status = 'queued' THEN 1
+                        WHEN dj.status = 'cancelling' THEN 2
+                        WHEN dj.status = 'paused' THEN 3
+                        WHEN dj.status = 'error' THEN 4
+                        ELSE 5
                     END,
-                    priority DESC,
-                    queue_position ASC,
-                    updated_at DESC
+                    dj.priority DESC,
+                    dj.queue_position ASC,
+                    dj.updated_at DESC
                 LIMIT ?
                 """,
                 (int(limit),),

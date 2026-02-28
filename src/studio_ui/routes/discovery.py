@@ -25,6 +25,8 @@ def setup_discovery_routes(app):
     app.get("/api/download_status/{download_id}")(discovery_handlers.get_download_status)
     app.post("/api/cancel_download/{download_id}")(discovery_handlers.cancel_download)
     app.get("/api/download_manager")(discovery_handlers.download_manager)
+    app.post("/api/download_manager/pause/{download_id}")(discovery_handlers.pause_download)
+    app.post("/api/download_manager/resume/{download_id}")(discovery_handlers.resume_download)
     app.post("/api/download_manager/cancel/{download_id}")(discovery_handlers.cancel_download)
     app.post("/api/download_manager/retry/{download_id}")(discovery_handlers.retry_download)
     app.post("/api/download_manager/prioritize/{download_id}")(discovery_handlers.prioritize_download)

@@ -26,7 +26,7 @@ from studio_ui.routes.discovery_helpers import analyze_manifest, start_downloade
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
-from universal_iiif_core.resolvers.discovery import resolve_shelfmark, smart_search
+from universal_iiif_core.resolvers.discovery import resolve_shelfmark, search_institut, smart_search
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
@@ -205,10 +205,29 @@ def _resolve_vatican_fallback(shelfmark: str):
     return render_search_results_list(results)
 
 
+def _resolve_institut_fallback(shelfmark: str):
+    logger.info("Trying Institut de France search for: %s", shelfmark)
+    try:
+        results = search_institut(shelfmark, max_results=10)
+    except Exception as exc:
+        logger.warning("Institut search failed: %s", exc)
+        return None
+
+    if not results:
+        return None
+    if len(results) == 1:
+        first = results[0]
+        pages = int(first.get("raw", {}).get("page_count", 0) or 0)
+        return render_preview(_build_item_preview_data(first, "Institut de France", pages=pages))
+    return render_search_results_list(results)
+
+
 def _build_not_found_hint(library: str) -> str:
     hint = "Verifica la segnatura."
     if library == "Vaticana":
         hint += " Prova formati come 'Urb.lat.1779' o inserisci solo il numero (es. '1223')."
+    if library == "Institut de France":
+        hint += " Usa ID numerico (es. '17837'), URL viewer o una ricerca testuale."
     return hint
 
 
@@ -239,6 +258,12 @@ def resolve_manifest(library: str, shelfmark: str):
 
         manifest_url, doc_id = _resolve_manifest_direct(library, shelfmark)
         if not manifest_url and library == "Vaticana" and (fallback_fragment := _resolve_vatican_fallback(shelfmark)):
+            return fallback_fragment
+        if (
+            not manifest_url
+            and library == "Institut de France"
+            and (fallback_fragment := _resolve_institut_fallback(shelfmark))
+        ):
             return fallback_fragment
 
         if not manifest_url:
@@ -410,6 +435,80 @@ def cancel_download(download_id: str, doc_id: str = "", library: str = ""):
         f"Annullamento richiesto per {doc_id}.",
         tone="info",
     )
+
+
+def pause_download(download_id: str):
+    """Pause a queued/running download job."""
+    vault = VaultManager()
+    job = vault.get_download_job(download_id) or {}
+    if not job:
+        return _with_feedback_toast("Job non trovato", "Il download selezionato non esiste.", tone="info")
+
+    status = str(job.get("status") or "").lower()
+    doc_id = str(job.get("doc_id") or download_id)
+    curr = int(job.get("current") or 0)
+    total = int(job.get("total") or 0)
+
+    if status == "paused":
+        return _with_feedback_toast("Già in pausa", "Questo job è già in pausa.", tone="info")
+    if status not in {"queued", "running", "cancelling"}:
+        return _with_feedback_toast("Pausa non disponibile", "Il job non è in uno stato pausabile.", tone="info")
+
+    if status == "running":
+        try:
+            vault.update_download_job(download_id, current=curr, total=total, status="cancelling", error="Pausing")
+        except Exception:
+            logger.debug("Failed to mark job as pausing", exc_info=True)
+
+    paused = False
+    try:
+        paused = bool(job_manager.request_pause(download_id))
+    except Exception:
+        logger.debug("Failed to request job pause", exc_info=True)
+
+    # Fallback for queued jobs not tracked in memory after app restarts.
+    if not paused and status == "queued":
+        try:
+            vault.update_download_job(download_id, current=curr, total=total, status="paused", error="Paused by user")
+            paused = True
+        except Exception:
+            logger.debug("Fallback pause update failed", exc_info=True)
+
+    if not paused:
+        return _with_feedback_toast(
+            "Pausa non disponibile",
+            "Non è stato possibile mettere in pausa il job selezionato.",
+            tone="danger",
+        )
+
+    return _with_toast(_download_manager_fragment(), f"Pausa richiesta per {doc_id}.", tone="info")
+
+
+def resume_download(download_id: str):
+    """Resume a paused download job by re-queuing a new run."""
+    vault = VaultManager()
+    job = vault.get_download_job(download_id) or {}
+    if not job:
+        return _with_feedback_toast("Job non trovato", "Il download selezionato non esiste.", tone="info")
+
+    status = str(job.get("status") or "").lower()
+    if status != "paused":
+        return _with_feedback_toast("Resume non disponibile", "Il job non è in pausa.", tone="info")
+
+    manifest_url = str(job.get("manifest_url") or "")
+    doc_id = str(job.get("doc_id") or "")
+    library = str(job.get("library") or "")
+    if not manifest_url or not doc_id or not library:
+        return _with_feedback_toast("Resume non disponibile", "Dati job insufficienti.", tone="danger")
+
+    try:
+        new_download_id = start_downloader_thread(manifest_url, doc_id, library)
+        if new_download_id and new_download_id != download_id:
+            vault.delete_download_job(download_id)
+        return _with_toast(_download_manager_fragment(), f"Resume avviato per {doc_id}.", tone="success")
+    except Exception:
+        logger.exception("Resume failed for paused job %s", download_id)
+        return _with_feedback_toast("Errore Resume", "Impossibile riprendere il download.", tone="danger")
 
 
 def retry_download(download_id: str):

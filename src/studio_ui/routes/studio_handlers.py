@@ -11,6 +11,7 @@ from urllib.parse import quote, unquote
 from fasthtml.common import Div, RedirectResponse, Request, Script
 
 from studio_ui.common.htmx import history_refresh_script
+from studio_ui.common.title_utils import resolve_preferred_title, truncate_title
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.studio.cropper import render_cropper_modal
@@ -81,6 +82,15 @@ def _library_redirect() -> RedirectResponse:
     return RedirectResponse(url="/library", status_code=303)
 
 
+def _resolve_studio_title(doc_id: str, meta: dict, ms_row: dict) -> tuple[str, str]:
+    """Return `(full_title, truncated_title)` for Studio header/info usage."""
+    fallback_title = str(meta.get("title") or meta.get("label") or doc_id).strip()
+    full_title = resolve_preferred_title(ms_row, fallback_doc_id=doc_id).strip()
+    if not full_title or full_title == doc_id:
+        full_title = fallback_title or doc_id
+    return full_title, truncate_title(full_title, max_len=70, suffix="[...]")
+
+
 def build_studio_tab_content(
     doc_id: str,
     library: str,
@@ -93,6 +103,9 @@ def build_studio_tab_content(
     """Build Studio Tab Content."""
     storage = OCRStorage()
     meta = storage.load_metadata(doc_id, library) or {}
+    ms_row = VaultManager().get_manuscript(doc_id) or {}
+    full_title, _truncated_title = _resolve_studio_title(doc_id, meta, ms_row)
+    meta = {**meta, "full_display_title": full_title}
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = Path(paths["scans"])
     total_pages = len(list(scans_dir.glob("pag_*.jpg"))) if scans_dir.exists() else 0
@@ -121,8 +134,10 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
     try:
         storage = OCRStorage()
         paths = storage.get_document_paths(doc_id, library)
-        meta = storage.load_metadata(doc_id, library)
-        title = meta.get("label", doc_id) if meta else doc_id
+        meta = storage.load_metadata(doc_id, library) or {}
+        ms_row = VaultManager().get_manuscript(doc_id) or {}
+        full_title, title = _resolve_studio_title(doc_id, meta, ms_row)
+        meta = {**meta, "full_display_title": full_title}
 
         scans_dir = Path(paths["scans"])
         total_pages = len(list(scans_dir.glob("pag_*.jpg"))) if scans_dir.exists() else 0
@@ -143,7 +158,6 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             return panel
 
         manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
-        ms_row = VaultManager().get_manuscript(doc_id) or {}
 
         content = studio_layout(
             title,
@@ -154,7 +168,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             initial_canvas,
             manifest_json,
             total_pages,
-            meta or {},
+            meta,
             asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
             has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
             pdf_local_available=bool(ms_row.get("pdf_local_available")),

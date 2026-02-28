@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
 from fasthtml.common import Request
 
+from studio_ui.common.title_utils import resolve_preferred_title
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.library import render_library_card, render_library_page
@@ -18,7 +18,6 @@ from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.library_catalog import (
     ITEM_TYPES,
     infer_item_type,
-    is_generic_catalog_text,
     normalize_item_type,
     parse_manifest_catalog,
 )
@@ -138,77 +137,9 @@ def _metadata_preview_items(raw_metadata_json: str, max_items: int = 8) -> list[
     return items[:max_items]
 
 
-def _compact_text(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
-
-
-def _looks_like_signature(text: str) -> bool:
-    value = (text or "").strip()
-    if not value:
-        return False
-    compact = _compact_text(value)
-    if not compact:
-        return False
-    if re.fullmatch(r"[a-z]{1,8}[0-9]{1,8}[a-z0-9]*", compact):
-        return True
-    has_digits = any(ch.isdigit() for ch in value)
-    words = len(value.split())
-    return has_digits and words <= 3 and len(value) <= 24
-
-
-def _title_score(value: str, source: str, shelfmark: str, doc_id: str) -> int:
-    text = (value or "").strip()
-    if not text:
-        return -999
-    if is_generic_catalog_text(text):
-        return -999
-
-    score = len(text)
-    words = len(text.split())
-    score += words * 6
-
-    if source in {"catalog_title", "display_title", "title"}:
-        score += 28
-    elif source == "reference_text":
-        score += 22
-    elif source == "shelfmark":
-        score += 4
-    elif source == "id":
-        score += 1
-
-    compact = _compact_text(text)
-    if compact and compact == _compact_text(shelfmark):
-        score -= 40
-    if compact and compact == _compact_text(doc_id):
-        score -= 35
-    if _looks_like_signature(text):
-        score -= 20
-    return score
-
-
 def _safe_catalog_title(row: dict) -> str:
-    shelfmark = str(row.get("shelfmark") or "").strip()
     doc_id = str(row.get("id") or "").strip()
-    candidates: list[tuple[str, str]] = [
-        ("catalog_title", str(row.get("catalog_title") or "").strip()),
-        ("display_title", str(row.get("display_title") or "").strip()),
-        ("title", str(row.get("title") or "").strip()),
-        ("reference_text", str(row.get("reference_text") or "").strip()),
-        ("shelfmark", shelfmark),
-        ("id", doc_id),
-    ]
-    scored = sorted(
-        (
-            (candidate, _title_score(candidate, source, shelfmark, doc_id))
-            for source, candidate in candidates
-            if candidate
-        ),
-        key=lambda item: item[1],
-        reverse=True,
-    )
-    if scored and scored[0][1] > -500:
-        return scored[0][0]
-    return doc_id or shelfmark or "-"
+    return resolve_preferred_title(row, fallback_doc_id=doc_id)
 
 
 def _to_downloads_url(path: Path) -> str:
@@ -311,7 +242,7 @@ def _sort_docs(docs: list[dict], mode: str, sort_by: str) -> list[dict]:
             str(d.get("item_type") or "").lower(),
             -(int(d.get("total_canvases") or 0)),
             str(d.get("display_title") or "").lower(),
-        )
+        ),
     )
 
 
@@ -393,11 +324,7 @@ def _refresh_card_response(
 ):
     rows = VaultManager().get_all_manuscripts()
     target_row = next(
-        (
-            row
-            for row in rows
-            if str(row.get("id") or "") == doc_id and str(row.get("library") or "Unknown") == library
-        ),
+        (row for row in rows if str(row.get("id") or "") == doc_id and str(row.get("library") or "Unknown") == library),
         None,
     )
     if target_row is None:
@@ -436,7 +363,7 @@ def _render_page_fragment(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
     return render_library_page(
         docs,
         view=view,
@@ -474,7 +401,7 @@ def _refresh_response(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
     return _with_toast(fragment, message, tone=tone)
 
 
@@ -563,7 +490,7 @@ def library_delete(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     return _refresh_response(
         message=f"Errore eliminando '{doc_id}'.",
         tone="danger",
@@ -575,7 +502,7 @@ def library_delete(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
 
 
 def library_cleanup_partial(
@@ -626,7 +553,7 @@ def library_cleanup_partial(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except Exception:
         logger.exception("Partial cleanup failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -640,7 +567,7 @@ def library_cleanup_partial(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
 
 def library_start_download(
@@ -672,7 +599,7 @@ def library_start_download(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     if _effective_state(ms) == "complete":
         return _refresh_response(
             message="Documento già completo: usa 'Aggiorna metadati' o apri Studio.",
@@ -685,7 +612,7 @@ def library_start_download(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     try:
         start_downloader_thread(manifest_url, doc_id, library)
         return _refresh_response(
@@ -699,7 +626,7 @@ def library_start_download(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except Exception:
         logger.exception("Start download failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -713,7 +640,7 @@ def library_start_download(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
 
 def library_retry_missing(
@@ -746,7 +673,7 @@ def library_retry_missing(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     if not missing_pages:
         return _refresh_response(
             message="Nessuna pagina mancante rilevata.",
@@ -759,7 +686,7 @@ def library_retry_missing(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
     try:
         start_downloader_thread(manifest_url, doc_id, library, target_pages=set(missing_pages))
@@ -774,7 +701,7 @@ def library_retry_missing(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except Exception:
         logger.exception("Retry missing failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -788,7 +715,7 @@ def library_retry_missing(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
 
 def _parse_ranges(raw: str) -> set[int]:
@@ -840,7 +767,7 @@ def library_retry_range(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
     ms = VaultManager().get_manuscript(doc_id) or {}
     manifest_url = str(ms.get("manifest_url") or "")
@@ -856,7 +783,7 @@ def library_retry_range(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
     try:
         start_downloader_thread(manifest_url, doc_id, library, target_pages=pages)
@@ -871,7 +798,7 @@ def library_retry_range(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except Exception:
         logger.exception("Retry range failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -885,7 +812,7 @@ def library_retry_range(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
 
 def library_set_type(
@@ -923,7 +850,7 @@ def library_set_type(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
 
 
 def library_update_notes(
@@ -954,7 +881,7 @@ def library_update_notes(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
 
 
 def library_refresh_metadata(
@@ -987,7 +914,7 @@ def library_refresh_metadata(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     try:
         _update_catalog_metadata(doc_id, manifest_url)
         if (card_only or "0").strip() == "1":
@@ -1009,7 +936,7 @@ def library_refresh_metadata(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except ValueError as exc:
         return _refresh_response(
             message=str(exc),
@@ -1022,7 +949,7 @@ def library_refresh_metadata(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
     except Exception:
         logger.exception("Metadata refresh failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -1036,7 +963,7 @@ def library_refresh_metadata(
             mode=mode,
             action_required=action_required,
             sort_by=sort_by,
-            )
+        )
 
 
 def library_reclassify(
@@ -1087,7 +1014,7 @@ def library_reclassify(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
 
 
 def library_reclassify_all(
@@ -1137,7 +1064,7 @@ def library_reclassify_all(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )
 
 
 def library_normalize_states(
@@ -1163,4 +1090,4 @@ def library_normalize_states(
         mode=mode,
         action_required=action_required,
         sort_by=sort_by,
-        )
+    )

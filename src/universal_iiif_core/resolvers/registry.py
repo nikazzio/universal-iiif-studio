@@ -4,6 +4,7 @@ from typing import Any, Final
 
 from .gallica import GallicaResolver
 from .generic import GenericResolver
+from .institut import InstitutResolver
 from .oxford import OxfordResolver
 from .vatican import VaticanResolver
 
@@ -19,6 +20,8 @@ class ResolverRegistry:
         "vatican": VaticanResolver,
         "gallica": GallicaResolver,
         "bnf": GallicaResolver,
+        "institut": InstitutResolver,
+        "bibnum": InstitutResolver,
         "oxford": OxfordResolver,
         "bodleian": OxfordResolver,
     }
