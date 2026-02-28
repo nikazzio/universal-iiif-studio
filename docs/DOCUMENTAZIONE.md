@@ -4,7 +4,7 @@
 
 Universal IIIF Downloader & Studio è una piattaforma modulare per lo studio di manoscritti digitali.
 L'architettura separa nettamente il backend (Python core) dall'interfaccia (FastHTML/HTMX).
-L'esperienza utente è quella di una SPA (Single Page Application): `/studio` serve la UI con Mirador a sinistra e i pannelli operativi (Trascrizione, Snippets, History, Visual) a destra, aggiornati dinamicamente senza ricaricamenti.
+L'esperienza utente è quella di una SPA (Single Page Application): `Libreria` è il punto di accesso ai documenti locali e `Studio` è il workspace con Mirador a sinistra e pannelli operativi (Trascrizione, Snippets, History, Visual) a destra.
 
 ## 2. Configurazione Dettagliata (`config.json`)
 
@@ -88,6 +88,10 @@ Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compre
 
 ## 4. Funzionalità Studio
 
+Accesso consigliato:
+* apri un documento dalla pagina **Libreria** tramite "Apri Studio";
+* `/studio` senza `doc_id` e `library` reindirizza automaticamente a `/library`.
+
 ### 🖼️ Viewer e Layout
 
 * **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
@@ -134,6 +138,8 @@ Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compre
   * Controlla i log (`logs/app.log`). Se il worker Python crasha, l'overlay potrebbe non ricevere il segnale di stop. Ricarica la pagina.
 * **PDF scaricato ma Studio vuoto**:
   * Verifica che l'estrazione delle immagini sia avvenuta. Controlla se la cartella `scans/` contiene file `pag_xxxx.jpg`.
+* **`/studio` ti porta in Libreria**:
+  * È comportamento previsto: Studio richiede il contesto documento (`doc_id` + `library`).
 
 ## 7. Developer Notes
 

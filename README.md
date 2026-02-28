@@ -34,7 +34,7 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - IIIF manifest resolution and page download pipeline
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
-- Local Studio UI for viewing, OCR workflows, and transcription editing
+- Local Library + Studio workflow: select in Library, analyze in Studio
 - `src/` package layout with separated `core`, `ui`, and `cli` modules
 
 ## Run Modes
@@ -50,6 +50,11 @@ Alternative entrypoint:
 ```bash
 python3 src/studio_app.py
 ```
+
+Navigation model:
+- `Library` is the canonical entrypoint for local documents.
+- `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
+- `/studio` without context redirects to `/library`.
 
 ### CLI
 
@@ -120,6 +125,10 @@ ruff format .
 Studio loads but pages are missing
 - Check `downloads/<Library>/<DocumentId>/scans/` for `pag_XXXX.jpg` files.
 - Verify `config.json` PDF flags (`prefer_native_pdf`, `create_pdf_from_images`).
+
+`/studio` opens Library instead of the editor
+- Expected behavior: Studio now requires `doc_id` + `library`.
+- Open a document from Library via "Apri Studio".
 
 `config.json` changes not applied
 - Validate JSON shape under `settings`.

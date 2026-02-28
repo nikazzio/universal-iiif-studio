@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from fasthtml.common import Request
 
@@ -136,22 +138,152 @@ def _metadata_preview_items(raw_metadata_json: str, max_items: int = 8) -> list[
     return items[:max_items]
 
 
+def _compact_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
+def _looks_like_signature(text: str) -> bool:
+    value = (text or "").strip()
+    if not value:
+        return False
+    compact = _compact_text(value)
+    if not compact:
+        return False
+    if re.fullmatch(r"[a-z]{1,8}[0-9]{1,8}[a-z0-9]*", compact):
+        return True
+    has_digits = any(ch.isdigit() for ch in value)
+    words = len(value.split())
+    return has_digits and words <= 3 and len(value) <= 24
+
+
+def _title_score(value: str, source: str, shelfmark: str, doc_id: str) -> int:
+    text = (value or "").strip()
+    if not text:
+        return -999
+    if is_generic_catalog_text(text):
+        return -999
+
+    score = len(text)
+    words = len(text.split())
+    score += words * 6
+
+    if source in {"catalog_title", "display_title", "title"}:
+        score += 28
+    elif source == "reference_text":
+        score += 22
+    elif source == "shelfmark":
+        score += 4
+    elif source == "id":
+        score += 1
+
+    compact = _compact_text(text)
+    if compact and compact == _compact_text(shelfmark):
+        score -= 40
+    if compact and compact == _compact_text(doc_id):
+        score -= 35
+    if _looks_like_signature(text):
+        score -= 20
+    return score
+
+
 def _safe_catalog_title(row: dict) -> str:
-    candidates = [
-        str(row.get("catalog_title") or "").strip(),
-        str(row.get("display_title") or "").strip(),
-        str(row.get("title") or "").strip(),
-        str(row.get("shelfmark") or "").strip(),
-        str(row.get("id") or "").strip(),
+    shelfmark = str(row.get("shelfmark") or "").strip()
+    doc_id = str(row.get("id") or "").strip()
+    candidates: list[tuple[str, str]] = [
+        ("catalog_title", str(row.get("catalog_title") or "").strip()),
+        ("display_title", str(row.get("display_title") or "").strip()),
+        ("title", str(row.get("title") or "").strip()),
+        ("reference_text", str(row.get("reference_text") or "").strip()),
+        ("shelfmark", shelfmark),
+        ("id", doc_id),
     ]
+    scored = sorted(
+        (
+            (candidate, _title_score(candidate, source, shelfmark, doc_id))
+            for source, candidate in candidates
+            if candidate
+        ),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    if scored and scored[0][1] > -500:
+        return scored[0][0]
+    return doc_id or shelfmark or "-"
+
+
+def _to_downloads_url(path: Path) -> str:
+    downloads_dir = get_config_manager().get_downloads_dir().resolve()
+    try:
+        rel = path.resolve().relative_to(downloads_dir)
+    except Exception:
+        return ""
+    encoded = "/".join(quote(part, safe="") for part in rel.parts)
+    return f"/downloads/{encoded}"
+
+
+def _thumbnail_url(row: dict) -> str:
+    candidates: list[Path] = []
+    local_path_raw = str(row.get("local_path") or "").strip()
+    if local_path_raw:
+        candidates.append(Path(local_path_raw) / "scans" / "pag_0000.jpg")
+
+    library = str(row.get("library") or "Unknown")
+    doc_id = str(row.get("id") or "").strip()
+    if doc_id:
+        candidates.append(get_config_manager().get_downloads_dir() / library / doc_id / "scans" / "pag_0000.jpg")
+
     for candidate in candidates:
-        if candidate and not is_generic_catalog_text(candidate):
-            return candidate
-    return str(row.get("id") or "-")
+        if candidate.exists() and candidate.is_file():
+            return _to_downloads_url(candidate)
+    return ""
 
 
-def _sort_docs(docs: list[dict], mode: str) -> list[dict]:
-    if (mode or "operativa").lower() == "archivio":
+def _operational_rank(doc: dict) -> int:
+    state = str(doc.get("asset_state") or "saved").lower()
+    has_missing = bool(doc.get("has_missing_pages"))
+    if state == "error":
+        return 0
+    if state == "partial" and has_missing:
+        return 1
+    if state in {"downloading", "running", "queued"}:
+        return 2
+    if state in {"saved", "partial"}:
+        return 3
+    if state == "complete":
+        return 4
+    return 5
+
+
+def _updated_at_sort_value(doc: dict) -> float:
+    raw = str(doc.get("updated_at") or doc.get("created_at") or "").strip()
+    if not raw:
+        return 0.0
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _sort_docs(docs: list[dict], mode: str, sort_by: str) -> list[dict]:
+    mode_value = (mode or "operativa").lower()
+    sort_value = (sort_by or "").strip().lower()
+
+    if mode_value == "archivio" and not sort_value:
+        sort_value = "title_az"
+    if mode_value != "archivio" and not sort_value:
+        sort_value = "priority"
+
+    if sort_value == "recent":
+        return sorted(
+            docs,
+            key=lambda d: (
+                str(d.get("updated_at") or d.get("created_at") or ""),
+                str(d.get("display_title") or "").lower(),
+            ),
+            reverse=True,
+        )
+    if sort_value == "title_az":
         return sorted(
             docs,
             key=lambda d: (
@@ -160,15 +292,26 @@ def _sort_docs(docs: list[dict], mode: str) -> list[dict]:
                 str(d.get("display_title") or "").lower(),
             ),
         )
+    if sort_value == "pages_desc":
+        return sorted(
+            docs,
+            key=lambda d: (
+                -(int(d.get("total_canvases") or 0)),
+                str(d.get("display_title") or "").lower(),
+            ),
+        )
     return sorted(
         docs,
         key=lambda d: (
+            _operational_rank(d),
             STATE_PRIORITY.get(str(d.get("asset_state") or "saved"), 99),
+            -len(d.get("missing_pages") or []),
+            -_updated_at_sort_value(d),
             str(d.get("library") or "").lower(),
             str(d.get("item_type") or "").lower(),
             -(int(d.get("total_canvases") or 0)),
             str(d.get("display_title") or "").lower(),
-        ),
+        )
     )
 
 
@@ -180,6 +323,7 @@ def _collect_docs_and_filters(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ) -> tuple[list[dict], list[str], list[str]]:
     rows = VaultManager().get_all_manuscripts()
     libraries: set[str] = set()
@@ -214,6 +358,7 @@ def _collect_docs_and_filters(
             "source_detail_url": str(row.get("source_detail_url") or ""),
             "user_notes": str(row.get("user_notes") or ""),
             "metadata_preview": _metadata_preview_items(str(row.get("metadata_json") or "")),
+            "thumbnail_url": _thumbnail_url(row),
         }
         if state_filter and doc["asset_state"] != state_filter:
             continue
@@ -228,7 +373,7 @@ def _collect_docs_and_filters(
         docs.append(doc)
 
     ordered_categories = [cat for cat in ITEM_TYPES if cat in categories]
-    return _sort_docs(docs, mode), sorted(libraries), ordered_categories
+    return _sort_docs(docs, mode, sort_by), sorted(libraries), ordered_categories
 
 
 def _with_toast(fragment, message: str, tone: str = "info"):
@@ -244,6 +389,7 @@ def _render_page_fragment(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     docs, libraries, categories = _collect_docs_and_filters(
         q=q,
@@ -252,7 +398,8 @@ def _render_page_fragment(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
     return render_library_page(
         docs,
         view=view,
@@ -262,6 +409,7 @@ def _render_page_fragment(
         category=category,
         mode=mode,
         action_required=action_required,
+        sort_by=sort_by,
         libraries=libraries,
         categories=categories,
     )
@@ -278,6 +426,7 @@ def _refresh_response(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     fragment = _render_page_fragment(
         view=view,
@@ -287,7 +436,8 @@ def _refresh_response(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
     return _with_toast(fragment, message, tone=tone)
 
 
@@ -330,6 +480,7 @@ def library_page(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Render the Local Library page (full page or HTMX fragment)."""
     VaultManager().normalize_asset_states(limit=500)
@@ -341,6 +492,7 @@ def library_page(
         category=category or "",
         mode=mode or "operativa",
         action_required=action_required or "0",
+        sort_by=sort_by or "",
     )
     if request.headers.get("HX-Request") == "true":
         return content
@@ -357,6 +509,7 @@ def library_delete(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Delete one local manuscript and refresh library list."""
     doc_id = _decode(doc_id)
@@ -372,7 +525,8 @@ def library_delete(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     return _refresh_response(
         message=f"Errore eliminando '{doc_id}'.",
         tone="danger",
@@ -383,7 +537,8 @@ def library_delete(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
 
 
 def library_cleanup_partial(
@@ -396,6 +551,7 @@ def library_cleanup_partial(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Remove partial scans/temp data while keeping manuscript metadata."""
     doc_id = _decode(doc_id)
@@ -432,7 +588,8 @@ def library_cleanup_partial(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except Exception:
         logger.exception("Partial cleanup failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -445,7 +602,8 @@ def library_cleanup_partial(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
 
 def library_start_download(
@@ -458,6 +616,7 @@ def library_start_download(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Queue a full download for an existing library entry."""
     doc_id = _decode(doc_id)
@@ -475,7 +634,8 @@ def library_start_download(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     if _effective_state(ms) == "complete":
         return _refresh_response(
             message="Documento già completo: usa 'Aggiorna metadati' o apri Studio.",
@@ -487,7 +647,8 @@ def library_start_download(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     try:
         start_downloader_thread(manifest_url, doc_id, library)
         return _refresh_response(
@@ -500,7 +661,8 @@ def library_start_download(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except Exception:
         logger.exception("Start download failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -513,7 +675,8 @@ def library_start_download(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
 
 def library_retry_missing(
@@ -526,6 +689,7 @@ def library_retry_missing(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Retry only missing pages when missing_pages_json is populated."""
     doc_id = _decode(doc_id)
@@ -544,7 +708,8 @@ def library_retry_missing(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     if not missing_pages:
         return _refresh_response(
             message="Nessuna pagina mancante rilevata.",
@@ -556,7 +721,8 @@ def library_retry_missing(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
     try:
         start_downloader_thread(manifest_url, doc_id, library, target_pages=set(missing_pages))
@@ -570,7 +736,8 @@ def library_retry_missing(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except Exception:
         logger.exception("Retry missing failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -583,7 +750,8 @@ def library_retry_missing(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
 
 def _parse_ranges(raw: str) -> set[int]:
@@ -617,6 +785,7 @@ def library_retry_range(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Retry a specific set/range of pages."""
     doc_id = _decode(doc_id)
@@ -633,7 +802,8 @@ def library_retry_range(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
     ms = VaultManager().get_manuscript(doc_id) or {}
     manifest_url = str(ms.get("manifest_url") or "")
@@ -648,7 +818,8 @@ def library_retry_range(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
     try:
         start_downloader_thread(manifest_url, doc_id, library, target_pages=pages)
@@ -662,7 +833,8 @@ def library_retry_range(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except Exception:
         logger.exception("Retry range failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -675,7 +847,8 @@ def library_retry_range(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
 
 def library_set_type(
@@ -689,6 +862,7 @@ def library_set_type(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Override automatic type classification for a manuscript."""
     doc_id = _decode(doc_id)
@@ -711,7 +885,8 @@ def library_set_type(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
 
 
 def library_update_notes(
@@ -725,6 +900,7 @@ def library_update_notes(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Persist inline note edits for a manuscript card."""
     doc_id = _decode(doc_id)
@@ -740,7 +916,8 @@ def library_update_notes(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
 
 
 def library_refresh_metadata(
@@ -753,6 +930,7 @@ def library_refresh_metadata(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Refresh stored catalog metadata from manifest + external detail page."""
     doc_id = _decode(doc_id)
@@ -770,7 +948,8 @@ def library_refresh_metadata(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     try:
         _update_catalog_metadata(doc_id, manifest_url)
         return _refresh_response(
@@ -783,7 +962,8 @@ def library_refresh_metadata(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except ValueError as exc:
         return _refresh_response(
             message=str(exc),
@@ -795,7 +975,8 @@ def library_refresh_metadata(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
     except Exception:
         logger.exception("Metadata refresh failed for %s/%s", library, doc_id)
         return _refresh_response(
@@ -808,7 +989,8 @@ def library_refresh_metadata(
             category=category,
             mode=mode,
             action_required=action_required,
-        )
+            sort_by=sort_by,
+            )
 
 
 def library_reclassify(
@@ -821,6 +1003,7 @@ def library_reclassify(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Recalculate item category automatically from available metadata."""
     doc_id = _decode(doc_id)
@@ -857,7 +1040,8 @@ def library_reclassify(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
 
 
 def library_reclassify_all(
@@ -868,6 +1052,7 @@ def library_reclassify_all(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Recalculate automatic category for all manuscripts not manually overridden."""
     vm = VaultManager()
@@ -905,7 +1090,8 @@ def library_reclassify_all(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )
 
 
 def library_normalize_states(
@@ -916,6 +1102,7 @@ def library_normalize_states(
     category: str = "",
     mode: str = "operativa",
     action_required: str = "0",
+    sort_by: str = "",
 ):
     """Run a normalization pass for legacy/inconsistent state records."""
     updated = VaultManager().normalize_asset_states(limit=1000)
@@ -929,4 +1116,5 @@ def library_normalize_states(
         category=category,
         mode=mode,
         action_required=action_required,
-    )
+        sort_by=sort_by,
+        )

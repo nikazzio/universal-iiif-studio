@@ -10,7 +10,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 
 ### 1. Presentation Layer (`studio_ui/`)
 
-* **Pages**: Layout builders (`studio_layout`, document picker, Mirador wiring).
+* **Pages**: Layout builders (`studio_layout`, Mirador wiring).
 * **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards).
 * **Routes**:
   * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations.
@@ -59,6 +59,7 @@ Queued jobs are promoted FIFO (with optional prioritization) and each running wo
 
 ### 3. Studio & OCR
 
+0. **Entry Point**: Library is the canonical selector; `/studio` without `doc_id/library` redirects to `/library`.
 1. **Async Request**: Clicking "Run OCR" sends an HTMX POST to `/api/run_ocr_async`.
 2. **Job State**: The server spawns a thread and tracks progress in `ocr_state.py`.
 3. **Polling**: The UI shows an overlay that polls `/api/check_ocr_status` every 2 seconds.

@@ -170,7 +170,6 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
 
 def _sidebar(active_page: str = "") -> Nav:
     nav_items = [
-        ("studio", "Studio", "/studio", "📖"),
         ("discovery", "Discovery", "/discovery", "🔍"),
         ("library", "Libreria", "/library", "📚"),
         ("export", "Export", "/export", "📄"),
@@ -269,9 +268,10 @@ def _sidebar(active_page: str = "") -> Nav:
                 setSidebarCollapse(!root.classList.contains('sidebar-collapsed'));
             }
             function syncActiveNav(pathname) {
+                const normalizedPath = pathname.startsWith('/studio') ? '/library' : pathname;
                 const links = document.querySelectorAll('[data-nav-link]');
                 links.forEach((link) => {
-                    const isActive = link.getAttribute('href') === pathname;
+                    const isActive = link.getAttribute('href') === normalizedPath;
                     if (isActive) {
                         link.setAttribute('aria-current', 'page');
                     } else {
@@ -396,6 +396,15 @@ def _style_tag():
         ".sidebar-collapsed #app-sidebar .sidebar-brand-text { display: none; }\n",
         "#sidebar-toggle { background: transparent; border: none; color: inherit; }\n",
         "#sidebar-toggle:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }\n",
+        "@media (max-width: 1024px) {\n",
+        "  #app-sidebar { width: 3.5rem !important; padding-left: 0.75rem; padding-right: 0.75rem; }\n",
+        "  #app-sidebar .sidebar-label { display: none; }\n",
+        "  #app-sidebar .sidebar-link { justify-content: center; padding-left: 0.5rem; ",
+        "padding-right: 0.5rem; gap: 0; }\n",
+        "  #app-sidebar .sidebar-link:hover { transform: none; }\n",
+        "  #app-sidebar .sidebar-footer, #app-sidebar .sidebar-brand-text { display: none; }\n",
+        "  #app-main { min-width: 0; }\n",
+        "}\n",
         "\n",
         "/* FIX MIRADOR THUMBNAIL ANIMATION */\n",
         ".mirador-thumbnail-nav-scroll-content { transition: transform 0.2s ease-out !important; }\n",
