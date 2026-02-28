@@ -50,11 +50,14 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "request_timeout": 30,
         },
         "defaults": {
-            "default_library": "Vaticana (BAV)",
+            "default_library": "Vaticana",
             "preferred_ocr_engine": "openai",
         },
         "ui": {
-            "theme_color": "#FF4B4B",
+            "theme_preset": "rosewater",
+            "theme_primary_color": "#7B8CC7",
+            "theme_accent_color": "#E8A6B6",
+            "theme_color": "#E8A6B6",
             "items_per_page": 12,
             "toast_duration": 3000,
         },
@@ -66,6 +69,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "tile_stitch_max_ram_gb": 2,
         },
         "ocr": {
+            "ocr_engine": "openai",
             "kraken_enabled": False,
         },
         "pdf": {
@@ -92,6 +96,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "columns": 6,
             "paginate_enabled": True,
             "page_size": 48,
+            "page_size_options": [24, 48, 72, 96],
             "default_select_all": True,
             "actions_apply_to_all_default": False,
             "hover_preview_enabled": True,

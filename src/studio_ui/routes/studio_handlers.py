@@ -4,6 +4,7 @@ This module contains the logic-heavy request handlers and helpers.
 """
 
 import json
+import math
 import time
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -15,7 +16,11 @@ from studio_ui.common.title_utils import resolve_preferred_title, truncate_title
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.studio.cropper import render_cropper_modal
-from studio_ui.components.studio.export import render_pdf_inventory_panel, render_studio_export_tab
+from studio_ui.components.studio.export import (
+    render_export_thumbnails_panel,
+    render_pdf_inventory_panel,
+    render_studio_export_tab,
+)
 from studio_ui.components.studio.history import history_tab_content
 from studio_ui.components.studio.tabs import render_studio_tabs
 from studio_ui.components.studio.transcription import transcription_tab_content
@@ -127,7 +132,50 @@ def _export_tab_defaults() -> dict[str, str | bool | int]:
     }
 
 
-def _build_export_thumbnail_items(doc_id: str, library: str) -> list[dict]:
+def _thumb_page_size(raw_page_size: int | None = None, *, doc_id: str = "") -> int:
+    cm = get_config_manager()
+    default_size = int(cm.get_setting("thumbnails.page_size", 48) or 48)
+    candidate = default_size
+    if raw_page_size not in {None, 0}:
+        candidate = int(raw_page_size)
+    elif doc_id:
+        try:
+            saved = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_thumb_page_size", default_size)
+            candidate = int(saved or default_size)
+        except Exception:
+            candidate = default_size
+    return max(1, min(candidate, 120))
+
+
+def _is_export_job_active(job: dict) -> bool:
+    return str(job.get("status") or "").lower() in {"queued", "running"}
+
+
+def _thumb_page_size_options() -> list[int]:
+    cm = get_config_manager()
+    raw_options = cm.get_setting("thumbnails.page_size_options", [24, 48, 72, 96])
+    options: list[int] = []
+    if isinstance(raw_options, list):
+        for raw in raw_options:
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= value <= 120 and value not in options:
+                options.append(value)
+    default_size = _thumb_page_size()
+    if default_size not in options:
+        options.append(default_size)
+    return sorted(options)
+
+
+def _build_export_thumbnail_slice(
+    doc_id: str,
+    library: str,
+    *,
+    thumb_page: int = 1,
+    page_size: int | None = None,
+) -> dict[str, object]:
     storage = OCRStorage()
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = Path(paths["scans"])
@@ -135,9 +183,33 @@ def _build_export_thumbnail_items(doc_id: str, library: str) -> list[dict]:
     cm = get_config_manager()
     max_px = int(cm.get_setting("thumbnails.max_long_edge_px", 320) or 320)
     quality = int(cm.get_setting("thumbnails.jpeg_quality", 70) or 70)
+    safe_page_size = _thumb_page_size(page_size, doc_id=doc_id)
+    if page_size not in {None, 0}:
+        try:
+            VaultManager().set_manuscript_ui_pref(doc_id, "studio_export_thumb_page_size", safe_page_size)
+        except Exception:
+            logger.debug("Unable to persist thumbnail page size preference for %s", doc_id, exc_info=True)
+    available_pages = guess_available_pages(scans_dir)
+    total_pages = len(available_pages)
+
+    if total_pages <= 0:
+        return {
+            "items": [],
+            "available_pages": [],
+            "thumb_page": 1,
+            "thumb_page_count": 1,
+            "total_pages": 0,
+            "page_size": safe_page_size,
+        }
+
+    thumb_page_count = max(1, math.ceil(total_pages / safe_page_size))
+    safe_thumb_page = max(1, min(int(thumb_page or 1), thumb_page_count))
+    start = (safe_thumb_page - 1) * safe_page_size
+    stop = start + safe_page_size
+    page_slice = available_pages[start:stop]
 
     items: list[dict] = []
-    for page_num in guess_available_pages(scans_dir):
+    for page_num in page_slice:
         thumb_path = ensure_thumbnail(
             scans_dir=scans_dir,
             thumbnails_dir=thumbnails_dir,
@@ -146,22 +218,45 @@ def _build_export_thumbnail_items(doc_id: str, library: str) -> list[dict]:
             jpeg_quality=quality,
         )
         thumb_url = _to_downloads_url(thumb_path) if thumb_path else ""
-        items.append({"page": page_num, "thumb_url": thumb_url, "selected": False})
-    return items
+        items.append({"page": page_num, "thumb_url": thumb_url})
+    return {
+        "items": items,
+        "available_pages": available_pages,
+        "thumb_page": safe_thumb_page,
+        "thumb_page_count": thumb_page_count,
+        "total_pages": total_pages,
+        "page_size": safe_page_size,
+    }
 
 
-def _build_studio_export_fragment(doc_id: str, library: str):
-    thumbs = _build_export_thumbnail_items(doc_id, library)
+def _build_studio_export_fragment(
+    doc_id: str,
+    library: str,
+    *,
+    thumb_page: int = 1,
+    page_size: int | None = None,
+    selected_pages_raw: str = "",
+):
+    thumb_state = _build_export_thumbnail_slice(doc_id, library, thumb_page=thumb_page, page_size=page_size)
     pdf_files = list_item_pdf_files(doc_id, library)
     for row in pdf_files:
         row["download_url"] = _to_downloads_url(Path(str(row.get("path") or "")))
     jobs = export_monitor_handlers.list_jobs_for_item(doc_id, library, limit=50)
+    has_active_jobs = any(_is_export_job_active(job) for job in jobs)
     return render_studio_export_tab(
         doc_id=doc_id,
         library=library,
-        thumbnails=thumbs,
+        thumbnails=list(thumb_state.get("items") or []),
+        thumb_page=int(thumb_state.get("thumb_page") or 1),
+        thumb_page_count=int(thumb_state.get("thumb_page_count") or 1),
+        thumb_total_pages=int(thumb_state.get("total_pages") or 0),
+        thumb_page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
+        thumb_page_size_options=_thumb_page_size_options(),
+        available_pages=list(thumb_state.get("available_pages") or []),
+        selected_pages_raw=(selected_pages_raw or "").strip(),
         pdf_files=pdf_files,
         jobs=jobs,
+        has_active_jobs=has_active_jobs,
         export_defaults=_export_tab_defaults(),
     )
 
@@ -185,7 +280,9 @@ def build_studio_tab_content(
     scans_dir = Path(paths["scans"])
     total_pages = len(list(scans_dir.glob("pag_*.jpg"))) if scans_dir.exists() else 0
     manifest_json = load_json(paths["manifest"]) or {}
-    export_fragment = _build_studio_export_fragment(doc_id, library)
+    encoded_doc = quote(doc_id, safe="")
+    encoded_lib = quote(library, safe="")
+    export_url = f"/studio/partial/export?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}"
     return render_studio_tabs(
         doc_id,
         library,
@@ -196,7 +293,8 @@ def build_studio_tab_content(
         is_ocr_loading=is_ocr_loading,
         ocr_error=ocr_error,
         history_message=history_message,
-        export_fragment=export_fragment,
+        export_fragment=None,
+        export_url=export_url,
     )
 
 
@@ -246,7 +344,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             manifest_json,
             total_pages,
             meta,
-            export_fragment=_build_studio_export_fragment(doc_id, library),
+            export_url=f"/studio/partial/export?doc_id={doc_q}&library={lib_q}&page={page}",
             asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
             has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
             pdf_local_available=bool(ms_row.get("pdf_local_available")),
@@ -286,11 +384,24 @@ def get_history_tab(doc_id: str, library: str, page: int, info_message: str | No
     )
 
 
-def get_export_tab(doc_id: str, library: str, page: int):
+def get_export_tab(
+    doc_id: str,
+    library: str,
+    page: int,
+    thumb_page: int = 1,
+    page_size: int = 0,
+    selected_pages: str = "",
+):
     """Get Studio Export tab content."""
     _ = int(page)
     doc_id, library = unquote(doc_id), unquote(library)
-    return _build_studio_export_fragment(doc_id, library)
+    return _build_studio_export_fragment(
+        doc_id,
+        library,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+        selected_pages_raw=selected_pages,
+    )
 
 
 def get_studio_export_jobs(doc_id: str, library: str):
@@ -305,7 +416,40 @@ def get_studio_export_pdf_list(doc_id: str, library: str):
     pdf_files = list_item_pdf_files(doc_id, library)
     for row in pdf_files:
         row["download_url"] = _to_downloads_url(Path(str(row.get("path") or "")))
-    return render_pdf_inventory_panel(pdf_files, doc_id=doc_id, library=library, polling=True)
+    jobs = export_monitor_handlers.list_jobs_for_item(doc_id, library, limit=50)
+    has_active_jobs = any(_is_export_job_active(job) for job in jobs)
+    return render_pdf_inventory_panel(
+        pdf_files,
+        doc_id=doc_id,
+        library=library,
+        polling=has_active_jobs,
+    )
+
+
+def get_studio_export_thumbs(
+    doc_id: str,
+    library: str,
+    thumb_page: int = 1,
+    page_size: int = 0,
+):
+    """Return one thumbnails page slice for Studio Export tab."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    thumb_state = _build_export_thumbnail_slice(
+        doc_id,
+        library,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+    )
+    return render_export_thumbnails_panel(
+        doc_id=doc_id,
+        library=library,
+        thumbnails=list(thumb_state.get("items") or []),
+        thumb_page=int(thumb_state.get("thumb_page") or 1),
+        thumb_page_count=int(thumb_state.get("thumb_page_count") or 1),
+        total_pages=int(thumb_state.get("total_pages") or 0),
+        page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
+        page_size_options=_thumb_page_size_options(),
+    )
 
 
 def _is_truthy_flag(raw: str | None) -> bool:
@@ -318,6 +462,8 @@ def start_studio_export(
     library: str,
     selection_mode: str = "all",
     selected_pages: str = "",
+    thumb_page: int = 1,
+    page_size: int = 0,
     export_format: str = "pdf_images",
     compression: str = "Standard",
     include_cover: str = "",
@@ -351,10 +497,26 @@ def start_studio_export(
             capability_flags={"source": "studio-tab"},
         )
     except Exception as exc:
-        return _with_toast(_build_studio_export_fragment(doc_id, library), f"Errore avvio export: {exc}", tone="danger")
+        return _with_toast(
+            _build_studio_export_fragment(
+                doc_id,
+                library,
+                thumb_page=int(thumb_page or 1),
+                page_size=int(page_size or 0),
+                selected_pages_raw=selected_pages,
+            ),
+            f"Errore avvio export: {exc}",
+            tone="danger",
+        )
 
     return _with_toast(
-        _build_studio_export_fragment(doc_id, library),
+        _build_studio_export_fragment(
+            doc_id,
+            library,
+            thumb_page=int(thumb_page or 1),
+            page_size=int(page_size or 0),
+            selected_pages_raw=selected_pages,
+        ),
         "Export PDF avviato per l'item corrente.",
         tone="success",
     )

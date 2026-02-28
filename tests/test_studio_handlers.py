@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from PIL import Image
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
@@ -122,3 +123,155 @@ def test_studio_uses_library_title_and_shows_full_title_in_info():
     rendered = str(response)
     assert truncate_title(long_title, max_len=70, suffix="[...]") in rendered
     assert long_title in rendered
+
+
+def test_studio_initial_render_keeps_export_lazy():
+    """Initial studio render should not build the full export panel eagerly."""
+    doc_id = "MSS_LAZY_EXPORT"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Lazy Export Title"}),
+        encoding="utf-8",
+    )
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+
+    response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
+    rendered = str(response)
+    assert "Apri il tab Export per caricare miniature" in rendered
+    assert "studio-export-form" not in rendered
+
+
+def test_export_thumbs_endpoint_returns_requested_slice():
+    """Thumbnails endpoint should render only the requested page slice."""
+    doc_id = "MSS_THUMB_SLICE"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(5):
+        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Thumb Slice Title"}),
+        encoding="utf-8",
+    )
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+
+    panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=2, page_size=2)
+    rendered = repr(panel)
+    assert "Miniature: pagina 2/3" in rendered
+    assert "Pag. 3" in rendered
+    assert "Pag. 4" in rendered
+
+
+def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
+    """Export form should submit only on submit and use card buttons for thumbnail selection."""
+    doc_id = "MSS_EXPORT_TRIGGER_GUARD"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(2):
+        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Trigger Guard Title"}),
+        encoding="utf-8",
+    )
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+
+    panel = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1)
+    rendered = repr(panel)
+    assert 'hx-trigger="submit"' in rendered
+    assert 'class="studio-export-page-card' in rendered
+    assert "studio-export-page-checkbox" not in rendered
+    assert 'data-thumbs-endpoint="/api/studio/export/thumbs' in rendered
+    assert 'form="studio-export-form"' in rendered
+    assert rendered.find('id="studio-export-thumbs-slot"') > rendered.find("</form>")
+    assert 'id="studio-export-thumb-size-select"' in rendered
+    assert 'name="page_size"' in rendered
+    assert 'hx-trigger="change"' in rendered
+
+
+def test_export_thumb_page_size_preference_is_persisted_per_item():
+    """Changing thumb page size should persist and be reused when reopening export tab."""
+    doc_id = "MSS_EXPORT_SIZE_PREF"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(4):
+        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Thumb Size Pref Title"}),
+        encoding="utf-8",
+    )
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+
+    _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+    panel = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1, page_size=0)
+    rendered = repr(panel)
+    assert 'name="page_size" value="24" id="studio-export-page-size"' in rendered
+    assert 'id="studio-export-thumb-size-select"' in rendered

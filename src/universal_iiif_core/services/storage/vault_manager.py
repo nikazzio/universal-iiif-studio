@@ -156,9 +156,20 @@ class VaultManager:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_ui_preferences (
+                manuscript_id TEXT NOT NULL,
+                pref_key TEXT NOT NULL,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (manuscript_id, pref_key)
+            )
+        """)
+
         self._migrate_manuscripts_table(cursor)
         self._migrate_download_jobs_table(cursor)
         self._migrate_export_jobs_table(cursor)
+        self._migrate_manuscript_ui_preferences_table(cursor)
 
         conn.commit()
         conn.close()
@@ -223,6 +234,17 @@ class VaultManager:
         self._ensure_column(cursor, "export_jobs", "started_at", "TIMESTAMP")
         self._ensure_column(cursor, "export_jobs", "finished_at", "TIMESTAMP")
         self._ensure_column(cursor, "export_jobs", "updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+
+    def _migrate_manuscript_ui_preferences_table(self, cursor: sqlite3.Cursor) -> None:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_ui_preferences (
+                manuscript_id TEXT NOT NULL,
+                pref_key TEXT NOT NULL,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (manuscript_id, pref_key)
+            )
+        """)
 
     def upsert_manuscript(self, manuscript_id: str, **kwargs):
         """Insert or update a manuscript record."""
@@ -506,6 +528,63 @@ class VaultManager:
         finally:
             conn.close()
 
+    def get_manuscript_ui_pref(self, manuscript_id: str, pref_key: str, default: Any = None) -> Any:
+        """Read one manuscript-scoped UI preference."""
+        if not manuscript_id or not pref_key:
+            return default
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT pref_value_json
+                FROM manuscript_ui_preferences
+                WHERE manuscript_id = ? AND pref_key = ?
+                """,
+                (manuscript_id, pref_key),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return default
+            raw = str(row[0] or "").strip()
+            if not raw:
+                return default
+            try:
+                return json.loads(raw)
+            except Exception:
+                return default
+        finally:
+            conn.close()
+
+    def set_manuscript_ui_pref(self, manuscript_id: str, pref_key: str, pref_value: Any) -> None:
+        """Persist one manuscript-scoped UI preference."""
+        if not manuscript_id or not pref_key:
+            return
+        payload = json.dumps(pref_value, ensure_ascii=False)
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO manuscripts (id, title)
+                VALUES (?, ?)
+                """,
+                (manuscript_id, None),
+            )
+            cursor.execute(
+                """
+                INSERT INTO manuscript_ui_preferences (manuscript_id, pref_key, pref_value_json, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(manuscript_id, pref_key) DO UPDATE SET
+                    pref_value_json = excluded.pref_value_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (manuscript_id, pref_key, payload),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def delete_manuscript(self, ms_id: str):
         """Delete manuscript DB record, snippets, and the manuscript folder on disk.
 
@@ -539,6 +618,9 @@ class VaultManager:
             # 3. Delete the manuscript DB entry
             cursor.execute("DELETE FROM manuscripts WHERE id = ?", (ms_id,))
             deleted = cursor.rowcount > 0
+
+            # 3a. Delete manuscript-scoped UI preferences.
+            cursor.execute("DELETE FROM manuscript_ui_preferences WHERE manuscript_id = ?", (ms_id,))
 
             # 3b. Remove historical download jobs for this manuscript to avoid stale
             # cards in the Download Manager after deletion from Library.
@@ -1184,6 +1266,32 @@ class VaultManager:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE status IN ('queued', 'pending', 'running')
             """,
+                (mark, message),
+            )
+            count = cursor.rowcount
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def reset_active_exports(self, mark: str = "error", message: str = "Server restarted") -> int:
+        """Mark any exports left in queued/running state as stopped on startup."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='export_jobs'")
+            if not cursor.fetchone():
+                return 0
+
+            cursor.execute(
+                """
+                UPDATE export_jobs
+                SET status = ?,
+                    error_message = COALESCE(error_message, ?) || ' (server restart)',
+                    finished_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status IN ('queued', 'running')
+                """,
                 (mark, message),
             )
             count = cursor.rowcount

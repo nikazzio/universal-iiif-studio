@@ -5,6 +5,7 @@ from typing import Any
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.settings import settings_content
+from studio_ui.theme import normalize_ui_theme_in_place
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger, setup_logging
 
@@ -166,6 +167,12 @@ async def save_settings(request):
         logger.debug("Payload contains settings.pdf.cover.description: %s", has_desc)
 
         _merge_payload_into_config(cm.data, payload)
+        settings_node = cm.data.setdefault("settings", {})
+        ui_settings = settings_node.get("ui")
+        if not isinstance(ui_settings, dict):
+            settings_node["ui"] = {}
+            ui_settings = settings_node["ui"]
+        normalize_ui_theme_in_place(ui_settings)
         cm.save()
         _reconfigure_logging_after_save()
         return build_toast("Impostazioni salvate con successo!", "success")

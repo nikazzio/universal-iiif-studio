@@ -23,6 +23,7 @@ from fasthtml.common import (
 )
 
 from studio_ui.common.title_utils import resolve_preferred_title, truncate_title
+from studio_ui.library_options import library_options
 
 
 def render_search_results_list(results: list) -> Div:
@@ -210,13 +211,7 @@ def render_error_message(title: str, details: str = "") -> Div:
 
 def discovery_form() -> Div:
     """Form component for discovery searches."""
-    libraries = [
-        ("Vaticana (BAV)", "Vaticana"),
-        ("Gallica (BnF)", "Gallica"),
-        ("Institut de France (Bibnum)", "Institut de France"),
-        ("Bodleian (Oxford)", "Bodleian"),
-        ("Altro / URL Diretto", "Unknown"),
-    ]
+    libraries = library_options()
 
     return Div(
         H3("🔎 Ricerca per Segnatura", cls="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4"),

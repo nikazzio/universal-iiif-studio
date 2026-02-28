@@ -31,6 +31,7 @@ from universal_iiif_core.services.export.service import (
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
+_ACTIVE_EXPORT_STATUSES = {"queued", "running"}
 
 
 def _with_toast(fragment, message: str, tone: str = "info"):
@@ -62,6 +63,10 @@ def _run_export_worker(
     vm.update_export_job(job_id, status="running", current_step=0, total_steps=total, error_message=None)
 
     def _progress(current: int, total_steps: int, _message: str):
+        existing = vm.get_export_job(job_id) or {}
+        existing_status = str(existing.get("status") or "").lower()
+        if existing_status in {"completed", "error", "cancelled"}:
+            return
         vm.update_export_job(
             job_id,
             status="running",
@@ -112,10 +117,7 @@ def _spawn_export_worker(**kwargs) -> None:
 
 def _item_exists(doc_id: str, library: str) -> bool:
     rows = VaultManager().get_all_manuscripts()
-    for row in rows:
-        if str(row.get("id") or "") == doc_id and str(row.get("library") or "") == library:
-            return True
-    return False
+    return any(str(row.get("id") or "") == doc_id and str(row.get("library") or "") == library for row in rows)
 
 
 def _job_matches_item(job: dict[str, Any], doc_id: str, library: str) -> bool:
@@ -130,21 +132,74 @@ def _job_matches_item(job: dict[str, Any], doc_id: str, library: str) -> bool:
 
 
 def list_jobs_for_item(doc_id: str, library: str, *, limit: int = 50) -> list[dict[str, Any]]:
+    """List export jobs limited to one item scope."""
     jobs = VaultManager().list_export_jobs(limit=limit)
     return [job for job in jobs if _job_matches_item(job, doc_id, library)]
 
 
+def _has_active_jobs(jobs: list[dict[str, Any]]) -> bool:
+    return any(str(job.get("status") or "").lower() in _ACTIVE_EXPORT_STATUSES for job in jobs)
+
+
 def jobs_fragment(*, limit: int = 50, panel_id: str = "export-jobs-panel"):
+    """Render a refreshable jobs panel for the export monitor page."""
     jobs = VaultManager().list_export_jobs(limit=limit)
-    return render_export_jobs_panel(jobs, polling=True, hx_url="/api/export/jobs", panel_id=panel_id)
+    return render_export_jobs_panel(
+        jobs,
+        polling=True,
+        hx_url="/api/export/jobs",
+        panel_id=panel_id,
+        has_active_jobs=_has_active_jobs(jobs),
+    )
 
 
 def jobs_fragment_for_item(doc_id: str, library: str, *, panel_id: str = "studio-export-jobs"):
+    """Render jobs panel scoped to one Studio item."""
     jobs = list_jobs_for_item(doc_id, library, limit=50)
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
     hx_url = f"/api/studio/export/jobs?doc_id={encoded_doc}&library={encoded_lib}"
-    return render_export_jobs_panel(jobs, polling=True, hx_url=hx_url, panel_id=panel_id)
+    return render_export_jobs_panel(
+        jobs,
+        polling=True,
+        hx_url=hx_url,
+        panel_id=panel_id,
+        has_active_jobs=_has_active_jobs(jobs),
+    )
+
+
+def _validate_selection_mode(selection_mode: str, selected_pages_raw: str) -> str:
+    mode = (selection_mode or "all").strip().lower()
+    if mode not in {"all", "custom"}:
+        raise ValueError("Modalita selezione non valida")
+    if mode == "custom":
+        parse_page_selection(selected_pages_raw)
+    return mode
+
+
+def _validate_format_and_destination(items: list[dict[str, str]], export_format: str, destination: str) -> None:
+    if not items:
+        raise ValueError("Nessun item selezionato per export.")
+    if not is_format_available(export_format):
+        raise ExportFeatureNotAvailableError(f"Formato non disponibile: {export_format}")
+    if not is_destination_available(destination):
+        raise ExportFeatureNotAvailableError(f"Destinazione non disponibile: {destination}")
+
+
+def _validate_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    validated_items: list[dict[str, str]] = []
+    for item in items:
+        doc = str(item.get("doc_id") or "").strip()
+        lib = str(item.get("library") or "").strip()
+        if not doc or not lib:
+            continue
+        if not _item_exists(doc, lib):
+            raise ValueError(f"Item non presente in Libreria: {lib}::{doc}")
+        validated_items.append({"doc_id": doc, "library": lib})
+
+    if not validated_items:
+        raise ValueError("Nessun item valido selezionato")
+    return validated_items
 
 
 def start_export_job(
@@ -165,31 +220,9 @@ def start_export_job(
     """Create one export job row and spawn worker thread; returns job_id."""
     fmt = (export_format or "").strip().lower()
     dst = (destination or "").strip().lower()
-    mode = (selection_mode or "all").strip().lower()
-
-    if not items:
-        raise ValueError("Nessun item selezionato per export.")
-    if not is_format_available(fmt):
-        raise ExportFeatureNotAvailableError(f"Formato non disponibile: {fmt}")
-    if not is_destination_available(dst):
-        raise ExportFeatureNotAvailableError(f"Destinazione non disponibile: {dst}")
-    if mode not in {"all", "custom"}:
-        raise ValueError("Modalita selezione non valida")
-    if mode == "custom":
-        parse_page_selection(selected_pages_raw)
-
-    validated_items: list[dict[str, str]] = []
-    for item in items:
-        doc = str(item.get("doc_id") or "").strip()
-        lib = str(item.get("library") or "").strip()
-        if not doc or not lib:
-            continue
-        if not _item_exists(doc, lib):
-            raise ValueError(f"Item non presente in Libreria: {lib}::{doc}")
-        validated_items.append({"doc_id": doc, "library": lib})
-
-    if not validated_items:
-        raise ValueError("Nessun item valido selezionato")
+    mode = _validate_selection_mode(selection_mode, selected_pages_raw)
+    _validate_format_and_destination(items, fmt, dst)
+    validated_items = _validate_items(items)
 
     job_id = f"exp_{uuid.uuid4().hex[:8]}"
     selected_pages_json = "[]"
@@ -309,10 +342,7 @@ def _is_path_allowed(candidate: Path) -> bool:
         cm.get_exports_dir().resolve(),
         cm.get_downloads_dir().resolve(),
     ]
-    for root in allowed_roots:
-        if candidate == root or root in candidate.parents:
-            return True
-    return False
+    return any(candidate == root or root in candidate.parents for root in allowed_roots)
 
 
 def download_export(job_id: str):

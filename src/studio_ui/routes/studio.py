@@ -31,6 +31,7 @@ def setup_studio_routes(app):
     app.post("/api/studio/export/start")(handlers.start_studio_export)
     app.get("/api/studio/export/jobs")(handlers.get_studio_export_jobs)
     app.get("/api/studio/export/pdf_list")(handlers.get_studio_export_pdf_list)
+    app.get("/api/studio/export/thumbs")(handlers.get_studio_export_thumbs)
 
     # Deletions
     app.delete("/api/delete_snippet/{snippet_id}")(handlers.delete_snippet)

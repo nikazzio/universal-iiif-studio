@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from PIL import Image
 
 from studio_ui.routes import export_handlers
@@ -99,3 +97,67 @@ def test_cancel_export_marks_job_cancelled():
     job = vm.get_export_job("exp_cancel_test") or {}
     assert str(job.get("status") or "").lower() == "cancelled"
 
+
+def test_jobs_fragment_for_item_pauses_polling_when_idle():
+    """Item jobs panel should stop polling when no running/queued jobs exist."""
+    _seed_library_item("DOC_IDLE", "Gallica")
+    panel = export_handlers.jobs_fragment_for_item("DOC_IDLE", "Gallica")
+    rendered = repr(panel)
+    assert "every 4s" not in rendered
+    assert "Nessun job attivo: polling in pausa." in rendered
+
+
+def test_jobs_fragment_for_item_enables_polling_when_active():
+    """Item jobs panel should poll while item has queued/running jobs."""
+    _seed_library_item("DOC_ACTIVE", "Gallica")
+    vm = VaultManager()
+    vm.create_export_job(
+        "exp_active_item",
+        scope_type="single",
+        doc_ids_json='["DOC_ACTIVE"]',
+        library="Gallica",
+        export_format="pdf_images",
+        output_kind="binary",
+        selection_mode="all",
+        selected_pages_json="[]",
+        destination="local_filesystem",
+        total_steps=1,
+    )
+    panel = export_handlers.jobs_fragment_for_item("DOC_ACTIVE", "Gallica")
+    rendered = repr(panel)
+    assert "every 4s" in rendered
+
+
+def test_reset_active_exports_marks_stale_jobs_terminal():
+    """Startup reset should move queued/running export jobs to terminal state."""
+    vm = VaultManager()
+    vm.create_export_job(
+        "exp_reset_queued",
+        scope_type="single",
+        doc_ids_json='["DOC_RQ"]',
+        library="Gallica",
+        export_format="pdf_images",
+        output_kind="binary",
+        selection_mode="all",
+        selected_pages_json="[]",
+        destination="local_filesystem",
+        total_steps=1,
+    )
+    vm.create_export_job(
+        "exp_reset_running",
+        scope_type="single",
+        doc_ids_json='["DOC_RR"]',
+        library="Gallica",
+        export_format="pdf_images",
+        output_kind="binary",
+        selection_mode="all",
+        selected_pages_json="[]",
+        destination="local_filesystem",
+        total_steps=1,
+    )
+    vm.update_export_job("exp_reset_running", status="running")
+
+    updated = vm.reset_active_exports()
+    assert updated >= 2
+    assert (vm.get_export_job("exp_reset_queued") or {}).get("status") == "error"
+    assert (vm.get_export_job("exp_reset_running") or {}).get("status") == "error"
