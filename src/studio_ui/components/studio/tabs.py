@@ -22,6 +22,7 @@ def render_studio_tabs(
     is_ocr_loading: bool = False,
     ocr_error: str | None = None,
     history_message: str | None = None,
+    export_fragment=None,
 ):
     """Render the studio tabs."""
     page_idx = int(page)
@@ -62,6 +63,13 @@ def render_studio_tabs(
             cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
             "border-transparent text-gray-500 hover:text-gray-700",
         ),
+        Button(
+            "📄 Export",
+            onclick="switchTab('export')",
+            id="tab-button-export",
+            cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
+            "border-transparent text-gray-500 hover:text-gray-700",
+        ),
         cls="flex gap-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4",
     )
 
@@ -89,6 +97,11 @@ def render_studio_tabs(
         Div(
             *info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library),
             id="tab-content-info",
+            cls="tab-content hidden h-full",
+        ),
+        Div(
+            export_fragment if export_fragment is not None else Div("Export non disponibile.", cls="text-sm p-2"),
+            id="tab-content-export",
             cls="tab-content hidden h-full",
         ),
         cls="flex-1 overflow-y-auto p-4",

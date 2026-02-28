@@ -39,6 +39,7 @@ This file is procedural only. For architectural rationale, see `docs/ARCHITECTUR
 
 ## Build, Run, Test Commands
 
+- Always use project tools from `.venv/bin/` when available (do not assume global executables).
 - Install: `pip install -e .`
 - Run web UI: `iiif-studio` (or `python3 src/studio_app.py`)
 - Run CLI: `iiif-cli "<manifest-url>"`

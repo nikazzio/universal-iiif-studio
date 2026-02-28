@@ -12,6 +12,7 @@ from starlette.staticfiles import StaticFiles
 
 from studio_ui.routes.api import setup_api_routes
 from studio_ui.routes.discovery import setup_discovery_routes
+from studio_ui.routes.export import setup_export_routes
 from studio_ui.routes.library import setup_library_routes
 from studio_ui.routes.settings import setup_settings_routes
 from studio_ui.routes.studio import setup_studio_routes
@@ -157,6 +158,9 @@ setup_discovery_routes(app)
 
 # Library page routes
 setup_library_routes(app)
+
+# Export hub routes
+setup_export_routes(app)
 
 # Settings page routes
 setup_settings_routes(app)

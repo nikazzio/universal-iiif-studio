@@ -15,17 +15,22 @@ from studio_ui.common.title_utils import resolve_preferred_title, truncate_title
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.studio.cropper import render_cropper_modal
+from studio_ui.components.studio.export import render_pdf_inventory_panel, render_studio_export_tab
 from studio_ui.components.studio.history import history_tab_content
 from studio_ui.components.studio.tabs import render_studio_tabs
 from studio_ui.components.studio.transcription import transcription_tab_content
 from studio_ui.config import get_api_key, get_snippets_dir
 from studio_ui.ocr_state import OCR_JOBS_STATE, get_ocr_job_state, is_ocr_job_running
 from studio_ui.pages.studio import studio_layout
+from studio_ui.routes import export_handlers as export_monitor_handlers
+from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.services.export import list_item_pdf_files
 from universal_iiif_core.services.ocr.processor import OCRProcessor
 from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+from universal_iiif_core.thumbnail_utils import ensure_thumbnail, guess_available_pages
 from universal_iiif_core.utils import load_json
 
 logger = get_logger(__name__)
@@ -91,6 +96,76 @@ def _resolve_studio_title(doc_id: str, meta: dict, ms_row: dict) -> tuple[str, s
     return full_title, truncate_title(full_title, max_len=70, suffix="[...]")
 
 
+def _to_downloads_url(path: Path) -> str:
+    downloads_dir = get_config_manager().get_downloads_dir().resolve()
+    try:
+        rel = path.resolve().relative_to(downloads_dir)
+    except Exception:
+        return ""
+    encoded = "/".join(quote(part, safe="") for part in rel.parts)
+    return f"/downloads/{encoded}"
+
+
+def _export_tab_defaults() -> dict[str, str | bool | int]:
+    cm = get_config_manager()
+    cover = cm.get_setting("pdf.cover", {})
+    export_cfg = cm.get_setting("pdf.export", {})
+    if not isinstance(cover, dict):
+        cover = {}
+    if not isinstance(export_cfg, dict):
+        export_cfg = {}
+
+    return {
+        "curator": str(cover.get("curator") or ""),
+        "description": str(cover.get("description") or ""),
+        "logo_path": str(cover.get("logo_path") or ""),
+        "format": str(export_cfg.get("default_format") or "pdf_images"),
+        "compression": str(export_cfg.get("default_compression") or "Standard"),
+        "include_cover": bool(export_cfg.get("include_cover", True)),
+        "include_colophon": bool(export_cfg.get("include_colophon", True)),
+        "description_rows": int(export_cfg.get("description_rows", 3) or 3),
+    }
+
+
+def _build_export_thumbnail_items(doc_id: str, library: str) -> list[dict]:
+    storage = OCRStorage()
+    paths = storage.get_document_paths(doc_id, library)
+    scans_dir = Path(paths["scans"])
+    thumbnails_dir = Path(paths["thumbnails"])
+    cm = get_config_manager()
+    max_px = int(cm.get_setting("thumbnails.max_long_edge_px", 320) or 320)
+    quality = int(cm.get_setting("thumbnails.jpeg_quality", 70) or 70)
+
+    items: list[dict] = []
+    for page_num in guess_available_pages(scans_dir):
+        thumb_path = ensure_thumbnail(
+            scans_dir=scans_dir,
+            thumbnails_dir=thumbnails_dir,
+            page_num_1_based=page_num,
+            max_long_edge_px=max_px,
+            jpeg_quality=quality,
+        )
+        thumb_url = _to_downloads_url(thumb_path) if thumb_path else ""
+        items.append({"page": page_num, "thumb_url": thumb_url, "selected": False})
+    return items
+
+
+def _build_studio_export_fragment(doc_id: str, library: str):
+    thumbs = _build_export_thumbnail_items(doc_id, library)
+    pdf_files = list_item_pdf_files(doc_id, library)
+    for row in pdf_files:
+        row["download_url"] = _to_downloads_url(Path(str(row.get("path") or "")))
+    jobs = export_monitor_handlers.list_jobs_for_item(doc_id, library, limit=50)
+    return render_studio_export_tab(
+        doc_id=doc_id,
+        library=library,
+        thumbnails=thumbs,
+        pdf_files=pdf_files,
+        jobs=jobs,
+        export_defaults=_export_tab_defaults(),
+    )
+
+
 def build_studio_tab_content(
     doc_id: str,
     library: str,
@@ -110,6 +185,7 @@ def build_studio_tab_content(
     scans_dir = Path(paths["scans"])
     total_pages = len(list(scans_dir.glob("pag_*.jpg"))) if scans_dir.exists() else 0
     manifest_json = load_json(paths["manifest"]) or {}
+    export_fragment = _build_studio_export_fragment(doc_id, library)
     return render_studio_tabs(
         doc_id,
         library,
@@ -120,6 +196,7 @@ def build_studio_tab_content(
         is_ocr_loading=is_ocr_loading,
         ocr_error=ocr_error,
         history_message=history_message,
+        export_fragment=export_fragment,
     )
 
 
@@ -169,6 +246,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             manifest_json,
             total_pages,
             meta,
+            export_fragment=_build_studio_export_fragment(doc_id, library),
             asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
             has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
             pdf_local_available=bool(ms_row.get("pdf_local_available")),
@@ -205,6 +283,80 @@ def get_history_tab(doc_id: str, library: str, page: int, info_message: str | No
     return Div(
         *history_tab_content(doc_id, page_idx, library, info_message=info_message),
         cls="p-4",
+    )
+
+
+def get_export_tab(doc_id: str, library: str, page: int):
+    """Get Studio Export tab content."""
+    _ = int(page)
+    doc_id, library = unquote(doc_id), unquote(library)
+    return _build_studio_export_fragment(doc_id, library)
+
+
+def get_studio_export_jobs(doc_id: str, library: str):
+    """Return per-item export jobs panel for polling."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    return export_monitor_handlers.jobs_fragment_for_item(doc_id, library, panel_id="studio-export-jobs")
+
+
+def get_studio_export_pdf_list(doc_id: str, library: str):
+    """Return per-item PDF inventory panel for polling."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    pdf_files = list_item_pdf_files(doc_id, library)
+    for row in pdf_files:
+        row["download_url"] = _to_downloads_url(Path(str(row.get("path") or "")))
+    return render_pdf_inventory_panel(pdf_files, doc_id=doc_id, library=library, polling=True)
+
+
+def _is_truthy_flag(raw: str | None) -> bool:
+    value = str(raw or "").strip().lower()
+    return value in {"1", "true", "on", "yes"}
+
+
+def start_studio_export(
+    doc_id: str,
+    library: str,
+    selection_mode: str = "all",
+    selected_pages: str = "",
+    export_format: str = "pdf_images",
+    compression: str = "Standard",
+    include_cover: str = "",
+    include_colophon: str = "",
+    cover_curator: str = "",
+    cover_description: str = "",
+    cover_logo_path: str = "",
+):
+    """Start one export job from Studio for the current item."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    include_cover_bool = _is_truthy_flag(include_cover)
+    include_colophon_bool = _is_truthy_flag(include_colophon)
+    if include_cover == "":
+        include_cover_bool = True
+    if include_colophon == "":
+        include_colophon_bool = True
+
+    try:
+        export_monitor_handlers.start_export_job(
+            items=[{"doc_id": doc_id, "library": library}],
+            export_format=export_format,
+            selection_mode=selection_mode,
+            selected_pages_raw=selected_pages,
+            destination="local_filesystem",
+            compression=compression,
+            include_cover=include_cover_bool,
+            include_colophon=include_colophon_bool,
+            cover_curator=cover_curator or None,
+            cover_description=cover_description or None,
+            cover_logo_path=cover_logo_path or None,
+            capability_flags={"source": "studio-tab"},
+        )
+    except Exception as exc:
+        return _with_toast(_build_studio_export_fragment(doc_id, library), f"Errore avvio export: {exc}", tone="danger")
+
+    return _with_toast(
+        _build_studio_export_fragment(doc_id, library),
+        "Export PDF avviato per l'item corrente.",
+        tone="success",
     )
 
 

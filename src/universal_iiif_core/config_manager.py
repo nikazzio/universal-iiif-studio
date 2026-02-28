@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 DEFAULT_CONFIG_JSON: dict[str, Any] = {
     "paths": {
         "downloads_dir": "data/local/downloads",
+        "exports_dir": "data/local/exports",
         "temp_dir": "data/local/temp_images",
         "models_dir": "data/local/models",
         "logs_dir": "data/local/logs",
@@ -72,6 +73,13 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "ocr_dpi": 300,
             "prefer_native_pdf": True,
             "create_pdf_from_images": False,
+            "export": {
+                "default_format": "pdf_images",
+                "default_compression": "Standard",
+                "include_cover": True,
+                "include_colophon": True,
+                "description_rows": 3,
+            },
             "cover": {
                 "logo_path": "",
                 "curator": "",
@@ -241,6 +249,10 @@ class ConfigManager:
         """Set the downloads directory path."""
         self._data.setdefault("paths", {})["downloads_dir"] = (value or "data/local/downloads").strip()
 
+    def set_exports_dir(self, value: str) -> None:
+        """Set the exports directory path."""
+        self._data.setdefault("paths", {})["exports_dir"] = (value or "data/local/exports").strip()
+
     def set_temp_dir(self, value: str) -> None:
         """Set the temporary images directory path."""
         self._data.setdefault("paths", {})["temp_dir"] = (value or "data/local/temp_images").strip()
@@ -316,6 +328,10 @@ class ConfigManager:
     def get_downloads_dir(self) -> Path:
         """Get the downloads directory path."""
         return self._ensure_dir(self.resolve_path("downloads_dir", "data/local/downloads"))
+
+    def get_exports_dir(self) -> Path:
+        """Get the exports directory path."""
+        return self._ensure_dir(self.resolve_path("exports_dir", "data/local/exports"))
 
     def get_temp_dir(self) -> Path:
         """Get the temporary images directory path."""

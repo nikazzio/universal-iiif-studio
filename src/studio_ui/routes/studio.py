@@ -17,6 +17,7 @@ def setup_studio_routes(app):
     app.get("/studio")(handlers.studio_page)
     app.get("/studio/partial/tabs")(handlers.get_studio_tabs)
     app.get("/studio/partial/history")(handlers.get_history_tab)
+    app.get("/studio/partial/export")(handlers.get_export_tab)
 
     # Async OCR API
     app.post("/api/run_ocr_async")(handlers.run_ocr_async)
@@ -27,6 +28,9 @@ def setup_studio_routes(app):
     app.get("/studio/cropper")(handlers.get_cropper)
     app.post("/api/save_snippet")(handlers.save_snippet_api)
     app.post("/api/save_transcription")(handlers.save_transcription)
+    app.post("/api/studio/export/start")(handlers.start_studio_export)
+    app.get("/api/studio/export/jobs")(handlers.get_studio_export_jobs)
+    app.get("/api/studio/export/pdf_list")(handlers.get_studio_export_pdf_list)
 
     # Deletions
     app.delete("/api/delete_snippet/{snippet_id}")(handlers.delete_snippet)
