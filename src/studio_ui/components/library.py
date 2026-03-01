@@ -52,6 +52,16 @@ _LINK_BUTTON_CLS = {
     "external": "app-btn app-btn-accent",
     "muted": "app-btn app-btn-muted",
 }
+_LIBRARY_FILTER_KEYS = [
+    "q",
+    "state",
+    "library_filter",
+    "category",
+    "mode",
+    "view",
+    "action_required",
+    "sort_by",
+]
 
 
 def _state_badge(state: str) -> Span:
@@ -172,6 +182,7 @@ def _render_filters(
                 hx_target="#library-page",
                 hx_swap="outerHTML show:none",
                 hx_push_url="true",
+                id="library-reset-filters",
                 cls="app-btn app-btn-neutral",
             ),
             cls="flex flex-wrap gap-2",
@@ -259,6 +270,192 @@ def _render_filters(
             "rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 "
             "p-3 mb-5 sticky top-0 z-10 backdrop-blur"
         ),
+    )
+
+
+def _library_filters_persistence_script() -> Script:
+    return Script(
+        """
+        (function () {
+            const STORAGE_KEY = 'ui.library.filters.v1';
+            const FILTER_KEYS = [
+                'q', 'state', 'library_filter', 'category', 'mode', 'view', 'action_required', 'sort_by'
+            ];
+
+            function defaultFilters() {
+                return {
+                    q: '',
+                    state: '',
+                    library_filter: '',
+                    category: '',
+                    mode: 'operativa',
+                    view: 'grid',
+                    action_required: '0',
+                    sort_by: ''
+                };
+            }
+
+            function normalizeFilters(raw) {
+                const base = defaultFilters();
+                const src = (raw && typeof raw === 'object') ? raw : {};
+                FILTER_KEYS.forEach((key) => {
+                    base[key] = String(src[key] || '').trim();
+                });
+                if (!base.mode) base.mode = 'operativa';
+                if (!base.view) base.view = 'grid';
+                if (!base.action_required) base.action_required = '0';
+                return base;
+            }
+
+            function readSavedFilters() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return null;
+                    return normalizeFilters(JSON.parse(raw));
+                } catch (_e) {
+                    return null;
+                }
+            }
+
+            function saveFilters(data) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeFilters(data)));
+                } catch (_e) {
+                    /* ignore quota/storage errors */
+                }
+            }
+
+            function clearSavedFilters() {
+                try {
+                    localStorage.removeItem(STORAGE_KEY);
+                } catch (_e) {
+                    /* ignore */
+                }
+            }
+
+            function hasMeaningfulFilters(data) {
+                const f = normalizeFilters(data);
+                return Boolean(
+                    f.q ||
+                    f.state ||
+                    f.library_filter ||
+                    f.category ||
+                    f.sort_by ||
+                    f.mode !== 'operativa' ||
+                    f.view !== 'grid' ||
+                    f.action_required !== '0'
+                );
+            }
+
+            function collectFormFilters(form) {
+                const payload = {};
+                FILTER_KEYS.forEach((key) => {
+                    const input = form.querySelector('[name="' + key + '"]');
+                    payload[key] = input ? String(input.value || '').trim() : '';
+                });
+                return normalizeFilters(payload);
+            }
+
+            function setFormFilters(form, data) {
+                const normalized = normalizeFilters(data);
+                FILTER_KEYS.forEach((key) => {
+                    const input = form.querySelector('[name="' + key + '"]');
+                    if (!input) return;
+                    input.value = normalized[key];
+                });
+            }
+
+            function urlHasFilterParams() {
+                try {
+                    const params = new URLSearchParams(window.location.search || '');
+                    return FILTER_KEYS.some((key) => params.has(key));
+                } catch (_e) {
+                    return false;
+                }
+            }
+
+            function filtersToQuery(data) {
+                const f = normalizeFilters(data);
+                const params = new URLSearchParams();
+                if (f.q) params.set('q', f.q);
+                if (f.state) params.set('state', f.state);
+                if (f.library_filter) params.set('library_filter', f.library_filter);
+                if (f.category) params.set('category', f.category);
+                if (f.sort_by) params.set('sort_by', f.sort_by);
+                if (f.mode !== 'operativa') params.set('mode', f.mode);
+                if (f.view !== 'grid') params.set('view', f.view);
+                if (f.action_required !== '0') params.set('action_required', f.action_required);
+                return params.toString();
+            }
+
+            function bindFormPersistence(form) {
+                if (!form || form.dataset.persistBound === '1') return;
+                const persist = () => saveFilters(collectFormFilters(form));
+                form.addEventListener('change', persist);
+                form.addEventListener('submit', persist);
+                form.dataset.persistBound = '1';
+            }
+
+            function bindResetAction() {
+                const resetLink = document.getElementById('library-reset-filters');
+                if (!resetLink || resetLink.dataset.resetBound === '1') return;
+                resetLink.addEventListener('click', () => clearSavedFilters());
+                resetLink.dataset.resetBound = '1';
+            }
+
+            function restoreFiltersIfNeeded(form) {
+                if (window.location.pathname !== '/library') return;
+                if (urlHasFilterParams()) return;
+                if (window.__libraryFiltersRestoreDone) return;
+
+                const saved = readSavedFilters();
+                if (!saved || !hasMeaningfulFilters(saved)) return;
+
+                const query = filtersToQuery(saved);
+                if (!query) return;
+
+                setFormFilters(form, saved);
+                saveFilters(saved);
+                window.__libraryFiltersRestoreDone = true;
+
+                const url = '/library?' + query;
+                try {
+                    window.history.replaceState(window.history.state, '', url);
+                } catch (_e) {
+                    /* ignore */
+                }
+
+                if (window.htmx && typeof window.htmx.ajax === 'function') {
+                    window.htmx.ajax('GET', url, { target: '#library-page', swap: 'outerHTML show:none' });
+                    return;
+                }
+                window.location.href = url;
+            }
+
+            function initLibraryFiltersPersistence() {
+                const form = document.getElementById('library-filters');
+                if (!form) return;
+                bindFormPersistence(form);
+                bindResetAction();
+                saveFilters(collectFormFilters(form));
+                restoreFiltersIfNeeded(form);
+            }
+
+            if (!window.__libraryFiltersPersistenceBootstrapped) {
+                window.__libraryFiltersPersistenceBootstrapped = true;
+                document.addEventListener('DOMContentLoaded', initLibraryFiltersPersistence);
+                document.body.addEventListener('htmx:afterSwap', (event) => {
+                    const target = event && event.target;
+                    if (!target) return;
+                    if (target.id === 'app-main' || target.id === 'library-page') {
+                        initLibraryFiltersPersistence();
+                    }
+                });
+            }
+
+            initLibraryFiltersPersistence();
+        })();
+        """
     )
 
 
@@ -978,6 +1175,7 @@ def render_library_page(
             libraries=libraries,
             categories=categories,
         ),
+        _library_filters_persistence_script(),
         render_library_list(docs, view=view, mode=mode),
         _metadata_drawer(),
         cls="p-6 max-w-7xl mx-auto",

@@ -1,4 +1,4 @@
-from studio_ui.components.library import render_library_card
+from studio_ui.components.library import render_library_card, render_library_page
 
 
 def _base_doc(**overrides):
@@ -58,3 +58,17 @@ def test_library_card_shows_pdf_absence_badges():
     assert "da immagini" in rendered
     assert "PDF locali:" in rendered
     assert "0" in rendered
+
+
+def test_library_page_includes_filter_persistence_script():
+    """Library page should include client-side filter persistence bootstrap."""
+    rendered = repr(render_library_page([]))
+    assert "ui.library.filters.v1" in rendered
+    assert "__libraryFiltersPersistenceBootstrapped" in rendered
+    assert "htmx.ajax('GET', url" in rendered
+
+
+def test_library_page_reset_control_clears_persisted_filters():
+    """Reset action must expose a stable id used by persistence script."""
+    rendered = repr(render_library_page([]))
+    assert 'id="library-reset-filters"' in rendered
