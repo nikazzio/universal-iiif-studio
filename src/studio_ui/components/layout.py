@@ -40,6 +40,112 @@ def _tailwind_theme_script(primary: str, accent: str) -> str:
     )
 
 
+def _library_nav_filters_bootstrap_script(default_mode: str) -> str:
+    safe_mode = "archivio" if str(default_mode or "").strip().lower() == "archivio" else "operativa"
+    return f"""
+        (function() {{
+            const STORAGE_KEY = 'ui.library.filters.v1';
+            const DEFAULT_MODE = {json.dumps(safe_mode)};
+            const FILTER_KEYS = [
+                'q', 'state', 'library_filter', 'category', 'mode', 'view', 'action_required', 'sort_by'
+            ];
+
+            function normalize(raw) {{
+                const base = {{
+                    q: '',
+                    state: '',
+                    library_filter: '',
+                    category: '',
+                    mode: DEFAULT_MODE,
+                    view: 'grid',
+                    action_required: '0',
+                    sort_by: ''
+                }};
+                const src = (raw && typeof raw === 'object') ? raw : {{}};
+                FILTER_KEYS.forEach((key) => {{
+                    base[key] = String(src[key] || '').trim();
+                }});
+                if (!base.mode) base.mode = DEFAULT_MODE;
+                if (!base.view) base.view = 'grid';
+                if (!base.action_required) base.action_required = '0';
+                return base;
+            }}
+
+            function readSavedFilters() {{
+                try {{
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return null;
+                    return normalize(JSON.parse(raw));
+                }} catch (_e) {{
+                    return null;
+                }}
+            }}
+
+            function hasMeaningfulFilters(data) {{
+                const f = normalize(data);
+                return Boolean(
+                    f.q ||
+                    f.state ||
+                    f.library_filter ||
+                    f.category ||
+                    f.sort_by ||
+                    f.mode !== DEFAULT_MODE ||
+                    f.view !== 'grid' ||
+                    f.action_required !== '0'
+                );
+            }}
+
+            function toQuery(data) {{
+                const f = normalize(data);
+                const params = new URLSearchParams();
+                if (f.q) params.set('q', f.q);
+                if (f.state) params.set('state', f.state);
+                if (f.library_filter) params.set('library_filter', f.library_filter);
+                if (f.category) params.set('category', f.category);
+                if (f.sort_by) params.set('sort_by', f.sort_by);
+                if (f.mode !== DEFAULT_MODE) params.set('mode', f.mode);
+                if (f.view !== 'grid') params.set('view', f.view);
+                if (f.action_required !== '0') params.set('action_required', f.action_required);
+                return params.toString();
+            }}
+
+            function resolveSavedQuery() {{
+                const saved = readSavedFilters();
+                if (!saved || !hasMeaningfulFilters(saved)) return '';
+                return toQuery(saved);
+            }}
+
+            const isLibraryPath = (window.location.pathname || '') === '/library';
+            const hasQuery = (window.location.search || '').length > 1;
+            if (isLibraryPath && !hasQuery) {{
+                const query = resolveSavedQuery();
+                if (query) {{
+                    window.location.replace('/library?' + query);
+                    return;
+                }}
+            }}
+
+            if (window.__libraryNavFilterBootstrapBound) return;
+            window.__libraryNavFilterBootstrapBound = true;
+            document.addEventListener('click', function(event) {{
+                const link = event.target && event.target.closest
+                    ? event.target.closest('a[data-nav-key="library"]')
+                    : null;
+                if (!link) return;
+                const href = String(link.getAttribute('href') || '');
+                if (!href || href.indexOf('/library') !== 0 || href.indexOf('?') !== -1) return;
+                const query = resolveSavedQuery();
+                if (!query) return;
+                const targetUrl = '/library?' + query;
+                link.setAttribute('href', targetUrl);
+                if (link.hasAttribute('hx-get')) {{
+                    link.setAttribute('hx-get', targetUrl);
+                }}
+            }}, true);
+        }})();
+    """
+
+
 def base_layout(title: str, content, active_page: str = "") -> Html:
     """Generate base page layout with sidebar, dark mode toggle, and headers."""
     theme = resolve_ui_theme(
@@ -56,6 +162,7 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
     accent_rgb = parse_hex_rgb(accent)
     primary_ink = readable_ink(primary)
     accent_ink = readable_ink(accent)
+    library_default_mode = str(get_setting("library.default_mode", "operativa"))
 
     return Html(
         Head(
@@ -86,6 +193,7 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                     }
                 })();
             """),
+            Script(_library_nav_filters_bootstrap_script(library_default_mode)),
             _style_tag(),
         ),
         Body(
@@ -251,6 +359,7 @@ def _sidebar(active_page: str = "") -> Nav:
                     hx_swap="innerHTML",
                     hx_push_url="true",
                     data_nav_link="true",
+                    data_nav_key=key,
                     cls=_sidebar_link_classes(),
                     **({"aria_current": "page"} if key == active_page else {}),
                 )

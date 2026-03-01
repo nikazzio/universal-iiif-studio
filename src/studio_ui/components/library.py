@@ -608,14 +608,6 @@ def _category_select_cls(item_type: str) -> str:
     return f"app-field min-w-[180px] px-2.5 py-1.5 text-sm font-medium {tone}"
 
 
-def _category_badge(item_type: str) -> Span:
-    tone = _CATEGORY_SELECT_TONE.get(item_type, _CATEGORY_SELECT_TONE["non classificato"])
-    return Span(
-        _CATEGORY_LABELS.get(item_type, item_type.title()),
-        cls=f"inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold {tone}",
-    )
-
-
 def _primary_action(doc: dict):
     doc_id = quote(str(doc.get("id") or ""), safe="")
     library = quote(str(doc.get("library") or "Unknown"), safe="")
@@ -880,7 +872,6 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         ),
         Div(
             Span(library_name, cls="text-sm text-slate-700 dark:text-slate-200 font-semibold"),
-            _category_badge(item_type),
             _category_form(doc, item_type),
             cls="flex flex-wrap items-center gap-2",
         ),
