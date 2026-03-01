@@ -21,8 +21,8 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 ### 2. Core Business Logic (`universal_iiif_core/`)
 
 * **Discovery Module**:
-  * **Resolvers**: Uses a Dispatcher pattern (`resolve_shelfmark`) to route inputs to specific implementations (`Vatican`, `Gallica`, `Oxford`).
-  * **Search**: Implements SRU parsing (Gallica) and stubs for deprecated APIs.
+  * **Resolvers**: Uses a Dispatcher pattern (`resolve_shelfmark`) to route inputs to specific implementations (`Vatican`, `Gallica`, `Oxford`, `Institut de France`).
+  * **Search**: Implements Gallica SRU parsing with optional type filtering (`all`, `manuscripts`, `printed books`) and fallback/stub logic where APIs are limited.
 * **Downloader Logic**:
   * Implements the **Golden Flow** (Native PDF check -> Extraction -> Fallback to IIIF).
   * Manages threading and DB updates.
@@ -40,11 +40,12 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 
 ### 1. Discovery, Library Add, and Resolution
 
-1. **User Input**: The user enters a shelfmark (e.g., "Urb.lat.1779") or a URL.
+1. **User Input**: The user enters free text, shelfmark (e.g., "Urb.lat.1779"), an ID, or a URL.
 2. **Dispatcher**: `resolve_shelfmark` detects the library signature and selects the correct strategy.
 3. **Normalization**: The resolver converts "dirty" inputs into a canonical IIIF Manifest URL.
-4. **Preview**: The UI fetches basic metadata and lazy-checks native PDF availability.
-5. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
+4. **Gallica Filter Stage**: Optional type filters are applied on parsed metadata (`dc:type`) to avoid SRU type-filter inconsistencies.
+5. **Preview**: The UI fetches basic metadata and lazy-checks native PDF availability.
+6. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
 
 ### 2. Download Manager + Golden Flow
 

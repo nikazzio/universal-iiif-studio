@@ -32,6 +32,7 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ## Features
 
 - IIIF manifest resolution and page download pipeline
+- Discovery with free-text search plus optional Gallica filters (`all`, `manuscripts`, `printed books`)
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
@@ -52,6 +53,7 @@ python3 src/studio_app.py
 ```
 
 Navigation model:
+- `Discovery` supports free text/shelfmark/ID/URL search and optional Gallica type filters.
 - `Library` is the canonical entrypoint for local documents.
 - `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
 - `Export` is a dedicated hub for batch/single exports (`/export`).
@@ -126,6 +128,10 @@ ruff format .
 Studio loads but pages are missing
 - Check `downloads/<Library>/<DocumentId>/scans/` for `pag_XXXX.jpg` files.
 - Verify `config.json` PDF flags (`prefer_native_pdf`, `create_pdf_from_images`).
+
+No results in Discovery for a known Gallica title
+- Keep the `Gallica` filter on `All materials` for broad lookup.
+- Use `Manuscripts` or `Printed books` only when you want to narrow down result type.
 
 `/studio` opens Library instead of the editor
 - Expected behavior: Studio now requires `doc_id` + `library`.

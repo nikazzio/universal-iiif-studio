@@ -55,14 +55,20 @@ Notes:
 
 ## `settings.defaults`
 
-- `settings.defaults.default_library` (`string`, default: `Vaticana (BAV)`)
+- `settings.defaults.default_library` (`string`, default: `Vaticana`)
 - `settings.defaults.preferred_ocr_engine` (`string`, default: `openai`)
 
 ## `settings.ui`
 
-- `settings.ui.theme_color` (`string`, default: `#FF4B4B`)
+- `settings.ui.theme_preset` (`string`, default: `rosewater`)
+- `settings.ui.theme_primary_color` (`string`, default: `#7B8CC7`)
+- `settings.ui.theme_accent_color` (`string`, default: `#E8A6B6`)
+- `settings.ui.theme_color` (`string`, default: `#E8A6B6`)
 - `settings.ui.items_per_page` (`int`, default: `12`)
 - `settings.ui.toast_duration` (`int`, default: `3000`)
+
+Notes:
+- `theme_color` is kept for backward compatibility; current UI uses primary/accent keys and preset.
 
 ## `settings.images`
 
@@ -110,6 +116,7 @@ Backward compatibility:
 - `settings.thumbnails.columns` (`int`, default: `6`)
 - `settings.thumbnails.paginate_enabled` (`bool`, default: `true`)
 - `settings.thumbnails.page_size` (`int`, default: `48`)
+- `settings.thumbnails.page_size_options` (`int[]`, default: `[24, 48, 72, 96]`)
 - `settings.thumbnails.default_select_all` (`bool`, default: `true`)
 - `settings.thumbnails.actions_apply_to_all_default` (`bool`, default: `false`)
 - `settings.thumbnails.hover_preview_enabled` (`bool`, default: `true`)

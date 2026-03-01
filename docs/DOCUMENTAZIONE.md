@@ -2,7 +2,7 @@
 
 ## 1. Introduzione
 
-Universal IIIF Downloader & Studio è una piattaforma modulare per lo studio di manoscritti digitali.
+Universal IIIF Downloader & Studio è una piattaforma modulare per lo studio di materiali IIIF (manoscritti e libri a stampa).
 L'architettura separa nettamente il backend (Python core) dall'interfaccia (FastHTML/HTMX).
 L'esperienza utente è quella di una SPA (Single Page Application): `Libreria` è il punto di accesso ai documenti locali e `Studio` è il workspace con Mirador a sinistra e pannelli operativi (Trascrizione, Snippets, History, Visual) a destra.
 
@@ -51,12 +51,26 @@ La pagina Discovery è divisa in due aree:
 
 Questo permette di continuare a cercare nuovi manoscritti mentre uno o più download sono in corso.
 
+### 🔎 Ricerca libera + filtri opzionali
+
+La barra di ricerca Discovery è pensata in stile "standard":
+* campo testo ampio (supporta query lunghe, segnature, ID, URL);
+* select biblioteca;
+* filtro opzionale specifico per Gallica:
+  * `Tutti i materiali` (default),
+  * `Solo manoscritti`,
+  * `Solo libri a stampa`.
+
+Nota: su Gallica i filtri per tipologia vengono applicati localmente sui metadati (`dc:type`) estratti dai record SRU, perché i filtri CQL diretti su `dc.type` non sono sempre affidabili.
+
 ### 🛰️ Smart Resolvers
 
 Il campo di ricerca accetta input "sporchi". Il sistema normalizza automaticamente:
 
 * **Vaticana**: `Urb. lat. 123` → `MSS_Urb.lat.123`
 * **Gallica**: Accetta Short ID (`bpt6k...`), ARK completi e URL di visualizzazione.
+  * Ricerca testuale libera di default.
+  * Filtri opzionali per restringere a manoscritti o libri a stampa.
 * **Oxford**: Riconosce UUID (case-insensitive) e URL del portale `digital.bodleian`.
 
 ### ⚡ Il "Golden Flow" di Download
@@ -146,7 +160,7 @@ Accesso consigliato:
 * **Architecture**: Vedi `docs/ARCHITECTURE.md` per il diagramma dei moduli.
 * **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/utils.py` (Session, Headers, Retry).
 * **Testing**:
-  * Unit test offline: `pytest tests/test_discovery_resolvers_unit.py`
+  * Unit test offline (Discovery/Gallica): `pytest tests/test_search_gallica_unit.py tests/test_discovery_handlers_resolve_manifest.py`
   * Live test (Rete richiesta): `pytest tests/test_live.py` (Abilitare in config).
 
 ## 8. Gestione dei dati locali
