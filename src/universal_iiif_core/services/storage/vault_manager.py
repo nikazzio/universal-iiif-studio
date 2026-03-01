@@ -131,8 +131,45 @@ class VaultManager:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS export_jobs (
+                job_id TEXT PRIMARY KEY,
+                scope_type TEXT DEFAULT 'batch',
+                doc_ids_json TEXT,
+                library TEXT,
+                export_format TEXT,
+                output_kind TEXT DEFAULT 'binary',
+                selection_mode TEXT DEFAULT 'all',
+                selected_pages_json TEXT,
+                destination TEXT DEFAULT 'local_filesystem',
+                destination_payload_json TEXT,
+                capability_flags_json TEXT,
+                status TEXT DEFAULT 'queued',
+                current_step INTEGER DEFAULT 0,
+                total_steps INTEGER DEFAULT 0,
+                output_path TEXT,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_ui_preferences (
+                manuscript_id TEXT NOT NULL,
+                pref_key TEXT NOT NULL,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (manuscript_id, pref_key)
+            )
+        """)
+
         self._migrate_manuscripts_table(cursor)
         self._migrate_download_jobs_table(cursor)
+        self._migrate_export_jobs_table(cursor)
+        self._migrate_manuscript_ui_preferences_table(cursor)
 
         conn.commit()
         conn.close()
@@ -176,6 +213,38 @@ class VaultManager:
         self._ensure_column(cursor, "download_jobs", "priority", "INTEGER DEFAULT 0")
         self._ensure_column(cursor, "download_jobs", "started_at", "TIMESTAMP")
         self._ensure_column(cursor, "download_jobs", "finished_at", "TIMESTAMP")
+
+    def _migrate_export_jobs_table(self, cursor: sqlite3.Cursor) -> None:
+        self._ensure_column(cursor, "export_jobs", "scope_type", "TEXT DEFAULT 'batch'")
+        self._ensure_column(cursor, "export_jobs", "doc_ids_json", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "library", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "export_format", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "output_kind", "TEXT DEFAULT 'binary'")
+        self._ensure_column(cursor, "export_jobs", "selection_mode", "TEXT DEFAULT 'all'")
+        self._ensure_column(cursor, "export_jobs", "selected_pages_json", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "destination", "TEXT DEFAULT 'local_filesystem'")
+        self._ensure_column(cursor, "export_jobs", "destination_payload_json", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "capability_flags_json", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "status", "TEXT DEFAULT 'queued'")
+        self._ensure_column(cursor, "export_jobs", "current_step", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "export_jobs", "total_steps", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "export_jobs", "output_path", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "error_message", "TEXT")
+        self._ensure_column(cursor, "export_jobs", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        self._ensure_column(cursor, "export_jobs", "started_at", "TIMESTAMP")
+        self._ensure_column(cursor, "export_jobs", "finished_at", "TIMESTAMP")
+        self._ensure_column(cursor, "export_jobs", "updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+
+    def _migrate_manuscript_ui_preferences_table(self, cursor: sqlite3.Cursor) -> None:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_ui_preferences (
+                manuscript_id TEXT NOT NULL,
+                pref_key TEXT NOT NULL,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (manuscript_id, pref_key)
+            )
+        """)
 
     def upsert_manuscript(self, manuscript_id: str, **kwargs):
         """Insert or update a manuscript record."""
@@ -459,6 +528,63 @@ class VaultManager:
         finally:
             conn.close()
 
+    def get_manuscript_ui_pref(self, manuscript_id: str, pref_key: str, default: Any = None) -> Any:
+        """Read one manuscript-scoped UI preference."""
+        if not manuscript_id or not pref_key:
+            return default
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT pref_value_json
+                FROM manuscript_ui_preferences
+                WHERE manuscript_id = ? AND pref_key = ?
+                """,
+                (manuscript_id, pref_key),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return default
+            raw = str(row[0] or "").strip()
+            if not raw:
+                return default
+            try:
+                return json.loads(raw)
+            except Exception:
+                return default
+        finally:
+            conn.close()
+
+    def set_manuscript_ui_pref(self, manuscript_id: str, pref_key: str, pref_value: Any) -> None:
+        """Persist one manuscript-scoped UI preference."""
+        if not manuscript_id or not pref_key:
+            return
+        payload = json.dumps(pref_value, ensure_ascii=False)
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO manuscripts (id, title)
+                VALUES (?, ?)
+                """,
+                (manuscript_id, None),
+            )
+            cursor.execute(
+                """
+                INSERT INTO manuscript_ui_preferences (manuscript_id, pref_key, pref_value_json, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(manuscript_id, pref_key) DO UPDATE SET
+                    pref_value_json = excluded.pref_value_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (manuscript_id, pref_key, payload),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def delete_manuscript(self, ms_id: str):
         """Delete manuscript DB record, snippets, and the manuscript folder on disk.
 
@@ -492,6 +618,9 @@ class VaultManager:
             # 3. Delete the manuscript DB entry
             cursor.execute("DELETE FROM manuscripts WHERE id = ?", (ms_id,))
             deleted = cursor.rowcount > 0
+
+            # 3a. Delete manuscript-scoped UI preferences.
+            cursor.execute("DELETE FROM manuscript_ui_preferences WHERE manuscript_id = ?", (ms_id,))
 
             # 3b. Remove historical download jobs for this manuscript to avoid stale
             # cards in the Download Manager after deletion from Library.
@@ -963,6 +1092,159 @@ class VaultManager:
         finally:
             conn.close()
 
+    def create_export_job(
+        self,
+        job_id: str,
+        *,
+        scope_type: str,
+        doc_ids_json: str,
+        library: str,
+        export_format: str,
+        output_kind: str,
+        selection_mode: str,
+        selected_pages_json: str,
+        destination: str,
+        destination_payload_json: str = "{}",
+        capability_flags_json: str = "{}",
+        total_steps: int = 0,
+    ) -> None:
+        """Create or replace one export job row."""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO export_jobs (
+                    job_id, scope_type, doc_ids_json, library, export_format, output_kind,
+                    selection_mode, selected_pages_json, destination, destination_payload_json,
+                    capability_flags_json, status, current_step, total_steps, output_path, error_message,
+                    started_at, finished_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, NULL, NULL, NULL, NULL,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (
+                    job_id,
+                    scope_type,
+                    doc_ids_json,
+                    library,
+                    export_format,
+                    output_kind,
+                    selection_mode,
+                    selected_pages_json,
+                    destination,
+                    destination_payload_json,
+                    capability_flags_json,
+                    int(total_steps),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_export_job(
+        self,
+        job_id: str,
+        *,
+        current_step: int | None = None,
+        total_steps: int | None = None,
+        status: str | None = None,
+        output_path: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        """Update one export job row with optional fields."""
+        updates: list[str] = ["updated_at = CURRENT_TIMESTAMP"]
+        params: list[Any] = []
+
+        if current_step is not None:
+            updates.append("current_step = ?")
+            params.append(int(current_step))
+        if total_steps is not None:
+            updates.append("total_steps = ?")
+            params.append(int(total_steps))
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+            if status == "running":
+                updates.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
+                updates.append("finished_at = NULL")
+            if status in {"completed", "error", "cancelled"}:
+                updates.append("finished_at = CURRENT_TIMESTAMP")
+        if output_path is not None:
+            updates.append("output_path = ?")
+            params.append(output_path)
+        if error_message is not None:
+            updates.append("error_message = ?")
+            params.append(error_message)
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            sql = f"UPDATE export_jobs SET {', '.join(updates)} WHERE job_id = ?"  # noqa: S608
+            params.append(job_id)
+            cursor.execute(sql, tuple(params))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_export_job(self, job_id: str) -> dict[str, Any] | None:
+        """Return one export job by id."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='export_jobs'")
+            if not cursor.fetchone():
+                return None
+            cursor.execute("SELECT * FROM export_jobs WHERE job_id = ?", (job_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def list_export_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List recent export jobs ordered by status and recency."""
+        conn = self._get_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='export_jobs'")
+            if not cursor.fetchone():
+                return []
+            cursor.execute(
+                """
+                SELECT *
+                FROM export_jobs
+                ORDER BY
+                    CASE
+                        WHEN status = 'running' THEN 0
+                        WHEN status = 'queued' THEN 1
+                        WHEN status = 'completed' THEN 2
+                        WHEN status = 'error' THEN 3
+                        WHEN status = 'cancelled' THEN 4
+                        ELSE 5
+                    END,
+                    updated_at DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def delete_export_job(self, job_id: str) -> bool:
+        """Delete one export job row by id."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM export_jobs WHERE job_id = ?", (job_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
+
     def reset_active_downloads(self, mark: str = "error", message: str = "Server restarted"):
         """Mark any downloads left in 'pending' or 'running' state as stopped.
 
@@ -984,6 +1266,32 @@ class VaultManager:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE status IN ('queued', 'pending', 'running')
             """,
+                (mark, message),
+            )
+            count = cursor.rowcount
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def reset_active_exports(self, mark: str = "error", message: str = "Server restarted") -> int:
+        """Mark any exports left in queued/running state as stopped on startup."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='export_jobs'")
+            if not cursor.fetchone():
+                return 0
+
+            cursor.execute(
+                """
+                UPDATE export_jobs
+                SET status = ?,
+                    error_message = COALESCE(error_message, ?) || ' (server restart)',
+                    finished_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status IN ('queued', 'running')
+                """,
                 (mark, message),
             )
             count = cursor.rowcount

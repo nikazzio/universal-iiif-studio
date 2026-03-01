@@ -36,7 +36,7 @@ def history_tab_content(doc_id, page, library, info_message: str | None = None):
         return [
             P(
                 "Nessuno storico di salvataggio per questa pagina.",
-                cls="text-gray-400 italic py-10 text-center",
+                cls="text-slate-500 dark:text-slate-400 italic py-10 text-center",
             )
         ]
 
@@ -61,22 +61,19 @@ def history_tab_content(doc_id, page, library, info_message: str | None = None):
             ),
             Span(
                 f"+{added}",
-                cls=(
-                    "text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/30 "
-                    "text-emerald-200 font-semibold tracking-wider",
-                ),
+                cls="app-chip app-chip-success text-[10px] tracking-wider",
             ),
             Span(
                 f"-{deleted}",
-                cls=("text-[10px] px-2 py-0.5 rounded-full bg-rose-900/30 text-rose-200 font-semibold tracking-wider",),
+                cls="app-chip app-chip-danger text-[10px] tracking-wider",
             ),
             cls="flex flex-wrap items-center gap-2 text-xs",
         )
 
-        status_classes = "text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded-full " + (
-            "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
+        status_classes = (
+            "app-chip app-chip-success text-[10px] tracking-wider"
             if status == "verified"
-            else "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-100"
+            else "app-chip app-chip-primary text-[10px] tracking-wider"
         )
         subtle_status = Span(status.upper(), cls=status_classes)
 
@@ -114,10 +111,7 @@ def history_tab_content(doc_id, page, library, info_message: str | None = None):
                         Button(
                             "↺ Ripristina versione",
                             type="submit",
-                            cls=(
-                                "text-[11px] font-bold uppercase tracking-[0.25em] px-3 py-1 rounded-full "
-                                "bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition"
-                            ),
+                            cls="app-btn app-btn-primary",
                         ),
                         hx_post="/api/restore_transcription",
                         hx_target="#studio-right-panel",
@@ -130,8 +124,8 @@ def history_tab_content(doc_id, page, library, info_message: str | None = None):
                     cls="mt-3",
                 ),
                 cls=(
-                    "relative bg-white dark:bg-gray-900/60 p-4 rounded-2xl border "
-                    "border-gray-200 dark:border-gray-800 shadow-lg space-y-3",
+                    "relative bg-white dark:bg-slate-900/60 p-4 rounded-2xl border "
+                    "border-slate-200 dark:border-slate-700 shadow-lg space-y-3",
                 ),
             )
         )
@@ -139,13 +133,16 @@ def history_tab_content(doc_id, page, library, info_message: str | None = None):
     info_banner = None
     if info_message:
         info_banner = Div(
-            Span(info_message, cls="text-[11px] font-semibold text-slate-50"),
-            cls="mb-4 rounded-2xl border border-indigo-500/40 bg-indigo-900/70 px-4 py-2 shadow-lg text-sm",
+            Span(info_message, cls="text-[11px] font-semibold text-slate-100"),
+            cls=(
+                "mb-4 rounded-2xl border border-slate-200 dark:border-slate-700 "
+                "bg-slate-800 dark:bg-slate-900 px-4 py-2 shadow-lg text-sm"
+            ),
         )
 
     return [
         Div(
-            H3("Storico Salvataggi", cls="text-xs font-bold text-gray-400 uppercase mb-3"),
+            H3("Storico Salvataggi", cls="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-3"),
             *([info_banner] if info_banner else []),
             Div(*cards, cls="space-y-4"),
             cls="p-4",

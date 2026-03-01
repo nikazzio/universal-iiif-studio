@@ -169,6 +169,68 @@ def _thumbnail_url(row: dict) -> str:
     return ""
 
 
+def _to_optional_bool(value) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y"}:
+        return True
+    if text in {"0", "false", "no", "n", ""}:
+        return False
+    return None
+
+
+def _pdf_dir_candidates(row: dict) -> list[Path]:
+    candidates: list[Path] = []
+    local_path_raw = str(row.get("local_path") or "").strip()
+    if local_path_raw:
+        candidates.append(Path(local_path_raw) / "pdf")
+
+    lib = str(row.get("library") or "Unknown")
+    doc_id = str(row.get("id") or "").strip()
+    if doc_id:
+        candidates.append(get_config_manager().get_downloads_dir() / lib / doc_id / "pdf")
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _pdf_local_stats(row: dict) -> tuple[bool, int]:
+    count = 0
+    for directory in _pdf_dir_candidates(row):
+        if not directory.exists() or not directory.is_dir():
+            continue
+        count += sum(1 for pdf in directory.glob("*.pdf") if pdf.is_file())
+
+    if count > 0:
+        return True, count
+
+    db_flag = bool(_to_optional_bool(row.get("pdf_local_available")))
+    if db_flag:
+        return True, 1
+    return False, 0
+
+
+def _pdf_source(row: dict) -> str:
+    native = _to_optional_bool(row.get("has_native_pdf"))
+    if native is True:
+        return "native"
+    if native is False:
+        return "images"
+    return "unknown"
+
+
 def _operational_rank(doc: dict) -> int:
     state = str(doc.get("asset_state") or "saved").lower()
     has_missing = bool(doc.get("has_missing_pages"))
@@ -293,6 +355,8 @@ def _row_to_view_model(row: dict) -> dict:
     lib = str(row.get("library") or "Unknown")
     item_type = normalize_item_type(str(row.get("item_type") or ""))
     missing_pages = _parse_missing_pages(row.get("missing_pages_json"))
+    pdf_local_available, pdf_local_count = _pdf_local_stats(row)
+    native_pdf = _to_optional_bool(row.get("has_native_pdf"))
     return {
         **row,
         "library": lib,
@@ -311,6 +375,10 @@ def _row_to_view_model(row: dict) -> dict:
         "user_notes": str(row.get("user_notes") or ""),
         "metadata_preview": _metadata_preview_items(str(row.get("metadata_json") or "")),
         "thumbnail_url": _thumbnail_url(row),
+        "has_native_pdf": native_pdf,
+        "pdf_source": _pdf_source(row),
+        "pdf_local_available": pdf_local_available,
+        "pdf_local_count": int(pdf_local_count),
     }
 
 

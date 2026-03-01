@@ -462,6 +462,8 @@ def build_professional_pdf(
     source_url: str,
     cover_logo_bytes: bytes | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    include_cover: bool = True,
+    include_colophon: bool = True,
 ) -> Path:
     """Assemble [Cover] + [Selected Pages] + [Colophon] into a single PDF.
 
@@ -479,14 +481,15 @@ def build_professional_pdf(
 
     doc = fitz.open()
     try:
-        _add_cover_page(
-            doc,
-            cover_title,
-            cover_curator,
-            cover_description,
-            manifest_meta or {},
-            logo_bytes=cover_logo_bytes,
-        )
+        if include_cover:
+            _add_cover_page(
+                doc,
+                cover_title,
+                cover_curator,
+                cover_description,
+                manifest_meta or {},
+                logo_bytes=cover_logo_bytes,
+            )
 
         original_bytes_total = 0
         encoded_bytes_total = 0
@@ -541,16 +544,17 @@ def build_professional_pdf(
                 page_label=page_label,
             )
 
-        _add_colophon_page(
-            doc,
-            source_url=source_url,
-            profile=profile,
-            mode=mode,
-            selected_pages_count=len(selected_pages),
-            images_added=images_added,
-            original_bytes_total=original_bytes_total,
-            encoded_bytes_total=encoded_bytes_total,
-        )
+        if include_colophon:
+            _add_colophon_page(
+                doc,
+                source_url=source_url,
+                profile=profile,
+                mode=mode,
+                selected_pages_count=len(selected_pages),
+                images_added=images_added,
+                original_bytes_total=original_bytes_total,
+                encoded_bytes_total=encoded_bytes_total,
+            )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         doc.save(str(output_path), garbage=4, deflate=True)

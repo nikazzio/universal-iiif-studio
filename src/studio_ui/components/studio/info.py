@@ -14,8 +14,8 @@ def info_row(label, value):
         val = "N/D"
     display_value = str(val) if isinstance(val, (int, float, str)) else val
     return Div(
-        Div(label, cls="text-[10px] font-bold text-gray-400 uppercase tracking-widest"),
-        Div(display_value, cls="text-sm font-medium text-gray-800 dark:text-gray-200 break-words"),
+        Div(label, cls="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest"),
+        Div(display_value, cls="text-sm font-medium text-slate-800 dark:text-slate-200 break-words"),
     )
 
 
@@ -117,14 +117,14 @@ def _render_metadata_grid(entries, title, max_rows=8):
             rows.append(info_row(label, value))
     if not rows:
         return None
-        return Div(
-            H4(title, cls="text-xs font-bold uppercase tracking-[0.3em] text-slate-400"),
-            Div(*rows, cls="grid gap-3 sm:grid-cols-2"),
-            cls=(
-                "space-y-2 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border "
-                "border-dashed border-slate-200 dark:border-slate-700",
-            ),
-        )
+    return Div(
+        H4(title, cls="text-xs font-bold uppercase tracking-[0.3em] text-slate-400"),
+        Div(*rows, cls="grid gap-3 sm:grid-cols-2"),
+        cls=(
+            "space-y-2 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border "
+            "border-dashed border-slate-200 dark:border-slate-700",
+        ),
+    )
 
 
 def _render_see_also(entries, title):
@@ -143,7 +143,7 @@ def _render_see_also(entries, title):
                     href=url,
                     target="_blank",
                     rel="noreferrer",
-                    cls="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-600 dark:text-indigo-300",
+                    cls="text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200",
                 )
             )
     if not items:
@@ -171,7 +171,7 @@ def _render_providers(entries):
                 href=homepage,
                 target="_blank",
                 rel="noreferrer",
-                cls="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500",
+                cls="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200",
             )
             if homepage
             else None
@@ -299,8 +299,8 @@ def info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library
                 cls="space-y-4",
             ),
             cls=(
-                "space-y-6 p-6 bg-white dark:bg-gray-900 rounded-2xl border "
-                "border-gray-100 dark:border-gray-800 shadow-lg",
+                "space-y-6 p-6 bg-white dark:bg-slate-900 rounded-2xl border "
+                "border-slate-200 dark:border-slate-700 shadow-lg",
             ),
         )
     ]
@@ -347,7 +347,7 @@ def _visual_control_row(label_text, control_id, min_val, max_val, step, value):
                 max=str(max_val),
                 step=str(step),
                 value=str(value),
-                cls="w-full h-2 rounded-full bg-slate-200 accent-indigo-500 cursor-pointer",
+                cls="app-range",
                 **{"data-visual-control": control_id.replace("visual-", "")},
             ),
             Span(f"{value:.2f}", id=f"{control_id}-value", cls="text-xs font-mono text-slate-500 ml-2"),
@@ -423,9 +423,8 @@ def visual_tab_content():
                 document.querySelectorAll('[data-visual-toggle]').forEach(btn => {
                     const key = btn.dataset.visualToggle;
                     btn.setAttribute('aria-pressed', state[key]);
-                    btn.classList.toggle('bg-indigo-600', state[key]);
-                    btn.classList.toggle('text-white', state[key]);
-                    btn.classList.toggle('border-slate-300', !state[key]);
+                    btn.classList.toggle('app-btn-primary', state[key]);
+                    btn.classList.toggle('app-btn-neutral', !state[key]);
                 });
             };
 
@@ -515,19 +514,13 @@ def visual_tab_content():
                 Button(
                     "Inverti colori",
                     type="button",
-                    cls=(
-                        "flex-1 text-sm font-semibold uppercase tracking-[0.2em] px-3 py-2 rounded-full "
-                        "border border-slate-300 text-slate-700 dark:text-slate-100"
-                    ),
+                    cls="app-btn app-btn-neutral flex-1",
                     **{"data-visual-toggle": "invert"},
                 ),
                 Button(
                     "B/N intenso",
                     type="button",
-                    cls=(
-                        "flex-1 text-sm font-semibold uppercase tracking-[0.2em] px-3 py-2 rounded-full "
-                        "border border-slate-300 text-slate-700 dark:text-slate-100"
-                    ),
+                    cls="app-btn app-btn-neutral flex-1",
                     **{"data-visual-toggle": "grayscale"},
                 ),
                 cls="flex gap-3 mt-4",
@@ -536,28 +529,19 @@ def visual_tab_content():
                 Button(
                     "Default",
                     type="button",
-                    cls=(
-                        "text-xs font-bold uppercase px-3 py-2 rounded-full bg-slate-100 "
-                        "text-slate-800 dark:bg-slate-800 dark:text-slate-100 transition"
-                    ),
+                    cls="app-btn app-btn-neutral",
                     **{"data-visual-preset": "default"},
                 ),
                 Button(
                     "Lettura notturna",
                     type="button",
-                    cls=(
-                        "text-xs font-bold uppercase px-3 py-2 rounded-full bg-gradient-to-r "
-                        "from-indigo-500 to-slate-900 text-white shadow-lg"
-                    ),
+                    cls="app-btn app-btn-primary",
                     **{"data-visual-preset": "night"},
                 ),
                 Button(
                     "Contrasto +",
                     type="button",
-                    cls=(
-                        "text-xs font-bold uppercase px-3 py-2 rounded-full bg-gradient-to-r "
-                        "from-emerald-500 to-emerald-700 text-white shadow-lg"
-                    ),
+                    cls="app-btn app-btn-accent",
                     **{"data-visual-preset": "contrast"},
                 ),
                 cls="flex flex-wrap gap-2 mt-4",
@@ -568,8 +552,8 @@ def visual_tab_content():
             ),
             Script(visual_script),
             cls=(
-                "p-4 bg-white dark:bg-gray-900/60 rounded-2xl border "
-                "border-gray-200 dark:border-gray-800 shadow-lg space-y-4"
+                "p-4 bg-white dark:bg-slate-900/60 rounded-2xl border "
+                "border-slate-200 dark:border-slate-700 shadow-lg space-y-4"
             ),
         )
     ]

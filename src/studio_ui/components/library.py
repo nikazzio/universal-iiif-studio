@@ -12,13 +12,13 @@ from fasthtml.common import H2, H3, A, Button, Details, Div, Form, Img, Input, O
 from universal_iiif_core.library_catalog import ITEM_TYPES
 
 _STATE_STYLE = {
-    "saved": ("Da scaricare", "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100"),
-    "queued": ("In coda", "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/60 dark:text-cyan-100"),
-    "downloading": ("Download", "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-100"),
-    "running": ("Download", "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-100"),
-    "partial": ("Parziale", "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-100"),
-    "complete": ("Completo", "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-100"),
-    "error": ("Errore", "bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-100"),
+    "saved": ("Da scaricare", "app-chip app-chip-neutral"),
+    "queued": ("In coda", "app-chip app-chip-accent"),
+    "downloading": ("Download", "app-chip app-chip-primary"),
+    "running": ("Download", "app-chip app-chip-primary"),
+    "partial": ("Parziale", "app-chip app-chip-warning"),
+    "complete": ("Completo", "app-chip app-chip-success"),
+    "error": ("Errore", "app-chip app-chip-danger"),
 }
 _CATEGORY_LABELS = {
     "manoscritto": "Manoscritto",
@@ -30,40 +30,6 @@ _CATEGORY_LABELS = {
     "miscellanea": "Miscellanea",
     "non classificato": "Non classificato",
 }
-_CATEGORY_SELECT_STYLE = {
-    "manoscritto": (
-        "border-emerald-300 bg-emerald-50 text-emerald-800 "
-        "dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100"
-    ),
-    "libro a stampa": (
-        "border-blue-300 bg-blue-50 text-blue-800 "
-        "dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-100"
-    ),
-    "incunabolo": (
-        "border-amber-300 bg-amber-50 text-amber-800 "
-        "dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
-    ),
-    "periodico": (
-        "border-cyan-300 bg-cyan-50 text-cyan-800 "
-        "dark:border-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-100"
-    ),
-    "musica/spartito": (
-        "border-rose-300 bg-rose-50 text-rose-800 "
-        "dark:border-rose-700 dark:bg-rose-900/30 dark:text-rose-100"
-    ),
-    "mappa/atlante": (
-        "border-lime-300 bg-lime-50 text-lime-800 "
-        "dark:border-lime-700 dark:bg-lime-900/30 dark:text-lime-100"
-    ),
-    "miscellanea": (
-        "border-slate-300 bg-slate-100 text-slate-700 "
-        "dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-    ),
-    "non classificato": (
-        "border-slate-300 bg-white text-slate-700 "
-        "dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-    ),
-}
 _SORT_LABELS = {
     "priority": "Priorita operativa",
     "recent": "Aggiornati di recente",
@@ -71,31 +37,29 @@ _SORT_LABELS = {
     "pages_desc": "Piu pagine",
 }
 _ACTION_BUTTON_CLS = {
-    "primary": "text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded",
-    "success": "text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded",
-    "danger": "text-sm bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded",
-    "warning": "text-sm bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded",
-    "neutral": "text-sm bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded",
-    "info": "text-sm bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 rounded",
-    "auto": "text-sm bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded",
+    "primary": "app-btn app-btn-primary",
+    "success": "app-btn app-btn-primary",
+    "accent": "app-btn app-btn-accent",
+    "danger": "app-btn app-btn-danger",
+    "warning": "app-btn app-btn-accent",
+    "neutral": "app-btn app-btn-neutral",
+    "info": "app-btn app-btn-info",
+    "auto": "app-btn app-btn-accent",
 }
 _LINK_BUTTON_CLS = {
-    "primary": "text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded",
-    "neutral": "text-sm bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded",
-    "external": "text-sm bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 rounded",
-    "muted": (
-        "text-sm bg-slate-300 text-slate-500 px-3 py-2 rounded cursor-not-allowed "
-        "dark:bg-slate-700 dark:text-slate-400"
-    ),
+    "primary": "app-btn app-btn-primary",
+    "neutral": "app-btn app-btn-neutral",
+    "external": "app-btn app-btn-accent",
+    "muted": "app-btn app-btn-muted",
 }
 
 
 def _state_badge(state: str) -> Span:
     label, cls = _STATE_STYLE.get(
         (state or "saved").lower(),
-        ("Da scaricare", "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100"),
+        ("Da scaricare", "app-chip app-chip-neutral"),
     )
-    return Span(label, cls=f"text-xs px-2.5 py-1 rounded {cls}")
+    return Span(label, cls=cls)
 
 
 def _action_button(
@@ -141,12 +105,12 @@ def _kpi_strip(docs: list[dict]) -> Div:
     counts = _state_counts(docs)
     kpis = [
         ("Totale", len(docs), "text-slate-800 dark:text-slate-100"),
-        ("Completi", counts.get("complete", 0), "text-emerald-600 dark:text-emerald-300"),
-        ("Parziali", counts.get("partial", 0), "text-amber-600 dark:text-amber-300"),
+        ("Completi", counts.get("complete", 0), "text-slate-700 dark:text-slate-200"),
+        ("Parziali", counts.get("partial", 0), "text-slate-700 dark:text-slate-200"),
         (
             "In coda",
             counts.get("queued", 0) + counts.get("downloading", 0) + counts.get("running", 0),
-            "text-indigo-600 dark:text-indigo-300",
+            "text-slate-700 dark:text-slate-200",
         ),
         ("Errori", counts.get("error", 0), "text-rose-600 dark:text-rose-300"),
         ("Da scaricare", counts.get("saved", 0), "text-slate-600 dark:text-slate-300"),
@@ -198,7 +162,7 @@ def _render_filters(
             ),
             Button(
                 "Filtra",
-                cls="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm",
+                cls="app-btn app-btn-primary",
                 type="submit",
             ),
             A(
@@ -208,10 +172,7 @@ def _render_filters(
                 hx_target="#library-page",
                 hx_swap="outerHTML show:none",
                 hx_push_url="true",
-                cls=(
-                    "px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded text-slate-600 "
-                    "dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
-                ),
+                cls="app-btn app-btn-neutral",
             ),
             cls="flex flex-wrap gap-2",
         ),
@@ -302,8 +263,8 @@ def _render_filters(
 
 
 def _category_select_cls(item_type: str) -> str:
-    tone = _CATEGORY_SELECT_STYLE.get(item_type, _CATEGORY_SELECT_STYLE["non classificato"])
-    return f"px-2.5 py-1.5 rounded border text-sm {tone}"
+    _ = item_type
+    return "app-field min-w-[180px] px-2.5 py-1.5 text-sm font-medium bg-white/90 dark:bg-slate-900/70"
 
 
 def _primary_action(doc: dict):
@@ -316,20 +277,20 @@ def _primary_action(doc: dict):
         return _action_button(
             "🔁 Riprendi mancanti",
             f"/api/library/retry_missing?doc_id={doc_id}&library={library}",
-            "primary",
+            "accent",
         )
 
     if state in {"saved", "partial", "error"}:
         return _action_button(
             "⬇️ Scarica" if state == "saved" else "🔁 Riprova download",
             f"/api/library/start_download?doc_id={doc_id}&library={library}",
-            "success",
+            "primary",
         )
 
     return None
 
 
-def _maintenance_actions(doc: dict) -> Div:
+def _maintenance_actions(doc: dict) -> list[Button]:
     doc_id = quote(str(doc.get("id") or ""), safe="")
     library = quote(str(doc.get("library") or "Unknown"), safe="")
     state = str(doc.get("asset_state") or "saved").lower()
@@ -344,20 +305,17 @@ def _maintenance_actions(doc: dict) -> Div:
                 "warning",
             )
         )
-    return Div(*actions, cls="flex gap-2 flex-wrap")
+    return actions
 
 
-def _delete_action(doc: dict) -> Div:
+def _delete_action(doc: dict) -> Button:
     doc_id = quote(str(doc.get("id") or ""), safe="")
     library = quote(str(doc.get("library") or "Unknown"), safe="")
-    return Div(
-        _action_button(
-            "🗑️ Elimina",
-            f"/api/library/delete?doc_id={doc_id}&library={library}",
-            "danger",
-            confirm="Confermi eliminazione completa del manoscritto locale?",
-        ),
-        cls="mt-1 flex justify-end",
+    return _action_button(
+        "🗑️ Elimina",
+        f"/api/library/delete?doc_id={doc_id}&library={library}",
+        "danger",
+        confirm="Confermi eliminazione completa del manoscritto locale?",
     )
 
 
@@ -381,11 +339,43 @@ def _category_form(doc: dict, item_type: str) -> Form:
     )
 
 
-def _info_chip(text: str) -> Span:
-    return Span(
-        text,
-        cls=("text-sm px-2 py-1 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"),
-    )
+def _to_optional_bool(value) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y"}:
+        return True
+    if text in {"0", "false", "no", "n", ""}:
+        return False
+    return None
+
+
+def _pdf_technical_info(doc: dict) -> tuple[str, str]:
+    source_raw = str(doc.get("pdf_source") or "").strip().lower()
+    if source_raw not in {"native", "images", "unknown"}:
+        native = _to_optional_bool(doc.get("has_native_pdf"))
+        if native is True:
+            source_raw = "native"
+        elif native is False:
+            source_raw = "images"
+        else:
+            source_raw = "unknown"
+
+    local_available = bool(_to_optional_bool(doc.get("pdf_local_available")))
+    local_count = int(doc.get("pdf_local_count") or 0)
+
+    source_map = {
+        "native": "nativa",
+        "images": "da immagini",
+        "unknown": "non nota",
+    }
+    source_label = source_map[source_raw]
+    local_count_label = str(max(local_count, 1) if local_available else 0)
+    return source_label, local_count_label
 
 
 def _compact_label(text: str) -> str:
@@ -442,6 +432,14 @@ def _metadata_payload(doc: dict) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
+def _tech_row(label: str, value: str) -> Div:
+    return Div(
+        Span(f"{label}:", cls="app-tech-key"),
+        Span(value, cls="app-tech-val"),
+        cls="app-tech-row",
+    )
+
+
 def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     state = str(doc.get("asset_state") or "saved").lower()
     title = str(doc.get("display_title") or doc.get("id") or "-")
@@ -457,7 +455,9 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     date_label = str(doc.get("date_label") or "")
     lang = str(doc.get("language_label") or "")
     shelfmark = str(doc.get("shelfmark") or doc.get("id") or "-")
+    library_name = str(doc.get("library") or "Unknown")
     thumb_url = str(doc.get("thumbnail_url") or "")
+    pdf_source_label, pdf_local_count = _pdf_technical_info(doc)
     compact_title = _compact_label(title)
     compact_shelfmark = _compact_label(shelfmark)
     compact_reference = _compact_label(detail_ref)
@@ -471,7 +471,7 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         Img(
             src=thumb_url,
             cls=(
-                "w-28 h-36 object-cover rounded-lg border border-slate-200 dark:border-slate-700 "
+                "w-full md:w-32 h-44 md:h-40 object-cover rounded-lg border border-slate-200 dark:border-slate-700 "
                 "bg-slate-100 dark:bg-slate-800"
             ),
         )
@@ -479,13 +479,13 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         else Div(
             "Anteprima non disponibile",
             cls=(
-                "w-28 h-36 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 "
+                "w-full md:w-32 h-44 md:h-40 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 "
                 "text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center text-center px-2"
             ),
         )
     )
 
-    top_actions = Div(
+    utility_actions = [
         _link_button("📖 Apri Studio", studio_href, tone="primary"),
         _link_button("🔗 Scheda catalogo ↗", source_detail_url, tone="external", external=True),
         Button(
@@ -495,43 +495,66 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
             data_payload=_metadata_payload(doc),
             onclick="openLibraryMetadata(this.dataset.payload)",
         ),
-        cls="flex flex-wrap gap-2",
-    )
+    ]
     primary_action = _primary_action(doc)
-    action_row_children = [top_actions]
+    action_buttons = [*utility_actions]
     if primary_action is not None:
-        action_row_children.append(primary_action)
+        action_buttons.append(primary_action)
+    action_buttons.extend(_maintenance_actions(doc))
+
+    media_badges = Div(
+        _state_badge(state),
+        cls="flex flex-wrap gap-2 mt-2",
+    )
+    technical_rows = Div(
+        _tech_row("Pagine scaricate", progress),
+        _tech_row("Pagine mancanti", str(missing_count)),
+        _tech_row("Data", date_label or "-"),
+        _tech_row("Lingua", lang or "-"),
+        _tech_row("Sorgente PDF", pdf_source_label),
+        _tech_row("PDF locali", pdf_local_count),
+        cls="app-tech-list mt-2",
+    )
+    media_column = Div(
+        thumbnail_block,
+        media_badges,
+        technical_rows,
+        cls="w-full md:w-44 shrink-0",
+    )
+
+    headline = Div(
+        H3(title, cls="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight"),
+        Div(
+            Span(library_name, cls="text-sm text-slate-700 dark:text-slate-200 font-semibold"),
+            _category_form(doc, item_type),
+            cls="flex flex-wrap items-center justify-between gap-2",
+        ),
+        P(f"Segnatura: {shelfmark}", cls="text-sm text-slate-500 dark:text-slate-400"),
+        cls="space-y-1 min-w-0",
+    )
 
     return Div(
-        thumbnail_block,
+        media_column,
         Div(
             Div(
-                Div(
-                    H3(title, cls="text-base font-bold text-slate-900 dark:text-slate-100 leading-tight"),
-                    P(str(doc.get("library") or "Unknown"), cls="text-sm text-slate-500 dark:text-slate-400"),
-                    cls="space-y-1 min-w-0",
-                ),
-                _state_badge(state),
+                headline,
                 cls="flex items-start justify-between gap-3",
             ),
-            Div(
-                _info_chip(f"Pagine: {progress}"),
-                _info_chip(f"Mancanti: {missing_count}"),
-                _info_chip(f"Segnatura: {shelfmark}"),
-                _info_chip(f"Data: {date_label or '-'}"),
-                _info_chip(f"Lingua: {lang or '-'}"),
-                _category_form(doc, item_type),
-                cls="flex flex-wrap gap-2",
+            (
+                P(detail_ref, cls="text-sm text-slate-600 dark:text-slate-300 border-l-2 border-slate-300 pl-2")
+                if show_reference
+                else Div()
             ),
-            P(detail_ref, cls="text-sm text-slate-600 dark:text-slate-300") if show_reference else Div(),
-            Div(*action_row_children, cls="flex flex-wrap items-center gap-3"),
-            _maintenance_actions(doc),
-            _delete_action(doc),
+            Div(
+                Div(*action_buttons, cls="flex flex-wrap items-center gap-2"),
+                Div(_delete_action(doc), cls="flex items-center"),
+                cls="flex flex-wrap items-start justify-between gap-2 pt-1",
+            ),
             cls="space-y-3 flex-1",
         ),
         cls=(
-            "flex gap-4 rounded-xl border border-slate-200 dark:border-slate-700 "
-            + ("bg-white dark:bg-slate-800/50 p-3" if compact else "bg-white dark:bg-slate-800/70 p-4")
+            "flex flex-col md:flex-row gap-4 rounded-xl border border-slate-200 dark:border-slate-700 "
+            + ("bg-slate-50 dark:bg-slate-800/55 p-3" if compact else "bg-slate-50 dark:bg-slate-800/75 p-4")
         ),
         id=_doc_card_dom_id(doc),
         data_library_card="1",
@@ -676,11 +699,23 @@ def _metadata_drawer() -> Div:
                 ),
                 Div(
                     Div(
-                        _info_chip("Segnatura: -"),
-                        _info_chip("Data: -"),
-                        _info_chip("Lingua: -"),
-                        id="library-meta-chips",
-                        cls="flex flex-wrap gap-2",
+                        Div(
+                            Span("Segnatura:", cls="app-tech-key"),
+                            Span("-", id="library-meta-shelfmark", cls="app-tech-val"),
+                            cls="app-tech-row",
+                        ),
+                        Div(
+                            Span("Data:", cls="app-tech-key"),
+                            Span("-", id="library-meta-date", cls="app-tech-val"),
+                            cls="app-tech-row",
+                        ),
+                        Div(
+                            Span("Lingua:", cls="app-tech-key"),
+                            Span("-", id="library-meta-language", cls="app-tech-val"),
+                            cls="app-tech-row",
+                        ),
+                        id="library-meta-tech",
+                        cls="app-tech-list",
                     ),
                     P("", id="library-meta-reference", cls="text-sm text-slate-600 dark:text-slate-300"),
                     Div(id="library-meta-items", cls="space-y-1"),
@@ -777,26 +812,21 @@ def _metadata_drawer() -> Div:
                     const overlay = document.getElementById('library-meta-overlay');
                     const sheet = document.getElementById('library-meta-sheet');
                     const title = document.getElementById('library-meta-title');
-                    const chips = document.getElementById('library-meta-chips');
+                    const shelfmark = document.getElementById('library-meta-shelfmark');
+                    const dateLabel = document.getElementById('library-meta-date');
+                    const language = document.getElementById('library-meta-language');
                     const reference = document.getElementById('library-meta-reference');
                     const refresh = document.getElementById('library-meta-refresh');
                     const catalog = document.getElementById('library-meta-catalog');
-                    if (!overlay || !sheet || !title || !chips || !reference || !refresh || !catalog) return;
+                    if (
+                        !overlay || !sheet || !title || !shelfmark || !dateLabel || !language ||
+                        !reference || !refresh || !catalog
+                    ) return;
 
                     title.textContent = data.title || 'Metadati documento';
-                    chips.innerHTML = '';
-                    [
-                        'Segnatura: ' + (data.shelfmark || '-'),
-                        'Data: ' + (data.date_label || '-'),
-                        'Lingua: ' + (data.language_label || '-')
-                    ].forEach((text) => {
-                        const chip = document.createElement('span');
-                        chip.className =
-                            'text-sm px-2 py-1 rounded bg-slate-100 text-slate-700 '
-                            + 'dark:bg-slate-800 dark:text-slate-200';
-                        chip.textContent = text;
-                        chips.appendChild(chip);
-                    });
+                    shelfmark.textContent = data.shelfmark || '-';
+                    dateLabel.textContent = data.date_label || '-';
+                    language.textContent = data.language_label || '-';
 
                     reference.textContent = data.reference_text || '';
                     reference.classList.toggle('hidden', !data.reference_text);

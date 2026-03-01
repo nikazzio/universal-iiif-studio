@@ -30,19 +30,13 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
     engine_name = trans.get("engine", "Manual") if trans else "N/A"
     timestamp = trans.get("timestamp", "N/A") if trans else "N/A"
 
-    # Status Badge for the Engine
-    status_extra = (
-        (
-            "border-green-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 "
-            "dark:bg-emerald-900/40 dark:text-emerald-100"
-        )
-        if is_ready
-        else ("border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-900/30 dark:text-rose-100")
-    )
-
     status_badge = Span(
         "Configurato" if is_ready else "Chiave mancante",
-        cls=("text-[10px] font-semibold px-2 py-1 rounded-full border " + status_extra),
+        cls=(
+            "app-chip app-chip-success text-[10px] font-semibold"
+            if is_ready
+            else "app-chip app-chip-danger text-[10px] font-semibold"
+        ),
     )
 
     error_alert = None
@@ -64,7 +58,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             Div(
                 H3(
                     f"AI Recognition: {selected_engine.upper()}",
-                    cls="text-[10px] font-bold text-indigo-400 uppercase tracking-widest",
+                    cls="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest",
                 ),
                 status_badge,
                 cls="flex items-center justify-between mb-3",
@@ -80,10 +74,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
                             *[Option(label, value=val) for label, val in engines],
                             name="model",
                             disabled=ui_disabled,
-                            cls="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 "
-                            "text-gray-900 dark:text-gray-100 text-xs rounded-lg block w-full p-2 "
-                            "focus:ring-2 focus:ring-indigo-500 transition-all "
-                            f"{'' if not ui_disabled else 'opacity-50'}",
+                            cls=f"app-field text-xs transition-all {'' if not ui_disabled else 'opacity-50'}",
                         ),
                         cls="flex-1",
                     ),
@@ -91,8 +82,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
                         Span("✨ Run OCR" if not is_loading else "⌛ Loading..."),
                         type="submit",
                         disabled=ui_disabled,
-                        cls=f"bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold "
-                        f"py-2 px-4 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-2 "
+                        cls=f"app-btn app-btn-primary text-xs transition-all active:scale-95 flex items-center gap-2 "
                         f"{'opacity-100' if not ui_disabled else 'opacity-50 cursor-not-allowed'}",
                     ),
                     cls="flex gap-2 items-center",
@@ -104,8 +94,8 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
                 id="ocr-form",
             ),
             cls=(
-                "bg-gray-50/50 dark:bg-gray-900/30 p-4 rounded-xl border "
-                "border-gray-100 dark:border-gray-800 shadow-sm mb-6"
+                "bg-slate-50/70 dark:bg-slate-900/40 p-4 rounded-2xl border "
+                "border-slate-200 dark:border-slate-700 shadow-sm mb-6"
             ),
         )
     )
@@ -116,7 +106,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             cls=(
                 "text-xs sm:text-sm font-semibold tracking-widest text-slate-600 "
                 "dark:text-slate-300 bg-slate-100 dark:bg-slate-800/40 px-3 py-1 "
-                "rounded-full shadow-inner"
+                "rounded-lg shadow-inner"
             ),
         ),
         Div(
@@ -126,9 +116,9 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             cls="flex flex-wrap items-center gap-1",
         ),
         cls=(
-            "flex flex-wrap items-center justify-between gap-3 border border-gray-100 "
-            "dark:border-gray-800/60 rounded-2xl px-4 py-3 mb-3 bg-white/70 "
-            "dark:bg-gray-900/50 shadow-sm"
+            "flex flex-wrap items-center justify-between gap-3 border border-slate-200 "
+            "dark:border-slate-700 rounded-2xl px-4 py-3 mb-3 bg-white/70 "
+            "dark:bg-slate-900/50 shadow-sm"
         ),
     )
 
@@ -144,7 +134,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
                 cls=(
                     "w-full h-[55vh] border-0 rounded-2xl bg-gradient-to-br from-slate-50 "
                     "to-white/70 dark:from-slate-950 dark:to-slate-900/70 font-sans "
-                    "text-base leading-relaxed shadow-inner focus:ring-4 focus:ring-indigo-500/30 "
+                    "text-base leading-relaxed shadow-inner "
                     "transition-all backdrop-blur-sm"
                     f"{'' if not is_loading else ' opacity-50'}"
                 ),
@@ -204,10 +194,10 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             border-color: rgba(148, 163, 184, 0.45) !important;
         }}
         .editor-toolbar button.active {{
-            background: #22c55e !important;
-            border-color: #22c55e !important;
-            color: #041926 !important;
-            box-shadow: 0 10px 20px rgba(34, 197, 94, 0.35);
+            background: var(--app-primary) !important;
+            border-color: var(--app-primary) !important;
+            color: var(--app-primary-ink) !important;
+            box-shadow: 0 10px 20px rgba(var(--app-primary-rgb), 0.35);
         }}
         .editor-toolbar .fa {{
             color: inherit !important;
@@ -219,10 +209,10 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             color: #e2e8f0 !important;
         }}
         .editor-toolbar button.toggle-preview.active {{
-            background: #06b6d4 !important;
-            border-color: #06b6d4 !important;
-            color: #031926 !important;
-            box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.6);
+            background: var(--app-accent) !important;
+            border-color: var(--app-accent) !important;
+            color: var(--app-accent-ink) !important;
+            box-shadow: inset 0 0 0 1px rgba(var(--app-accent-rgb), 0.6);
         }}
         .SimpleMDEContainer .editor-statusbar {{
             background: #050b1d !important;
@@ -339,8 +329,8 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
                 "})()"
             ),
             cls=(
-                "bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 "
-                "rounded-full shadow-lg transition-all active:scale-95 pointer-events-auto"
+                "app-btn app-btn-primary font-bold py-2 px-4 rounded-full "
+                "shadow-lg transition-all active:scale-95 pointer-events-auto"
             ),
         ),
         cls="pointer-events-none fixed top-6 right-6 z-60",

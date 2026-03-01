@@ -19,17 +19,33 @@ def studio_layout(
     manifest_json,
     total_pages,
     meta,
+    export_fragment=None,
+    export_url: str | None = None,
     asset_status: str = "",
     has_native_pdf: bool | None = None,
     pdf_local_available: bool = False,
 ):
     """Render the main Studio split-view layout."""
+    status_value = (asset_status or "unknown").strip().lower()
+    status_chip_map = {
+        "complete": "app-chip app-chip-success",
+        "downloading": "app-chip app-chip-primary",
+        "running": "app-chip app-chip-primary",
+        "queued": "app-chip app-chip-accent",
+        "partial": "app-chip app-chip-warning",
+        "error": "app-chip app-chip-danger",
+        "saved": "app-chip app-chip-neutral",
+    }
+    status_chip_cls = status_chip_map.get(status_value, "app-chip app-chip-neutral")
+    pdf_source_cls = "app-chip app-chip-success" if has_native_pdf else "app-chip app-chip-neutral"
+    pdf_local_cls = "app-chip app-chip-primary" if pdf_local_available else "app-chip app-chip-neutral"
+
     return Div(
         Div(
             # LEFT: Mirador (55%)
             Div(
                 *mirador_viewer(manifest_url, "mirador-viewer", canvas_id=initial_canvas),
-                cls="flex-none bg-slate-900 border-r border-gray-200 dark:border-gray-800",
+                cls="flex-none bg-slate-900 border-r border-slate-200 dark:border-slate-700",
                 style="width: 55%;",
             ),
             # RIGHT: Editor (45%)
@@ -42,45 +58,27 @@ def studio_layout(
                                 Div(
                                     Span(
                                         library,
-                                        cls=(
-                                            "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 "
-                                            "dark:text-indigo-400 text-[11px] font-bold px-3 py-1 "
-                                            "rounded uppercase tracking-wider"
-                                        ),
+                                        cls="app-chip app-chip-primary text-[11px] font-bold uppercase tracking-wider",
                                     ),
                                     Span(
                                         (asset_status or "unknown").upper(),
-                                        cls=(
-                                            "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 "
-                                            "text-[10px] font-bold px-2 py-0.5 rounded"
-                                        ),
+                                        cls=f"{status_chip_cls} text-[10px] font-bold",
                                     ),
                                     Span(
                                         "PDF nativo" if has_native_pdf else "Solo immagini",
                                         cls=(
-                                            "bg-emerald-50 dark:bg-emerald-900/30 "
-                                            "text-emerald-700 dark:text-emerald-300 "
-                                            "text-[10px] font-bold px-2 py-0.5 rounded"
-                                        )
-                                        if has_native_pdf is not None
-                                        else (
-                                            "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 "
-                                            "text-[10px] font-bold px-2 py-0.5 rounded"
+                                            f"{pdf_source_cls} text-[10px] font-bold"
+                                            if has_native_pdf is not None
+                                            else "app-chip app-chip-neutral text-[10px] font-bold"
                                         ),
                                     ),
                                     Span(
                                         "PDF locale ✓" if pdf_local_available else "PDF locale -",
-                                        cls=(
-                                            "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 "
-                                            "text-[10px] font-bold px-2 py-0.5 rounded"
-                                        ),
+                                        cls=f"{pdf_local_cls} text-[10px] font-bold",
                                     ),
                                     Span(
                                         doc_id,
-                                        cls=(
-                                            "bg-slate-100 dark:bg-slate-800 text-slate-500 "
-                                            "dark:text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded"
-                                        ),
+                                        cls="app-chip app-chip-neutral text-[9px] font-mono",
                                     ),
                                     cls="flex gap-2 mt-1",
                                 ),
@@ -88,7 +86,7 @@ def studio_layout(
                             ),
                             cls="flex items-start justify-between",
                         ),
-                        cls="px-6 py-8 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50",
+                        cls="px-6 py-8 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50",
                     ),
                     # HTMX Target for Tab Content
                     Div(
@@ -100,13 +98,15 @@ def studio_layout(
                             total_pages,
                             manifest_json=manifest_json,
                             is_ocr_loading=is_ocr_job_running(doc_id, int(page)),
+                            export_fragment=export_fragment,
+                            export_url=export_url,
                         ),
                         id="studio-right-panel",
                         cls="flex-1 overflow-hidden h-full",
                     ),
                     cls="h-full flex flex-col",
                 ),
-                cls="flex-none bg-white dark:bg-gray-900 shadow-2xl z-10",
+                cls="flex-none bg-white dark:bg-slate-900 shadow-2xl z-10",
                 style="width: 45%;",
             ),
             cls="flex h-screen",

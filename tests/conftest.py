@@ -70,6 +70,7 @@ def _redirect_test_logging(monkeypatch, tmp_path):
 def _snapshot_config_paths(cm):
     return {
         "downloads": cm.resolve_path("downloads_dir", "data/local/downloads"),
+        "exports": cm.resolve_path("exports_dir", "data/local/exports"),
         "temp": cm.resolve_path("temp_dir", "data/local/temp_images"),
         "models": cm.resolve_path("models_dir", "data/local/models"),
         "logs": cm.resolve_path("logs_dir", "data/local/logs"),
@@ -79,6 +80,7 @@ def _snapshot_config_paths(cm):
 
 def _set_tmp_config_paths(cm, tmp_path):
     cm.set_downloads_dir(str(tmp_path / "downloads"))
+    cm.set_exports_dir(str(tmp_path / "exports"))
     cm.set_temp_dir(str(tmp_path / "temp_images"))
     cm.set_models_dir(str(tmp_path / "models"))
     cm.set_logs_dir(str(tmp_path / "logs"))
@@ -87,6 +89,7 @@ def _set_tmp_config_paths(cm, tmp_path):
 
 def _restore_config_paths(cm, original_paths):
     cm.set_downloads_dir(str(original_paths["downloads"]))
+    cm.set_exports_dir(str(original_paths["exports"]))
     cm.set_temp_dir(str(original_paths["temp"]))
     cm.set_models_dir(str(original_paths["models"]))
     cm.set_logs_dir(str(original_paths["logs"]))

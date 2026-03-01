@@ -1,6 +1,7 @@
 {
     "paths": {
         "downloads_dir": "data/local/downloads",
+        "exports_dir": "data/local/exports",
         "temp_dir": "data/local/temp_images",
         "models_dir": "data/local/models",
         "logs_dir": "data/local/logs",
@@ -21,6 +22,7 @@
     "settings": {
         "system": {
             "download_workers": 4,
+            "max_concurrent_downloads": 2,
             "ocr_concurrency": 1,
             "request_timeout": 30
         },
@@ -29,7 +31,10 @@
             "preferred_ocr_engine": "openai"
         },
         "ui": {
-            "theme_color": "#FF4B4B",
+            "theme_preset": "rosewater",
+            "theme_primary_color": "#7B8CC7",
+            "theme_accent_color": "#E8A6B6",
+            "theme_color": "#E8A6B6",
             "items_per_page": 25,
             "toast_duration": 3000
         },
@@ -52,7 +57,40 @@
             "viewer_dpi": 150,
             "ocr_dpi": 300,
             "prefer_native_pdf": true,
-            "create_pdf_from_images": false
+            "create_pdf_from_images": false,
+            "export": {
+                "default_format": "pdf_images",
+                "default_compression": "Standard",
+                "include_cover": true,
+                "include_colophon": true,
+                "description_rows": 3
+            },
+            "cover": {
+                "logo_path": "",
+                "curator": "",
+                "description": ""
+            }
+        },
+        "thumbnails": {
+            "max_long_edge_px": 320,
+            "jpeg_quality": 70,
+            "columns": 6,
+            "paginate_enabled": true,
+            "page_size": 48,
+            "page_size_options": [
+                24,
+                48,
+                72,
+                96
+            ],
+            "default_select_all": true,
+            "actions_apply_to_all_default": false,
+            "hover_preview_enabled": true,
+            "hover_preview_max_long_edge_px": 900,
+            "hover_preview_jpeg_quality": 82,
+            "hover_preview_delay_ms": 550,
+            "inline_base64_max_tiles": 120,
+            "hover_preview_max_tiles": 72
         },
         "housekeeping": {
             "temp_cleanup_days": 7

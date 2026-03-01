@@ -22,6 +22,8 @@ def render_studio_tabs(
     is_ocr_loading: bool = False,
     ocr_error: str | None = None,
     history_message: str | None = None,
+    export_fragment=None,
+    export_url: str | None = None,
 ):
     """Render the studio tabs."""
     page_idx = int(page)
@@ -31,38 +33,39 @@ def render_studio_tabs(
             "📝 Trascrizione",
             onclick="switchTab('transcription')",
             id="tab-button-transcription",
-            cls="tab-button active px-4 py-2 text-base font-medium border-b-2 "
-            "border-indigo-600 text-indigo-600 dark:text-indigo-400",
+            cls="tab-button studio-tab studio-tab-active",
         ),
         Button(
             "📂 Snippets",
             onclick="switchTab('snippets')",
             id="tab-button-snippets",
-            cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
-            "border-transparent text-gray-500 hover:text-gray-700",
+            cls="tab-button studio-tab",
         ),
         Button(
             "📝 History",
             onclick="switchTab('history')",
             id="tab-button-history",
-            cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
-            "border-transparent text-gray-500 hover:text-gray-700",
+            cls="tab-button studio-tab",
         ),
         Button(
             "🎨 Visual",
             onclick="switchTab('visual')",
             id="tab-button-visual",
-            cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
-            "border-transparent text-gray-500 hover:text-gray-700",
+            cls="tab-button studio-tab",
         ),
         Button(
             "ℹ️ Info",
             onclick="switchTab('info')",
             id="tab-button-info",
-            cls="tab-button px-4 py-2 text-base font-medium border-b-2 "
-            "border-transparent text-gray-500 hover:text-gray-700",
+            cls="tab-button studio-tab",
         ),
-        cls="flex gap-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4",
+        Button(
+            "📄 Export",
+            onclick="switchTab('export')",
+            id="tab-button-export",
+            cls="tab-button studio-tab",
+        ),
+        cls="studio-tablist",
     )
 
     tab_contents = Div(
@@ -91,6 +94,20 @@ def render_studio_tabs(
             id="tab-content-info",
             cls="tab-content hidden h-full",
         ),
+        Div(
+            (
+                export_fragment
+                if export_fragment is not None
+                else Div(
+                    "Apri il tab Export per caricare miniature e strumenti di esportazione.",
+                    cls="text-sm text-slate-500 dark:text-slate-400 p-2",
+                )
+            ),
+            id="tab-content-export",
+            cls="tab-content hidden h-full",
+            data_export_loaded="1" if export_fragment is not None else "0",
+            data_export_url=export_url or "",
+        ),
         cls="flex-1 overflow-y-auto p-4",
     )
 
@@ -98,13 +115,29 @@ def render_studio_tabs(
         function switchTab(t){
             document.querySelectorAll('.tab-content').forEach(e=>e.classList.add('hidden'));
             document.querySelectorAll('.tab-button').forEach(b=>{
-                b.classList.remove('active','border-indigo-600','text-indigo-600');
-                b.classList.add('border-transparent', 'text-gray-500');
+                b.classList.remove('studio-tab-active');
             });
-            document.getElementById('tab-content-'+t).classList.remove('hidden');
+            const target = document.getElementById('tab-content-'+t);
+            if (!target) return;
+            target.classList.remove('hidden');
             const btn = document.getElementById('tab-button-'+t);
-            btn.classList.add('active','border-indigo-600','text-indigo-600');
-            btn.classList.remove('border-transparent', 'text-gray-500');
+            if (btn) {
+                btn.classList.add('studio-tab-active');
+            }
+
+            if (t === 'export') {
+                const loaded = target.dataset.exportLoaded === '1';
+                const exportUrl = target.dataset.exportUrl || '';
+                if (!loaded && exportUrl) {
+                    target.dataset.exportLoaded = '1';
+                    try {
+                        htmx.ajax('GET', exportUrl, {target:'#tab-content-export', swap:'innerHTML'});
+                    } catch (e) {
+                        console.error('export-load-err', e);
+                        target.dataset.exportLoaded = '0';
+                    }
+                }
+            }
         }
     """)
 
@@ -119,12 +152,19 @@ def render_studio_tabs(
 
         overlay = Div(
             Div(
-                Div(cls="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"),
-                Span("AI in ascolto...", cls="text-indigo-600 font-bold tracking-widest uppercase text-[10px]"),
+                Div(
+                    cls="animate-spin rounded-full h-8 w-8 border-b-2 mb-4",
+                    style="border-color: var(--app-accent);",
+                ),
+                Span(
+                    "AI in ascolto...",
+                    cls="font-bold tracking-widest uppercase text-[10px]",
+                    style="color: var(--app-primary);",
+                ),
                 cls="flex flex-col items-center justify-center h-full",
             ),
             cls=(
-                "absolute inset-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-[2px] z-50 rounded-xl "
+                "absolute inset-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-[2px] z-50 rounded-xl "
                 "flex items-center justify-center pointer-events-auto"
             ),
             hx_get=hx_path,

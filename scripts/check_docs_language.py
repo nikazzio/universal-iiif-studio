@@ -109,9 +109,7 @@ def main() -> int:
 
         if expected == "en":
             if _is_mixed(en_score, it_score):
-                failures.append(
-                    f"{path}: mixed language detected (en_score={en_score}, it_score={it_score})."
-                )
+                failures.append(f"{path}: mixed language detected (en_score={en_score}, it_score={it_score}).")
                 continue
             if it_score >= 6 and it_score > en_score:
                 failures.append(f"{path}: expected English but Italian appears dominant.")

@@ -10,3 +10,17 @@ def test_studio_tabs_importable():
     from studio_ui.components.studio.tabs import render_studio_tabs
 
     assert callable(render_studio_tabs)
+
+
+def test_export_routes_importable():
+    """Ensure export routes module imports correctly."""
+    from studio_ui.routes.export import setup_export_routes
+
+    assert callable(setup_export_routes)
+
+
+def test_export_components_importable():
+    """Ensure export component module imports correctly."""
+    from studio_ui.components.export import render_export_page
+
+    assert callable(render_export_page)

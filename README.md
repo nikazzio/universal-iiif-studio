@@ -54,6 +54,7 @@ python3 src/studio_app.py
 Navigation model:
 - `Library` is the canonical entrypoint for local documents.
 - `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
+- `Export` is a dedicated hub for batch/single exports (`/export`).
 - `/studio` without context redirects to `/library`.
 
 ### CLI

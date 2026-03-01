@@ -12,6 +12,7 @@ from starlette.staticfiles import StaticFiles
 
 from studio_ui.routes.api import setup_api_routes
 from studio_ui.routes.discovery import setup_discovery_routes
+from studio_ui.routes.export import setup_export_routes
 from studio_ui.routes.library import setup_library_routes
 from studio_ui.routes.settings import setup_settings_routes
 from studio_ui.routes.studio import setup_studio_routes
@@ -32,11 +33,15 @@ try:
     from universal_iiif_core.services.storage.vault_manager import VaultManager
 
     vm = VaultManager()
-    reset_count = vm.reset_active_downloads()
-    if reset_count:
-        logger.info(f"Marked {reset_count} stale download job(s) as errored on startup")
+    reset_download_count = vm.reset_active_downloads()
+    if reset_download_count:
+        logger.info(f"Marked {reset_download_count} stale download job(s) as errored on startup")
+
+    reset_export_count = vm.reset_active_exports()
+    if reset_export_count:
+        logger.info(f"Marked {reset_export_count} stale export job(s) as errored on startup")
 except Exception:
-    logger.debug("Failed to reset stale download jobs on startup", exc_info=True)
+    logger.debug("Failed to reset stale jobs on startup", exc_info=True)
 
 
 @asynccontextmanager
@@ -128,9 +133,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         except Exception:
             path = ""
 
-        if (
-            request.method.upper() == "GET"
-            and (path.startswith("/api/download_status/") or path == "/api/download_manager")
+        if request.method.upper() == "GET" and (
+            path.startswith("/api/download_status/") or path == "/api/download_manager"
         ):
             logger.debug(f"Polling: [{request.method}] {path}")
         else:
@@ -157,6 +161,9 @@ setup_discovery_routes(app)
 
 # Library page routes
 setup_library_routes(app)
+
+# Export hub routes
+setup_export_routes(app)
 
 # Settings page routes
 setup_settings_routes(app)

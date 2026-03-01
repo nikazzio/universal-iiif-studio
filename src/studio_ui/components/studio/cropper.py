@@ -14,16 +14,16 @@ def render_cropper_modal(doc_id, library, page, img_url):
                         Button(
                             "✕",
                             onclick="document.getElementById('cropper-modal-container').innerHTML=''",
-                            cls="text-gray-500 hover:text-gray-800",
+                            cls="app-btn app-btn-neutral",
                         ),
-                        cls="flex justify-between items-center p-4 border-b",
+                        cls="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700",
                     ),
                     Div(
                         Div(
                             NotStr(f'<img id="cropper-image" src="{img_url}">'),
                             cls="max-h-[60vh] overflow-hidden bg-black flex justify-center",
                         ),
-                        cls="p-4 bg-gray-100",
+                        cls="p-4 bg-slate-100 dark:bg-slate-900/60",
                     ),
                     Div(
                         Form(
@@ -32,28 +32,27 @@ def render_cropper_modal(doc_id, library, page, img_url):
                             Input(type="hidden", name="page", value=str(page)),
                             Input(type="hidden", id="crop-data", name="crop_data"),
                             Div(
-                                Label("Trascrizione / Nota", cls="text-xs font-bold uppercase text-gray-500 mb-1"),
+                                Label("Trascrizione / Nota", cls="app-label mb-1"),
                                 Textarea(
                                     name="transcription",
                                     rows="2",
-                                    cls="w-full border rounded p-2 text-sm focus:ring-2 focus:ring-indigo-500",
+                                    cls="app-field",
                                 ),
                                 cls="mb-4",
                             ),
                             Button(
                                 "Salva Snippet",
                                 type="submit",
-                                cls="w-full bg-indigo-600 hover:bg-indigo-700 text-white "
-                                "font-bold py-3 rounded transition",
+                                cls="w-full app-btn app-btn-primary font-bold py-3 transition",
                             ),
                             hx_post="/api/save_snippet",
                             hx_target="#tab-content-snippets",
                             hx_indicator="#ocr-loading",
                             onclick="if(!prepareCropData()) return false;",
                         ),
-                        cls="p-6 border-t bg-gray-50",
+                        cls="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40",
                     ),
-                    cls="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden "
+                    cls="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden "
                     "animate-in zoom-in-95 duration-200",
                 ),
                 cls="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[9999]",

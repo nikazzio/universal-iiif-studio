@@ -100,3 +100,27 @@ def test_normalize_asset_states_recovers_stale_downloading_from_temp_pages(tmp_p
     finally:
         cm.set_downloads_dir(str(old_downloads))
         cm.set_temp_dir(str(old_temp))
+
+
+def test_manuscript_ui_preferences_roundtrip():
+    """Item-scoped UI preferences should persist as typed JSON values."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_PREFS", status="saved", asset_state="saved")
+
+    vm.set_manuscript_ui_pref("DOC_PREFS", "studio_export_thumb_page_size", 72)
+    vm.set_manuscript_ui_pref("DOC_PREFS", "studio_export_last_mode", "custom")
+
+    assert vm.get_manuscript_ui_pref("DOC_PREFS", "studio_export_thumb_page_size", 0) == 72
+    assert vm.get_manuscript_ui_pref("DOC_PREFS", "studio_export_last_mode", "") == "custom"
+    assert vm.get_manuscript_ui_pref("DOC_PREFS", "missing_key", "fallback") == "fallback"
+
+
+def test_delete_manuscript_removes_ui_preferences():
+    """Deleting a manuscript should remove its UI preferences as well."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_PREF_DELETE", library="Gallica", status="saved", asset_state="saved")
+    vm.set_manuscript_ui_pref("DOC_PREF_DELETE", "studio_export_thumb_page_size", 24)
+
+    assert vm.get_manuscript_ui_pref("DOC_PREF_DELETE", "studio_export_thumb_page_size", None) == 24
+    assert vm.delete_manuscript("DOC_PREF_DELETE") is True
+    assert vm.get_manuscript_ui_pref("DOC_PREF_DELETE", "studio_export_thumb_page_size", None) is None

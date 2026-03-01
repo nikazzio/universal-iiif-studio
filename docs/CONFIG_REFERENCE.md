@@ -23,6 +23,7 @@ config.json
 ## `paths`
 
 - `paths.downloads_dir` (`string`, default: `data/local/downloads`)
+- `paths.exports_dir` (`string`, default: `data/local/exports`)
 - `paths.temp_dir` (`string`, default: `data/local/temp_images`)
 - `paths.models_dir` (`string`, default: `data/local/models`)
 - `paths.logs_dir` (`string`, default: `data/local/logs`)
@@ -82,6 +83,14 @@ Notes:
 - `settings.pdf.ocr_dpi` (`int`, default: `300`)
 - `settings.pdf.prefer_native_pdf` (`bool`, default: `true`)
 - `settings.pdf.create_pdf_from_images` (`bool`, default: `false`)
+
+### `settings.pdf.export`
+
+- `settings.pdf.export.default_format` (`string`, default: `pdf_images`)
+- `settings.pdf.export.default_compression` (`string`, default: `Standard`)
+- `settings.pdf.export.include_cover` (`bool`, default: `true`)
+- `settings.pdf.export.include_colophon` (`bool`, default: `true`)
+- `settings.pdf.export.description_rows` (`int`, default: `3`, UI clamp `2..8`)
 
 ### `settings.pdf.cover`
 

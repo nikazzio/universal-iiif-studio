@@ -3,13 +3,60 @@
 Shell HTML con sidebar, headers per Tailwind/HTMX/Mirador, tema chiaro/scuro, e area contenuto principale.
 """
 
+import json
+
 from fasthtml.common import A, Body, Button, Div, Head, Html, Img, Link, Main, Meta, Nav, Script, Title
 
+from studio_ui.config import get_setting
+from studio_ui.theme import mix_hex, parse_hex_rgb, readable_ink, resolve_ui_theme
 from universal_iiif_core import __version__
+
+
+def _tailwind_theme_script(primary: str, accent: str) -> str:
+    primary_scale = {
+        "50": mix_hex(primary, "#FFFFFF", 0.90),
+        "500": primary,
+        "600": mix_hex(primary, "#000000", 0.14),
+        "700": mix_hex(primary, "#000000", 0.24),
+        "900": mix_hex(primary, "#000000", 0.42),
+    }
+    accent_scale = {
+        "50": mix_hex(accent, "#FFFFFF", 0.88),
+        "500": accent,
+        "600": mix_hex(accent, "#000000", 0.14),
+        "700": mix_hex(accent, "#000000", 0.24),
+        "900": mix_hex(accent, "#000000", 0.42),
+    }
+    return (
+        "if (typeof tailwind !== 'undefined') {"
+        "tailwind.config = {"
+        "darkMode: 'class',"
+        "theme: {extend: {colors: {"
+        f"primary: {json.dumps(primary_scale)},"
+        f"accent: {json.dumps(accent_scale)}"
+        "}}}"
+        "};"
+        "}"
+    )
 
 
 def base_layout(title: str, content, active_page: str = "") -> Html:
     """Generate base page layout with sidebar, dark mode toggle, and headers."""
+    theme = resolve_ui_theme(
+        {
+            "theme_preset": get_setting("ui.theme_preset", ""),
+            "theme_primary_color": get_setting("ui.theme_primary_color", ""),
+            "theme_accent_color": get_setting("ui.theme_accent_color", ""),
+            "theme_color": get_setting("ui.theme_color", ""),
+        }
+    )
+    primary = theme["primary"]
+    accent = theme["accent"]
+    primary_rgb = parse_hex_rgb(primary)
+    accent_rgb = parse_hex_rgb(accent)
+    primary_ink = readable_ink(primary)
+    accent_ink = readable_ink(accent)
+
     return Html(
         Head(
             Meta(charset="utf-8"),
@@ -18,22 +65,7 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
             # Tailwind CSS CDN
             Script(src="https://cdn.tailwindcss.com"),
             # Tailwind configuration
-            Script("""
-                if (typeof tailwind !== 'undefined') {
-                    tailwind.config = {
-                        darkMode: 'class',
-                        theme: {
-                            extend: {
-                                colors: {
-                                    primary: {
-                                        50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81'
-                                    }
-                                }
-                            }
-                        }
-                    };
-                }
-            """),
+            Script(_tailwind_theme_script(primary, accent)),
             # HTMX
             Script(src="https://unpkg.com/htmx.org@1.9.10"),
             # Mirador
@@ -163,6 +195,14 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
                     });
                 })();
             """),
+            style=(
+                f"--app-primary: {primary};"
+                f"--app-accent: {accent};"
+                f"--app-primary-rgb: {primary_rgb[0]}, {primary_rgb[1]}, {primary_rgb[2]};"
+                f"--app-accent-rgb: {accent_rgb[0]}, {accent_rgb[1]}, {accent_rgb[2]};"
+                f"--app-primary-ink: {primary_ink};"
+                f"--app-accent-ink: {accent_ink};"
+            ),
             cls="antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100",
         ),
     )
@@ -298,23 +338,67 @@ def _sidebar(active_page: str = "") -> Nav:
             (function(){
                 const paneSelector = '[data_pane],[data-pane]';
                 const tabSelector = '[data_tab],[data-tab]';
+                const settingsRootSelector = '.settings-shell';
+
+                function readTabFromUrl() {
+                    try {
+                        const url = new URL(window.location.href);
+                        const queryTab = url.searchParams.get('tab');
+                        if (queryTab) return queryTab;
+                        const hash = window.location.hash || '';
+                        if (hash.startsWith('#tab=')) return decodeURIComponent(hash.slice(5));
+                        if (hash.length > 1) return decodeURIComponent(hash.slice(1));
+                    } catch (e) {
+                        console.warn('readTabFromUrl error', e);
+                    }
+                    return null;
+                }
+
+                function writeTabToUrl(tabName) {
+                    if (!tabName) return;
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', tabName);
+                        const next = url.pathname + '?' + url.searchParams.toString() + url.hash;
+                        window.history.replaceState(window.history.state, '', next);
+                    } catch (e) {
+                        console.warn('writeTabToUrl error', e);
+                    }
+                }
 
                 function activateTabByName(name, root=document) {
                     root.querySelectorAll(paneSelector).forEach(p => p.style.display = 'none');
-                    root.querySelectorAll(tabSelector).forEach(b => b.classList.remove('bg-slate-700'));
+                    root.querySelectorAll(tabSelector).forEach(b => b.classList.remove('settings-tab-active'));
                     const pane = root.querySelector('[data-pane="' + name + '"]') ||
                         root.querySelector('[data_pane="' + name + '"]');
-                    const btn = document.querySelector('[data-tab="' + name + '"]') ||
-                        document.querySelector('[data_tab="' + name + '"]');
+                    const btn = root.querySelector('[data-tab="' + name + '"]') ||
+                        root.querySelector('[data_tab="' + name + '"]');
                     if (pane) pane.style.display = 'block';
-                    if (btn) btn.classList.add('bg-slate-700');
+                    if (btn) btn.classList.add('settings-tab-active');
+                    return !!(pane && btn);
                 }
 
                 function initSettingsTabs(root=document) {
-                    const panes = root.querySelectorAll(paneSelector);
+                    const isRootSettingsShell = root.matches && root.matches(settingsRootSelector);
+                    const settingsRoot = root.querySelector(settingsRootSelector)
+                        || (isRootSettingsShell ? root : null);
+                    if (!settingsRoot) return;
+                    const panes = settingsRoot.querySelectorAll(paneSelector);
+                    if (!panes.length) return;
                     panes.forEach((p, i) => p.style.display = (i === 0) ? 'block' : 'none');
-                    const firstTab = root.querySelector(tabSelector);
-                    if (firstTab) firstTab.classList.add('bg-slate-700');
+                    const tabs = settingsRoot.querySelectorAll(tabSelector);
+                    tabs.forEach(b => b.classList.remove('settings-tab-active'));
+                    const firstTab = settingsRoot.querySelector(tabSelector);
+                    if (firstTab) firstTab.classList.add('settings-tab-active');
+                    const requestedTab = readTabFromUrl();
+                    if (requestedTab) {
+                        activateTabByName(requestedTab, settingsRoot);
+                    } else {
+                        const selectedName = firstTab
+                            ? (firstTab.getAttribute('data-tab') || firstTab.getAttribute('data_tab'))
+                            : null;
+                        if (selectedName) writeTabToUrl(selectedName);
+                    }
                 }
 
                 // Delegated click handler bound once on document
@@ -322,9 +406,13 @@ def _sidebar(active_page: str = "") -> Nav:
                     document.addEventListener('click', function(e){
                         const btn = e.target.closest(tabSelector);
                         if (!btn) return;
+                        const settingsRoot = btn.closest(settingsRootSelector);
+                        if (!settingsRoot) return;
                         const name = btn.getAttribute('data-tab') || btn.getAttribute('data_tab');
                         if (!name) return;
-                        activateTabByName(name);
+                        if (activateTabByName(name, settingsRoot)) {
+                            writeTabToUrl(name);
+                        }
                     });
                     document._settingsTabsBoundGlobal = true;
                 }
@@ -358,10 +446,136 @@ def _style_tag():
 
     parts = [
         "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');\n",
+        ":root { --app-primary: #4f46e5; --app-accent: #e8a6b6; --app-primary-rgb: 79, 70, 229; "
+        "--app-accent-rgb: 232, 166, 182; --app-primary-ink: #f8fafc; --app-accent-ink: #0f172a; }\n",
         "body { font-family: 'Inter', sans-serif; }\n",
         ".sidebar-link { transition: all 0.2s ease; }\n",
+        ".app-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; "
+        "padding: 0.52rem 0.82rem; border-radius: 0.62rem; border: 1px solid transparent; "
+        "font-size: 0.875rem; font-weight: 600; line-height: 1.1; text-decoration: none; "
+        "transition: all 0.15s ease; cursor: pointer; }\n",
+        ".app-btn:hover { transform: translateY(-1px); }\n",
+        ".app-btn:focus-visible { outline: 2px solid rgba(var(--app-accent-rgb), 0.45); outline-offset: 2px; }\n",
+        ".app-btn-primary { background: var(--app-primary); color: var(--app-primary-ink); "
+        "border-color: rgba(var(--app-primary-rgb), 0.62); }\n",
+        ".app-btn-primary:hover { filter: brightness(0.95); }\n",
+        ".app-btn-accent { background: var(--app-accent); color: var(--app-accent-ink); "
+        "border-color: rgba(var(--app-accent-rgb), 0.62); }\n",
+        ".app-btn-accent:hover { filter: brightness(0.95); }\n",
+        ".app-btn-neutral { background: rgba(var(--app-primary-rgb), 0.10); color: #334155; "
+        "border-color: rgba(var(--app-primary-rgb), 0.35); }\n",
+        ".app-btn-neutral:hover { background: rgba(var(--app-primary-rgb), 0.18); }\n",
+        ".dark .app-btn-neutral { background: rgba(var(--app-primary-rgb), 0.22); color: #e2e8f0; "
+        "border-color: rgba(var(--app-primary-rgb), 0.45); }\n",
+        ".dark .app-btn-neutral:hover { background: rgba(var(--app-primary-rgb), 0.30); }\n",
+        ".app-btn-info { background: rgba(var(--app-accent-rgb), 0.12); color: #1e3a8a; "
+        "border-color: rgba(var(--app-accent-rgb), 0.42); }\n",
+        ".app-btn-info:hover { background: rgba(var(--app-accent-rgb), 0.20); }\n",
+        ".dark .app-btn-info { color: #dbeafe; }\n",
+        ".app-btn-success { background: #e8f8ef; color: #166534; border-color: #86efac; }\n",
+        ".app-btn-success:hover { background: #d2f3df; }\n",
+        ".dark .app-btn-success { background: rgba(34, 197, 94, 0.24); color: #bbf7d0; "
+        "border-color: rgba(34, 197, 94, 0.45); }\n",
+        ".dark .app-btn-success:hover { background: rgba(34, 197, 94, 0.32); }\n",
+        ".app-btn-warning { background: #fff6e9; color: #92400e; border-color: #fdba74; }\n",
+        ".app-btn-warning:hover { background: #ffedd5; }\n",
+        ".dark .app-btn-warning { background: rgba(245, 158, 11, 0.24); color: #fde68a; "
+        "border-color: rgba(245, 158, 11, 0.45); }\n",
+        ".dark .app-btn-warning:hover { background: rgba(245, 158, 11, 0.32); }\n",
+        ".app-btn-danger { background: #fdecec; color: #991b1b; border-color: #fca5a5; }\n",
+        ".app-btn-danger:hover { background: #fee2e2; }\n",
+        ".dark .app-btn-danger { background: rgba(239, 68, 68, 0.24); color: #fecaca; "
+        "border-color: rgba(239, 68, 68, 0.45); }\n",
+        ".dark .app-btn-danger:hover { background: rgba(239, 68, 68, 0.32); }\n",
+        ".app-btn-muted { background: rgba(148, 163, 184, 0.18); color: #64748b; "
+        "border-color: rgba(148, 163, 184, 0.35); "
+        "cursor: not-allowed; pointer-events: none; }\n",
+        ".dark .app-btn-muted { background: rgba(148, 163, 184, 0.16); color: #94a3b8; "
+        "border-color: rgba(148, 163, 184, 0.28); }\n",
+        ".app-chip { display: inline-flex; align-items: center; padding: 0.28rem 0.56rem; border-radius: 0.56rem; "
+        "border: 1px solid transparent; font-size: 0.75rem; font-weight: 600; line-height: 1.2; }\n",
+        ".app-chip-neutral { background: rgba(148, 163, 184, 0.16); color: #334155; "
+        "border-color: rgba(148, 163, 184, 0.35); }\n",
+        ".dark .app-chip-neutral { background: rgba(148, 163, 184, 0.18); color: #e2e8f0; "
+        "border-color: rgba(148, 163, 184, 0.30); }\n",
+        ".app-chip-primary { background: rgba(var(--app-primary-rgb), 0.16); color: #1e293b; "
+        "border-color: rgba(var(--app-primary-rgb), 0.38); }\n",
+        ".dark .app-chip-primary { background: rgba(var(--app-primary-rgb), 0.24); color: #f1f5f9; "
+        "border-color: rgba(var(--app-primary-rgb), 0.46); }\n",
+        ".app-chip-accent { background: rgba(var(--app-accent-rgb), 0.18); color: #1e293b; "
+        "border-color: rgba(var(--app-accent-rgb), 0.42); }\n",
+        ".dark .app-chip-accent { background: rgba(var(--app-accent-rgb), 0.26); color: #f1f5f9; "
+        "border-color: rgba(var(--app-accent-rgb), 0.52); }\n",
+        ".app-chip-success { background: #e8f8ef; color: #166534; border-color: #86efac; }\n",
+        ".dark .app-chip-success { background: rgba(34, 197, 94, 0.22); color: #bbf7d0; "
+        "border-color: rgba(34, 197, 94, 0.42); }\n",
+        ".app-chip-warning { background: #fff6e9; color: #92400e; border-color: #fdba74; }\n",
+        ".dark .app-chip-warning { background: rgba(245, 158, 11, 0.22); color: #fde68a; "
+        "border-color: rgba(245, 158, 11, 0.42); }\n",
+        ".app-chip-danger { background: #fdecec; color: #991b1b; border-color: #fca5a5; }\n",
+        ".dark .app-chip-danger { background: rgba(239, 68, 68, 0.22); color: #fecaca; "
+        "border-color: rgba(239, 68, 68, 0.42); }\n",
+        ".app-field { width: 100%; border: 1px solid #cbd5e1; border-radius: 0.65rem; padding: 0.45rem 0.62rem; "
+        "font-size: 0.875rem; line-height: 1.25; background: #ffffff; color: #0f172a; "
+        "transition: border-color 0.15s ease, "
+        "box-shadow 0.15s ease; }\n",
+        ".app-field::placeholder { color: #94a3b8; }\n",
+        ".app-field:focus-visible { outline: none; border-color: rgba(var(--app-accent-rgb), 0.66); "
+        "box-shadow: 0 0 0 3px rgba(var(--app-accent-rgb), 0.20); }\n",
+        ".dark .app-field { background: rgba(15, 23, 42, 0.84); color: #f1f5f9; border-color: #475569; }\n",
+        ".dark .app-field::placeholder { color: #64748b; }\n",
+        ".app-label { display: inline-block; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.01em; "
+        "color: #475569; }\n",
+        ".dark .app-label { color: #cbd5e1; }\n",
+        ".app-check { width: 1.05rem; height: 1.05rem; border-radius: 0.25rem; cursor: pointer; "
+        "accent-color: var(--app-accent); }\n",
+        ".app-range { width: 100%; height: 0.45rem; border-radius: 0.5rem; background: #cbd5e1; cursor: pointer; "
+        "accent-color: var(--app-accent); }\n",
+        ".dark .app-range { background: #334155; }\n",
+        ".app-tech-list { display: grid; gap: 0.3rem; }\n",
+        ".app-tech-row { display: flex; align-items: baseline; gap: 0.35rem; "
+        "font-size: 0.78rem; line-height: 1.25; }\n",
+        ".app-tech-key { color: #64748b; font-weight: 600; }\n",
+        ".app-tech-val { color: #0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "
+        "'Liberation Mono', 'Courier New', monospace; }\n",
+        ".dark .app-tech-key { color: #94a3b8; }\n",
+        ".dark .app-tech-val { color: #e2e8f0; }\n",
+        ".studio-tablist { display: flex; gap: 0.35rem; border-bottom: 1px solid rgba(148, 163, 184, 0.35); "
+        "padding: 0.45rem 1rem; background: rgba(var(--app-primary-rgb), 0.06); }\n",
+        ".dark .studio-tablist { border-bottom-color: rgba(71, 85, 105, 0.65); background: rgba(15, 23, 42, 0.55); }\n",
+        ".studio-tab { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; "
+        "padding: 0.52rem 0.72rem; border: 1px solid transparent; border-bottom-width: 2px; "
+        "border-radius: 0.62rem 0.62rem 0 0; font-size: 0.92rem; font-weight: 600; color: #475569; "
+        "background: transparent; transition: all 0.15s ease; }\n",
+        ".studio-tab:hover { color: #0f172a; background: rgba(var(--app-primary-rgb), 0.12); }\n",
+        ".dark .studio-tab { color: #94a3b8; }\n",
+        ".dark .studio-tab:hover { color: #f1f5f9; background: rgba(var(--app-primary-rgb), 0.24); }\n",
+        ".studio-tab-active { border-color: rgba(var(--app-primary-rgb), 0.56); color: var(--app-primary); "
+        "background: rgba(var(--app-primary-rgb), 0.16); }\n",
+        ".dark .studio-tab-active { color: #f8fafc; background: rgba(var(--app-primary-rgb), 0.30); "
+        "border-color: rgba(var(--app-primary-rgb), 0.66); }\n",
+        ".studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.66) !important; "
+        "background: rgba(var(--app-primary-rgb), 0.10) !important; }\n",
+        ".dark .studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.74) !important; "
+        "background: rgba(var(--app-primary-rgb), 0.24) !important; }\n",
+        ".studio-export-page-card:focus-visible { outline: 2px solid rgba(var(--app-accent-rgb), 0.65); "
+        "outline-offset: 2px; border-radius: 0.75rem; }\n",
+        ".bg-indigo-600, .bg-indigo-500, .dark .dark\\:bg-indigo-500 { "
+        "background-color: var(--app-primary) !important; color: var(--app-primary-ink) !important; }\n",
+        ".hover\\:bg-indigo-700:hover, .hover\\:bg-indigo-600:hover, .hover\\:bg-indigo-500:hover, "
+        ".dark .dark\\:hover\\:bg-indigo-600:hover { "
+        "background-color: rgba(var(--app-primary-rgb), 0.86) !important; }\n",
+        ".text-indigo-600, .dark .dark\\:text-indigo-300, .dark .dark\\:text-indigo-400 { "
+        "color: var(--app-primary) !important; }\n",
+        ".border-indigo-600, .border-indigo-500, .dark .dark\\:border-indigo-500 { "
+        "border-color: rgba(var(--app-primary-rgb), 0.58) !important; }\n",
+        ".bg-sky-900\\/40, .bg-cyan-900\\/40 { background-color: rgba(var(--app-accent-rgb), 0.26) !important; }\n",
+        ".text-sky-800, .text-cyan-800, .dark .dark\\:text-sky-100, .dark .dark\\:text-cyan-100 { "
+        "color: var(--app-accent) !important; }\n",
+        ".border-sky-200, .border-cyan-200, .dark .dark\\:border-sky-700\\/40, .dark .dark\\:border-cyan-700\\/40 { "
+        "border-color: rgba(var(--app-accent-rgb), 0.45) !important; }\n",
         ".htmx-request .spinner { display: inline-block; width: 1rem; height: 1rem; ",
-        "border: 2px solid #f3f4f6; border-top-color: #6366f1; border-radius: 50%; ",
+        "border: 2px solid #f3f4f6; border-top-color: var(--app-accent); border-radius: 50%; ",
         "animation: spin 0.8s linear infinite; }\n",
         "@keyframes spin { to { transform: rotate(360deg); } }\n",
         "@keyframes studio-toast-in {",
@@ -379,11 +593,9 @@ def _style_tag():
         ".dark ::-webkit-scrollbar-thumb { background: #475569; }\n",
         "\n",
         ".sidebar { width: 16rem; }\n",
-        ".sidebar-link:hover { background: #374151; transform: translateX(0.25rem); }\n",
-        (
-            '.sidebar-link[aria-current="page"] { background: #4f46e5; '
-            "border-left: 4px solid #ffffff; transform: none; }\n"
-        ),
+        ".sidebar-link:hover { background: rgba(var(--app-primary-rgb), 0.26); transform: translateX(0.25rem); }\n",
+        '.sidebar-link[aria-current="page"] { background: var(--app-primary); border-left: 4px solid '
+        "var(--app-accent); color: var(--app-primary-ink); transform: none; }\n",
         ".sidebar-icon { width: 2rem; text-align: center; }\n",
         ".sidebar-collapsed #app-sidebar { width: 3.5rem !important; ",
         "padding-left: 0.75rem; padding-right: 0.75rem; }\n",
@@ -395,7 +607,7 @@ def _style_tag():
         ".sidebar-collapsed #app-sidebar .sidebar-footer { display: none; }\n",
         ".sidebar-collapsed #app-sidebar .sidebar-brand-text { display: none; }\n",
         "#sidebar-toggle { background: transparent; border: none; color: inherit; }\n",
-        "#sidebar-toggle:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }\n",
+        "#sidebar-toggle:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }\n",
         "@media (max-width: 1024px) {\n",
         "  #app-sidebar { width: 3.5rem !important; padding-left: 0.75rem; padding-right: 0.75rem; }\n",
         "  #app-sidebar .sidebar-label { display: none; }\n",
@@ -409,7 +621,7 @@ def _style_tag():
         "/* FIX MIRADOR THUMBNAIL ANIMATION */\n",
         ".mirador-thumbnail-nav-scroll-content { transition: transform 0.2s ease-out !important; }\n",
         ".mirador-thumbnail-nav-canvas { border-radius: 4px; overflow: hidden; }\n",
-        ".mirador-thumbnail-nav-selected { border: 2px solid #6366f1 !important; ",
-        "box-shadow: 0 0 10px rgba(99, 102, 241, 0.4); }\n",
+        ".mirador-thumbnail-nav-selected { border: 2px solid var(--app-accent) !important; ",
+        "box-shadow: 0 0 10px rgba(var(--app-accent-rgb), 0.42); }\n",
     ]
     return NotStr("<style>" + "".join(parts) + "</style>")

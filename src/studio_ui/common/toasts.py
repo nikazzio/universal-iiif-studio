@@ -7,6 +7,7 @@ import re
 from fasthtml.common import Button, Div, Span
 
 from studio_ui.config import get_setting
+from studio_ui.theme import resolve_ui_theme
 
 _ICONS = {"success": "✅", "info": "ℹ️", "danger": "⚠️"}
 _MIN_TIMEOUT_MS = 1000
@@ -63,7 +64,15 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 def _toast_style(tone: str) -> str:
     """Inline style for reliable gradient/background rendering."""
-    site_theme = _normalize_hex(get_setting("ui.theme_color", "#6366f1"))
+    resolved_theme = resolve_ui_theme(
+        {
+            "theme_preset": get_setting("ui.theme_preset", ""),
+            "theme_primary_color": get_setting("ui.theme_primary_color", ""),
+            "theme_accent_color": get_setting("ui.theme_accent_color", ""),
+            "theme_color": get_setting("ui.theme_color", ""),
+        }
+    )
+    site_theme = _normalize_hex(resolved_theme["accent"])
     anchor = _normalize_hex(_TONE_ANCHORS.get(tone, _TONE_ANCHORS["info"]))
     start = _mix_hex(site_theme, anchor, 0.28 if tone == "info" else 0.48)
     end = _mix_hex(site_theme, "#0f172a", 0.62)

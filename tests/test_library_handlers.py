@@ -179,3 +179,37 @@ def test_library_refresh_metadata_without_card_only_returns_full_page(monkeypatc
     rendered = repr(result)
     assert "Libreria Locale" in rendered
     assert "Metadati aggiornati per DOC_META_FULL." in rendered
+
+
+def test_row_to_view_model_detects_local_pdf_from_filesystem(tmp_path):
+    """Local PDF badge data should be correct even when DB flag is stale/false."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        doc_id = "DOC_PDF_LOCAL"
+        library = "Gallica"
+        doc_root = tmp_downloads / library / doc_id
+        pdf_dir = doc_root / "pdf"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        (pdf_dir / f"{doc_id}.pdf").write_bytes(b"%PDF-1.4\n%test\n")
+
+        vm = VaultManager()
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="complete",
+            asset_state="complete",
+            has_native_pdf=1,
+            pdf_local_available=0,
+        )
+        row = vm.get_manuscript(doc_id) or {}
+        model = library_handlers._row_to_view_model(row)
+        assert model["pdf_local_available"] is True
+        assert int(model["pdf_local_count"]) >= 1
+        assert model["pdf_source"] == "native"
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
