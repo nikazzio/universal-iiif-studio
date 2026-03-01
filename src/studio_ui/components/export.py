@@ -267,11 +267,7 @@ def render_export_page(jobs: list[dict], capabilities: dict[str, list[dict]]) ->
             ),
             Span(
                 f"Job attivi: {active_jobs}",
-                cls=(
-                    "app-chip app-chip-primary text-xs"
-                    if active_jobs > 0
-                    else "app-chip app-chip-neutral text-xs"
-                ),
+                cls=("app-chip app-chip-primary text-xs" if active_jobs > 0 else "app-chip app-chip-neutral text-xs"),
             ),
             cls="flex flex-wrap items-start justify-between gap-3 mb-6",
         ),

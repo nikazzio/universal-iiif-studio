@@ -12,4 +12,3 @@ def setup_export_routes(app):
     app.post("/api/export/cancel/{job_id}")(export_handlers.cancel_export)
     app.post("/api/export/remove/{job_id}")(export_handlers.remove_export)
     app.get("/api/export/download/{job_id}")(export_handlers.download_export)
-

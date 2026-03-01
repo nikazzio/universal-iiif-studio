@@ -88,4 +88,3 @@ def test_execute_export_job_batches_zip_outputs_into_bundle():
     with zipfile.ZipFile(output, "r") as archive:
         names = archive.namelist()
     assert len(names) >= 2
-

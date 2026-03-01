@@ -230,10 +230,7 @@ def _is_oxford_detail_url(url: str) -> bool:
 def _is_detail_url(url: str) -> bool:
     path = urlparse(url).path.lower()
     return (
-        _is_vatican_detail_url(url)
-        or _is_gallica_catalog_url(url)
-        or _is_oxford_detail_url(url)
-        or "/detail/" in path
+        _is_vatican_detail_url(url) or _is_gallica_catalog_url(url) or _is_oxford_detail_url(url) or "/detail/" in path
     )
 
 

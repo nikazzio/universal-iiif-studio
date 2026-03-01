@@ -116,8 +116,10 @@ def _spawn_export_worker(**kwargs) -> None:
 
 
 def _item_exists(doc_id: str, library: str) -> bool:
-    rows = VaultManager().get_all_manuscripts()
-    return any(str(row.get("id") or "") == doc_id and str(row.get("library") or "") == library for row in rows)
+    manuscript = VaultManager().get_manuscript(doc_id)
+    if not manuscript:
+        return False
+    return str(manuscript.get("library") or "").strip() == library
 
 
 def _job_matches_item(job: dict[str, Any], doc_id: str, library: str) -> bool:
@@ -168,13 +170,16 @@ def jobs_fragment_for_item(doc_id: str, library: str, *, panel_id: str = "studio
     )
 
 
-def _validate_selection_mode(selection_mode: str, selected_pages_raw: str) -> str:
+def _validate_selection_mode(selection_mode: str, selected_pages_raw: str) -> tuple[str, list[int]]:
     mode = (selection_mode or "all").strip().lower()
     if mode not in {"all", "custom"}:
         raise ValueError("Modalita selezione non valida")
+    selected_pages: list[int] = []
     if mode == "custom":
-        parse_page_selection(selected_pages_raw)
-    return mode
+        selected_pages = parse_page_selection(selected_pages_raw)
+        if not selected_pages:
+            raise ValueError("Selezione pagine vuota: specificare almeno una pagina")
+    return mode, selected_pages
 
 
 def _validate_format_and_destination(items: list[dict[str, str]], export_format: str, destination: str) -> None:
@@ -220,14 +225,14 @@ def start_export_job(
     """Create one export job row and spawn worker thread; returns job_id."""
     fmt = (export_format or "").strip().lower()
     dst = (destination or "").strip().lower()
-    mode = _validate_selection_mode(selection_mode, selected_pages_raw)
+    mode, selected_pages = _validate_selection_mode(selection_mode, selected_pages_raw)
     _validate_format_and_destination(items, fmt, dst)
     validated_items = _validate_items(items)
 
     job_id = f"exp_{uuid.uuid4().hex[:8]}"
     selected_pages_json = "[]"
     if mode == "custom":
-        selected_pages_json = json.dumps(parse_page_selection(selected_pages_raw))
+        selected_pages_json = json.dumps(selected_pages)
 
     vm = VaultManager()
     vm.create_export_job(

@@ -50,6 +50,23 @@ def test_start_export_rejects_unavailable_destination():
     assert "Destinazione non disponibile" in repr(result)
 
 
+def test_start_export_rejects_empty_custom_selection():
+    """Custom selection must include at least one page before queueing a job."""
+    _seed_library_item("DOC_EMPTY_SEL", "Gallica")
+    result = export_handlers.start_export(
+        items_csv="Gallica::DOC_EMPTY_SEL",
+        export_format="pdf_images",
+        selection_mode="custom",
+        selected_pages="",
+        destination="local_filesystem",
+    )
+    rendered = repr(result)
+    assert "Errore avvio export" in rendered
+    assert "Selezione pagine vuota" in rendered
+    jobs = VaultManager().list_export_jobs(limit=20)
+    assert all(str(job.get("doc_ids_json") or "") != '["DOC_EMPTY_SEL"]' for job in jobs)
+
+
 def test_start_export_creates_job_and_spawns_worker(monkeypatch):
     """Starting export should persist a queued job and call worker launcher."""
     _seed_library_item("DOC_START", "Gallica")
