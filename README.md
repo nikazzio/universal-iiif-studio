@@ -74,11 +74,18 @@ Key PDF settings:
 ```json
 {
   "settings": {
+    "images": {
+      "download_strategy_mode": "balanced",
+      "download_strategy_custom": ["3000", "1740", "max"],
+      "iiif_quality": "default"
+    },
     "pdf": {
       "viewer_dpi": 150,
-      "ocr_dpi": 300,
       "prefer_native_pdf": true,
-      "create_pdf_from_images": false
+      "create_pdf_from_images": false,
+      "profiles": {
+        "default": "balanced"
+      }
     }
   }
 }
@@ -88,7 +95,11 @@ Meaning:
 - `prefer_native_pdf`: if manifest `rendering` contains a native PDF, native flow is attempted first
 - `create_pdf_from_images`: when native PDF is not used, build a PDF from downloaded images only if `true`
 - `viewer_dpi`: DPI used when extracting JPG pages from native PDF for the web viewer
-- `ocr_dpi`: OCR-oriented DPI setting
+- `images.download_strategy_mode`: preset ordering for IIIF size fallback (`balanced|quality_first|fast|archival|custom`)
+- `images.download_strategy_custom`: size list used when `mode=custom`
+- `images.iiif_quality`: IIIF quality segment in image URLs (recommended `default`)
+- `pdf.profiles.default`: default export profile (`balanced`, `high_quality`, `archival_highres`, `lightweight`)
+- PDF profiles are created/edited in `Settings > PDF Export`; item Export tab only selects a profile per job
 
 ## Output Layout
 
@@ -147,4 +158,5 @@ No results in Discovery for a known Gallica title
 - User/feature guide: `docs/DOCUMENTAZIONE.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
+- Inactive/evolution backlog: `docs/FEATURES_INACTIVE_BACKLOG.md`
 - Contributor/agent rules: `AGENTS.md`

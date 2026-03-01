@@ -57,6 +57,13 @@ def _run_export_worker(
     cover_curator: str | None,
     cover_description: str | None,
     cover_logo_path: str | None,
+    profile_name: str | None,
+    image_source_mode: str,
+    image_max_long_edge_px: int,
+    image_jpeg_quality: int,
+    force_remote_refetch: bool,
+    cleanup_temp_after_export: bool,
+    max_parallel_page_fetch: int,
 ) -> None:
     vm = VaultManager()
     total = max(1, len(items))
@@ -91,6 +98,13 @@ def _run_export_worker(
             cover_curator=cover_curator,
             cover_description=cover_description,
             cover_logo_path=cover_logo_path,
+            profile_name=profile_name,
+            image_source_mode=image_source_mode,
+            image_max_long_edge_px=image_max_long_edge_px,
+            image_jpeg_quality=image_jpeg_quality,
+            force_remote_refetch=force_remote_refetch,
+            cleanup_temp_after_export=cleanup_temp_after_export,
+            max_parallel_page_fetch=max_parallel_page_fetch,
         )
         if _should_cancel(job_id):
             vm.update_export_job(job_id, status="cancelled", error_message="Cancelled by user")
@@ -220,6 +234,13 @@ def start_export_job(
     cover_curator: str | None = None,
     cover_description: str | None = None,
     cover_logo_path: str | None = None,
+    profile_name: str | None = None,
+    image_source_mode: str = "local_balanced",
+    image_max_long_edge_px: int = 0,
+    image_jpeg_quality: int = 82,
+    force_remote_refetch: bool = False,
+    cleanup_temp_after_export: bool = True,
+    max_parallel_page_fetch: int = 2,
     capability_flags: dict[str, Any] | None = None,
 ) -> str:
     """Create one export job row and spawn worker thread; returns job_id."""
@@ -263,6 +284,13 @@ def start_export_job(
         cover_curator=cover_curator,
         cover_description=cover_description,
         cover_logo_path=cover_logo_path,
+        profile_name=profile_name,
+        image_source_mode=image_source_mode,
+        image_max_long_edge_px=int(image_max_long_edge_px or 0),
+        image_jpeg_quality=int(image_jpeg_quality or 82),
+        force_remote_refetch=bool(force_remote_refetch),
+        cleanup_temp_after_export=bool(cleanup_temp_after_export),
+        max_parallel_page_fetch=max(1, int(max_parallel_page_fetch or 2)),
     )
     return job_id
 

@@ -235,9 +235,15 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
     assert 'data-thumbs-endpoint="/api/studio/export/thumbs' in rendered
     assert 'form="studio-export-form"' in rendered
     assert rendered.find('id="studio-export-thumbs-slot"') > rendered.find("</form>")
+    assert rendered.find('id="studio-export-pdf-list"') < rendered.find('id="studio-export-form"')
     assert 'id="studio-export-thumb-size-select"' in rendered
     assert 'name="page_size"' in rendered
     assert 'hx-trigger="change"' in rendered
+    assert 'id="studio-export-subtab-btn-build"' in rendered
+    assert 'id="studio-export-subtab-btn-jobs"' in rendered
+    assert 'id="studio-export-subtab-build"' in rendered
+    assert 'id="studio-export-subtab-jobs"' in rendered
+    assert "studio-export-profile-form" not in rendered
     assert "window.__studioExportListenersBound" in rendered
     assert "initStudioExport();" in rendered
 

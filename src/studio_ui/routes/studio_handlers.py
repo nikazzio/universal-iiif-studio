@@ -6,7 +6,9 @@ This module contains the logic-heavy request handlers and helpers.
 import json
 import math
 import time
+from contextlib import suppress
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, unquote
 
 from fasthtml.common import Div, RedirectResponse, Request, Script
@@ -28,15 +30,21 @@ from studio_ui.config import get_api_key, get_snippets_dir
 from studio_ui.ocr_state import OCR_JOBS_STATE, get_ocr_job_state, is_ocr_job_running
 from studio_ui.pages.studio import studio_layout
 from studio_ui.routes import export_handlers as export_monitor_handlers
+from studio_ui.routes.discovery_helpers import start_downloader_thread
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.iiif_resolution import probe_remote_max_dimensions
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.pdf_profiles import (
+    list_profiles,
+    resolve_effective_profile,
+)
 from universal_iiif_core.services.export import list_item_pdf_files
 from universal_iiif_core.services.ocr.processor import OCRProcessor
 from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.thumbnail_utils import ensure_thumbnail, guess_available_pages
-from universal_iiif_core.utils import load_json
+from universal_iiif_core.utils import load_json, save_json
 
 logger = get_logger(__name__)
 
@@ -111,10 +119,13 @@ def _to_downloads_url(path: Path) -> str:
     return f"/downloads/{encoded}"
 
 
-def _export_tab_defaults() -> dict[str, str | bool | int]:
+def _export_tab_defaults(doc_id: str, library: str) -> dict[str, Any]:
     cm = get_config_manager()
     cover = cm.get_setting("pdf.cover", {})
     export_cfg = cm.get_setting("pdf.export", {})
+    profile_name, profile = resolve_effective_profile(cm)
+    profiles_catalog = list_profiles(cm)
+
     if not isinstance(cover, dict):
         cover = {}
     if not isinstance(export_cfg, dict):
@@ -125,10 +136,18 @@ def _export_tab_defaults() -> dict[str, str | bool | int]:
         "description": str(cover.get("description") or ""),
         "logo_path": str(cover.get("logo_path") or ""),
         "format": str(export_cfg.get("default_format") or "pdf_images"),
-        "compression": str(export_cfg.get("default_compression") or "Standard"),
-        "include_cover": bool(export_cfg.get("include_cover", True)),
-        "include_colophon": bool(export_cfg.get("include_colophon", True)),
+        "compression": str(profile.get("compression") or export_cfg.get("default_compression") or "Standard"),
+        "include_cover": bool(profile.get("include_cover", export_cfg.get("include_cover", True))),
+        "include_colophon": bool(profile.get("include_colophon", export_cfg.get("include_colophon", True))),
         "description_rows": int(export_cfg.get("description_rows", 3) or 3),
+        "profile_name": profile_name,
+        "profile_catalog": profiles_catalog,
+        "image_source_mode": str(profile.get("image_source_mode") or "local_balanced"),
+        "image_max_long_edge_px": int(profile.get("image_max_long_edge_px") or 0),
+        "jpeg_quality": int(profile.get("jpeg_quality") or 82),
+        "force_remote_refetch": bool(profile.get("force_remote_refetch", False)),
+        "cleanup_temp_after_export": bool(profile.get("cleanup_temp_after_export", True)),
+        "max_parallel_page_fetch": int(profile.get("max_parallel_page_fetch") or 2),
     }
 
 
@@ -169,6 +188,16 @@ def _thumb_page_size_options() -> list[int]:
     return sorted(options)
 
 
+def _prune_stale_thumbnails(thumbnails_dir: Path, retention_days: int) -> None:
+    cutoff = time.time() - (max(1, int(retention_days or 1)) * 86400)
+    if not thumbnails_dir.exists():
+        return
+    for thumb in thumbnails_dir.glob("*.jpg"):
+        with suppress(OSError):
+            if thumb.stat().st_mtime < cutoff:
+                thumb.unlink()
+
+
 def _build_export_thumbnail_slice(
     doc_id: str,
     library: str,
@@ -183,6 +212,8 @@ def _build_export_thumbnail_slice(
     cm = get_config_manager()
     max_px = int(cm.get_setting("thumbnails.max_long_edge_px", 320) or 320)
     quality = int(cm.get_setting("thumbnails.jpeg_quality", 70) or 70)
+    thumbs_retention = int(cm.get_setting("storage.thumbnails_retention_days", 14) or 14)
+    _prune_stale_thumbnails(thumbnails_dir, thumbs_retention)
     safe_page_size = _thumb_page_size(page_size, doc_id=doc_id)
     if page_size not in {None, 0}:
         try:
@@ -208,6 +239,13 @@ def _build_export_thumbnail_slice(
     stop = start + safe_page_size
     page_slice = available_pages[start:stop]
 
+    manifest_json = load_json(paths["manifest"]) or {}
+    remote_cache_path = Path(paths["data"]) / "remote_resolution_cache.json"
+    remote_cache = load_json(remote_cache_path) or {}
+    if not isinstance(remote_cache, dict):
+        remote_cache = {}
+
+    remote_probe_enabled = bool(cm.get_setting("images.probe_remote_max_resolution", True))
     items: list[dict] = []
     for page_num in page_slice:
         thumb_path = ensure_thumbnail(
@@ -218,7 +256,41 @@ def _build_export_thumbnail_slice(
             jpeg_quality=quality,
         )
         thumb_url = _to_downloads_url(thumb_path) if thumb_path else ""
-        items.append({"page": page_num, "thumb_url": thumb_url})
+        scan_path = scans_dir / f"pag_{page_num - 1:04d}.jpg"
+        local_w = None
+        local_h = None
+        if scan_path.exists():
+            with suppress(Exception):
+                from PIL import Image
+
+                with Image.open(scan_path) as img:
+                    local_w, local_h = img.size
+
+        remote_entry = remote_cache.get(str(page_num)) if isinstance(remote_cache.get(str(page_num)), dict) else {}
+        remote_w = remote_entry.get("width")
+        remote_h = remote_entry.get("height")
+        remote_service = remote_entry.get("service_url")
+        if remote_probe_enabled and (not remote_w or not remote_h):
+            pw, ph, service_url = probe_remote_max_dimensions(manifest_json, page_num)
+            remote_w, remote_h = pw, ph
+            remote_service = service_url or remote_service
+            remote_cache[str(page_num)] = {"width": remote_w, "height": remote_h, "service_url": remote_service}
+
+        items.append(
+            {
+                "page": page_num,
+                "thumb_url": thumb_url,
+                "local_width": local_w,
+                "local_height": local_h,
+                "remote_width": remote_w,
+                "remote_height": remote_h,
+                "remote_service_url": remote_service,
+            }
+        )
+
+    with suppress(Exception):
+        save_json(remote_cache_path, remote_cache)
+
     return {
         "items": items,
         "available_pages": available_pages,
@@ -257,7 +329,7 @@ def _build_studio_export_fragment(
         pdf_files=pdf_files,
         jobs=jobs,
         has_active_jobs=has_active_jobs,
-        export_defaults=_export_tab_defaults(),
+        export_defaults=_export_tab_defaults(doc_id, library),
     )
 
 
@@ -457,6 +529,13 @@ def _is_truthy_flag(raw: str | None) -> bool:
     return value in {"1", "true", "on", "yes"}
 
 
+def _as_int(raw: int | str | None, default: int = 0) -> int:
+    try:
+        return int(raw or default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def start_studio_export(
     doc_id: str,
     library: str,
@@ -471,6 +550,13 @@ def start_studio_export(
     cover_curator: str = "",
     cover_description: str = "",
     cover_logo_path: str = "",
+    pdf_profile: str = "",
+    image_source_mode: str = "",
+    image_max_long_edge_px: int = 0,
+    image_jpeg_quality: int = 0,
+    force_remote_refetch: str = "",
+    cleanup_temp_after_export: str = "",
+    max_parallel_page_fetch: int = 0,
 ):
     """Start one export job from Studio for the current item."""
     doc_id, library = unquote(doc_id), unquote(library)
@@ -494,6 +580,13 @@ def start_studio_export(
             cover_curator=cover_curator or None,
             cover_description=cover_description or None,
             cover_logo_path=cover_logo_path or None,
+            profile_name=pdf_profile or None,
+            image_source_mode=image_source_mode or "local_balanced",
+            image_max_long_edge_px=_as_int(image_max_long_edge_px, 0),
+            image_jpeg_quality=_as_int(image_jpeg_quality, 82),
+            force_remote_refetch=_is_truthy_flag(force_remote_refetch),
+            cleanup_temp_after_export=_is_truthy_flag(cleanup_temp_after_export) or cleanup_temp_after_export == "",
+            max_parallel_page_fetch=max(1, _as_int(max_parallel_page_fetch, 2)),
             capability_flags={"source": "studio-tab"},
         )
     except Exception as exc:
@@ -519,6 +612,58 @@ def start_studio_export(
         ),
         "Export PDF avviato per l'item corrente.",
         tone="success",
+    )
+
+
+def download_highres_export_page(
+    doc_id: str,
+    library: str,
+    page: int,
+    thumb_page: int = 1,
+    page_size: int = 0,
+):
+    """Queue a page-only high-resolution refresh for one local scan."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    page_num = max(1, int(page or 1))
+    manifest_url = str((VaultManager().get_manuscript(doc_id) or {}).get("manifest_url") or "").strip()
+    if not manifest_url:
+        return _with_toast(
+            _build_studio_export_fragment(
+                doc_id,
+                library,
+                thumb_page=int(thumb_page or 1),
+                page_size=int(page_size or 0),
+            ),
+            "Manifest URL non disponibile per questo item.",
+            tone="danger",
+        )
+
+    try:
+        job_id = start_downloader_thread(
+            manifest_url=manifest_url,
+            doc_id=doc_id,
+            library=library,
+            target_pages={page_num},
+            force_max_resolution=True,
+            force_redownload=True,
+            overwrite_existing_scans=True,
+        )
+    except Exception as exc:
+        return _with_toast(
+            _build_studio_export_fragment(
+                doc_id,
+                library,
+                thumb_page=int(thumb_page or 1),
+                page_size=int(page_size or 0),
+            ),
+            f"Errore download high-res pagina {page_num}: {exc}",
+            tone="danger",
+        )
+
+    return _with_toast(
+        _build_studio_export_fragment(doc_id, library, thumb_page=int(thumb_page or 1), page_size=int(page_size or 0)),
+        f"High-res pagina {page_num} in coda (job {job_id}).",
+        tone="info",
     )
 
 

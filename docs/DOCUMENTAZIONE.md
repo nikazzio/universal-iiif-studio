@@ -12,27 +12,51 @@ Il file `config.json` è la singola fonte di verità.
 
 ### ⚙️ Sistema e Download
 
-* `settings.system.download_workers`: Numero di thread per il download parallelo delle immagini (default: 4).
 * `settings.system.max_concurrent_downloads`: Numero massimo di download documento in esecuzione contemporanea (default: 2). Gli altri job restano in coda.
 * `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
+* `settings.images.probe_remote_max_resolution`: Abilita il probing automatico della risoluzione massima online per pagina.
+* `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi size IIIF.
+* `settings.images.download_strategy_custom`: Strategia custom (lista size, es. `3000,1740,max`) usata solo quando `mode=custom`.
+* `settings.images.iiif_quality`: Segmento quality nelle URL IIIF (`.../quality.jpg`). In generale lasciare `default`; usare `gray/bitonal` solo per casi specifici.
 
 ### 📄 Opzioni PDF (Core + UI Config)
 
 * `settings.pdf.prefer_native_pdf` (default: `true`): se il manifest IIIF espone un PDF nativo (`rendering`), il downloader lo usa come sorgente primaria.
 * `settings.pdf.create_pdf_from_images` (default: `false`): se non viene usato un PDF nativo, crea un PDF compilato dalle immagini scaricate.
 * `settings.pdf.viewer_dpi` (default: `150`): DPI usati per estrarre le immagini JPG dal PDF nativo per il viewer.
-* `settings.pdf.ocr_dpi` (default: `300`): DPI consigliati per pipeline OCR.
+* `settings.pdf.profiles`: catalogo preset PDF avanzati (`balanced`, `high_quality`, `archival_highres`, `lightweight`) con supporto custom globale.
+* `settings.storage.highres_temp_retention_hours`: retention dei file high-res temporanei usati per export avanzati.
+* `settings.storage.auto_prune_on_startup`: se attivo, applica pruning retention all'avvio (export + temp high-res).
 
-Nel pannello **Settings > OCR & PDF** trovi gli stessi controlli con help text esplicativi:
+Nel pannello **Settings > PDF Export** trovi i controlli con help text esplicativi:
 * **Prefer Native PDF**: priorita al PDF della biblioteca se disponibile.
 * **Create PDF from Images**: attiva/disattiva la generazione del PDF compilato in fallback.
-* **PDF Viewer DPI** e **PDF OCR DPI**: qualità estrazione/processing.
+* **PDF Viewer DPI**: qualità estrazione da PDF nativo.
+* **Default PDF Profile**: preset operativo globale.
+* **Catalogo Profili PDF**: editor unico con selettore profilo.
+  - scegli un profilo esistente per modificarlo;
+  - scegli `Nuovo profilo...` per crearne uno custom;
+  - usa il pulsante rosso **Elimina Profilo** per rimuovere il profilo selezionato;
+  - dopo create/delete la pagina viene ricaricata per aggiornare subito il catalogo selezionabile.
+
+Nel pannello **Settings > Viewer**:
+* sub-tab **Zoom**, **Defaults**, **Presets** per separare parametri OpenSeadragon e filtri visivi.
+
+Nel pannello **Settings > Paths & System**:
+* sub-tab **Paths & Logging** per directory runtime e logging base;
+* sub-tab **Storage & Security** per retention, pruning, test live e CORS.
+
+Nel tab **Studio > Export**:
+* scegli il profilo per il job corrente;
+* visualizzi in alto la lista PDF già presenti;
+* usi i sub-tab `Crea PDF` / `Job` per separare configurazione e monitoraggio.
 
 ### 🤖 Motori OCR
 
 Le API key vanno in `api_keys`: `openai`, `anthropic`, `google_vision`, `huggingface`.
 
 * `settings.ocr.ocr_engine`: Seleziona il motore attivo (es. `"openai"` o `"kraken"`).
+* `settings.ocr.kraken_enabled`: abilita l'uso esplicito del backend Kraken quando selezionato.
 
 ### 🎨 Preferenze UI
 
@@ -81,6 +105,23 @@ Quando avvii un download, il sistema decide la strategia migliore:
    * **Se c'è** e `settings.pdf.prefer_native_pdf=true`: lo scarica e **estrae automaticamente** le pagine in immagini JPG ad alta risoluzione (nella cartella `scans/`). Questo garantisce che lo Studio funzioni anche con i PDF.
    * **Se non c'è**: Scarica le immagini dai server IIIF una per una.
 2. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
+
+### 🧪 Strategia immagini: come leggere davvero le opzioni
+
+Per ogni pagina, il downloader prova una sequenza di size IIIF e solo in fallback passa al tile stitching:
+
+* `balanced`: `3000 -> 1740 -> max`
+* `quality_first`: `max -> 3000 -> 1740`
+* `fast`: `1740 -> 1200 -> max`
+* `archival`: `max`
+* `custom`: usa `settings.images.download_strategy_custom`
+
+La variabile `settings.images.iiif_quality` non cambia la size: cambia il **profilo cromatico richiesto** nel segmento finale URL (`default/color/gray/bitonal/native`).
+
+Indicazioni pratiche:
+* usa `default` per la maggior parte dei manoscritti;
+* usa `gray` o `bitonal` solo quando serve ridurre peso o forzare B/N per workflow OCR specifici;
+* se un server IIIF non supporta una quality, il downloader applica retry/fallback tramite la stessa pipeline di download.
 
 ### 📚 Libreria Locale (Local Assets)
 

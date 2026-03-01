@@ -48,10 +48,7 @@ Notes:
 
 ## `settings.system`
 
-- `settings.system.download_workers` (`int`, default: `4`)
 - `settings.system.max_concurrent_downloads` (`int`, default: `2`)
-- `settings.system.ocr_concurrency` (`int`, default: `1`)
-- `settings.system.request_timeout` (`int`, default: `30`)
 
 ## `settings.defaults`
 
@@ -72,11 +69,22 @@ Notes:
 
 ## `settings.images`
 
-- `settings.images.download_strategy` (`string[]`, default: `['max', '3000', '1740']`)
+- `settings.images.download_strategy_mode` (`string`, default: `balanced`)
+  - allowed: `balanced|quality_first|fast|archival|custom`
+- `settings.images.download_strategy_custom` (`string[]`, default: `['3000', '1740', 'max']`)
+  - used only when `download_strategy_mode=custom`
+- `settings.images.download_strategy` (`string[]`, default: `['3000', '1740', 'max']`)
+  - canonical resolved strategy used at runtime (materialized from mode/custom)
 - `settings.images.iiif_quality` (`string`, default: `default`)
+  - segment used in IIIF URLs: `/full/{size}/0/{quality}.jpg`
 - `settings.images.viewer_quality` (`int`, default: `95`)
-- `settings.images.ocr_quality` (`int`, default: `95`)
+- `settings.images.probe_remote_max_resolution` (`bool`, default: `true`)
 - `settings.images.tile_stitch_max_ram_gb` (`number`, default: `2`)
+
+Runtime notes:
+- `download_strategy_mode` defines ordered size attempts before tile stitching.
+- `iiif_quality` applies to normal page downloads and temporary remote high-res export fetches.
+- `probe_remote_max_resolution` enables `info.json` probing for Studio Export thumbnails.
 
 ## `settings.ocr`
 
@@ -86,7 +94,6 @@ Notes:
 ## `settings.pdf`
 
 - `settings.pdf.viewer_dpi` (`int`, default: `150`)
-- `settings.pdf.ocr_dpi` (`int`, default: `300`)
 - `settings.pdf.prefer_native_pdf` (`bool`, default: `true`)
 - `settings.pdf.create_pdf_from_images` (`bool`, default: `false`)
 
@@ -104,31 +111,58 @@ Notes:
 - `settings.pdf.cover.curator` (`string`, default: empty)
 - `settings.pdf.cover.description` (`string`, default: empty)
 
+### `settings.pdf.profiles`
+
+- `settings.pdf.profiles.default` (`string`, default: `balanced`)
+- `settings.pdf.profiles.catalog` (`object`, named profile map)
+  - built-in keys: `balanced`, `high_quality`, `archival_highres`, `lightweight`
+  - profile fields:
+    - `label` (`string`)
+    - `compression` (`High-Res|Standard|Light`)
+    - `include_cover` (`bool`)
+    - `include_colophon` (`bool`)
+    - `image_source_mode` (`local_balanced|local_highres|remote_highres_temp`)
+    - `image_max_long_edge_px` (`int`, `0` means original size)
+    - `jpeg_quality` (`int`, `40..100`)
+    - `force_remote_refetch` (`bool`)
+    - `cleanup_temp_after_export` (`bool`)
+    - `max_parallel_page_fetch` (`int`, `1..8`)
+- `settings.pdf.profiles.document_overrides` (`object`, legacy; retained for backward compatibility)
+
+UI/runtime notes:
+- Profile creation/edit/delete is handled from **Settings > PDF Export**.
+- In Settings, the profile catalog uses one selector with `Nuovo profilo...` for creation and a dedicated delete action.
+- Studio item Export only selects one profile for the current job.
+- `max_parallel_page_fetch` is actively used for parallel remote high-res page staging.
+
 Backward compatibility:
 - legacy `settings.pdf.render_dpi` is mapped in-memory to:
   - `settings.pdf.viewer_dpi`
-  - `settings.pdf.ocr_dpi`
 
 ## `settings.thumbnails`
 
 - `settings.thumbnails.max_long_edge_px` (`int`, default: `320`)
 - `settings.thumbnails.jpeg_quality` (`int`, default: `70`)
-- `settings.thumbnails.columns` (`int`, default: `6`)
-- `settings.thumbnails.paginate_enabled` (`bool`, default: `true`)
 - `settings.thumbnails.page_size` (`int`, default: `48`)
 - `settings.thumbnails.page_size_options` (`int[]`, default: `[24, 48, 72, 96]`)
-- `settings.thumbnails.default_select_all` (`bool`, default: `true`)
-- `settings.thumbnails.actions_apply_to_all_default` (`bool`, default: `false`)
-- `settings.thumbnails.hover_preview_enabled` (`bool`, default: `true`)
-- `settings.thumbnails.hover_preview_max_long_edge_px` (`int`, default: `900`)
-- `settings.thumbnails.hover_preview_jpeg_quality` (`int`, default: `82`)
-- `settings.thumbnails.hover_preview_delay_ms` (`int`, default: `550`)
-- `settings.thumbnails.inline_base64_max_tiles` (`int`, default: `120`)
-- `settings.thumbnails.hover_preview_max_tiles` (`int`, default: `72`)
 
 ## `settings.housekeeping`
 
 - `settings.housekeeping.temp_cleanup_days` (`int`, default: `7`)
+
+## `settings.storage`
+
+- `settings.storage.exports_retention_days` (`int`, default: `30`)
+- `settings.storage.thumbnails_retention_days` (`int`, default: `14`)
+- `settings.storage.highres_temp_retention_hours` (`int`, default: `6`)
+- `settings.storage.auto_prune_on_startup` (`bool`, default: `false`)
+- `settings.storage.max_exports_per_item` (`int`, default: `5`)
+
+Runtime notes:
+- `exports_retention_days`: global pruning on export execution and optional startup prune.
+- `thumbnails_retention_days`: pruning applied when Studio Export thumbnails are generated.
+- `highres_temp_retention_hours`: pruning of temporary remote high-res staging folders.
+- `auto_prune_on_startup`: enables startup pruning for exports + high-res temp.
 
 ## `settings.logging`
 
