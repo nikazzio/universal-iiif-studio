@@ -58,6 +58,10 @@ Notes:
 ## `settings.library`
 
 - `settings.library.default_mode` (`string`, default: `operativa`)
+  - allowed: `operativa` | `archiviata`
+  - Determines the initial view mode displayed in the Library interface
+  - `operativa`: shows active/working documents (documents currently being processed or studied)
+  - `archiviata`: shows archived documents (completed or stored documents)
 
 ## `settings.ui`
 
@@ -155,6 +159,9 @@ Backward compatibility:
 ## `settings.housekeeping`
 
 - `settings.housekeeping.temp_cleanup_days` (`int`, default: `7`)
+  - Number of days before temporary files are eligible for cleanup
+  - Applied to files in `paths.temp_dir` during housekeeping operations
+  - Files older than this threshold may be automatically removed to free disk space
 
 ## `settings.storage`
 
@@ -173,10 +180,22 @@ Runtime notes:
 ## `settings.logging`
 
 - `settings.logging.level` (`string`, default: `INFO`)
+  - allowed: `DEBUG` | `INFO` | `WARNING` | `ERROR` | `CRITICAL`
+  - Controls logging verbosity across the application
+  - `DEBUG`: detailed logging for troubleshooting (significantly increases log file size)
+  - `INFO`: standard operational messages (recommended for normal usage)
+  - `WARNING`: only warnings and errors
+  - `ERROR`: only errors and critical issues
+  - `CRITICAL`: only critical failures
 
 ## `settings.testing`
 
 - `settings.testing.run_live_tests` (`bool`, default: `false`)
+  - Enables tests that make real API calls to external services during test suite execution
+  - ⚠️  **Warning**: Requires valid API keys configured in `api_keys` section
+  - ⚠️  **Warning**: Consumes API quota from your OpenAI, Anthropic, Google Vision, and HuggingFace accounts
+  - Only needed for development/CI environments; safe to keep `false` for normal usage
+  - When `false`, tests requiring network access are automatically skipped
 
 ## `settings.viewer.mirador.openSeadragonOptions`
 
