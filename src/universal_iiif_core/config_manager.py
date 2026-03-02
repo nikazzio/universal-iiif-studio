@@ -16,6 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from .config_validation import SEVERITY_ERROR, validate_config
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -225,6 +226,28 @@ def _deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
     return dst
 
 
+def _log_validation_report(data: dict[str, Any]) -> None:
+    issues = validate_config(data, schema=DEFAULT_CONFIG_JSON)
+    if not issues:
+        return
+
+    error_count = 0
+    warning_count = 0
+    for issue in issues:
+        if issue.severity == SEVERITY_ERROR:
+            error_count += 1
+            logger.error("Config validation [%s] at '%s': %s", issue.code, issue.path, issue.message)
+        else:
+            warning_count += 1
+            logger.warning("Config validation [%s] at '%s': %s", issue.code, issue.path, issue.message)
+
+    logger.info(
+        "Config validation completed: %s error(s), %s warning(s).",
+        error_count,
+        warning_count,
+    )
+
+
 def _try_make_parent_writable(path: Path) -> bool:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -269,8 +292,13 @@ class ConfigManager:
                 loaded = json.loads(cfg_path.read_text(encoding="utf-8") or "{}")
                 if isinstance(loaded, dict):
                     _deep_merge(data, loaded)
+                else:
+                    logger.error("Invalid config root at %s: expected object, got %s", cfg_path, type(loaded).__name__)
             except (OSError, json.JSONDecodeError) as exc:
-                logger.warning("Failed to read config.json at %s: %s", cfg_path, exc)
+                if isinstance(exc, json.JSONDecodeError):
+                    logger.error("Failed to parse config.json at %s: %s", cfg_path, exc)
+                else:
+                    logger.warning("Failed to read config.json at %s: %s", cfg_path, exc)
         else:
             # Ensure file exists for user edits
             try:
@@ -289,6 +317,8 @@ class ConfigManager:
                 # Keep the in-memory config clean; it will disappear on next save.
                 with suppress(KeyError):
                     del pdf_cfg["render_dpi"]
+
+        _log_validation_report(data)
 
         return cls(path=cfg_path, _data=data)
 

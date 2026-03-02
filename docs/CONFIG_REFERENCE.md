@@ -10,6 +10,27 @@ This reference documents the full `config.json` keyspace currently used by the a
 
 If a key appears in one source but not the other, keep this document aligned with runtime behavior in `ConfigManager`.
 
+## Runtime Validation Policy
+
+At startup, `ConfigManager.load()` runs a non-mutating validation pass over the merged `config.json`:
+- `ERROR`: invalid critical structures/types (for example malformed `paths` or `security.allowed_origins`).
+- `WARNING`: deprecated keys, unknown keys, and non-fatal semantic anomalies (enum/range/reference issues).
+
+Validation only logs diagnostics; it does **not** rewrite `config.json`.
+Sensitive values (for example API keys/tokens) are never emitted in clear text by validation logs.
+
+Deprecated keys currently flagged:
+- `settings.thumbnails.columns`
+- `settings.thumbnails.paginate_enabled`
+- `settings.thumbnails.default_select_all`
+- `settings.thumbnails.actions_apply_to_all_default`
+- `settings.thumbnails.hover_preview_enabled`
+- `settings.thumbnails.hover_preview_max_long_edge_px`
+- `settings.thumbnails.hover_preview_jpeg_quality`
+- `settings.thumbnails.hover_preview_delay_ms`
+- `settings.thumbnails.inline_base64_max_tiles`
+- `settings.thumbnails.hover_preview_max_tiles`
+
 ## Top-Level Schema
 
 ```text
