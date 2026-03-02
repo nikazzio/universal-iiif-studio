@@ -12,6 +12,22 @@ All notable changes to this project are documented in this file.
 - Every non-empty bullet should reference an issue or PR number using the `(#123)` suffix.
 - If a section has no items, use `- None.`
 
+## [v0.6.1] - 2026-03-02
+
+### Added
+
+- Added global, non-mutating `config.json` validation with severity-based diagnostics (`WARNING`/`ERROR`) during `ConfigManager.load()` (#73).
+- Added dedicated tests for config schema/deprecation validation and load-time logging behavior (#73).
+
+### Changed
+
+- Deprecated thumbnail keys are now explicitly reported as runtime warnings instead of being silently ignored (#73).
+- Validation logs avoid leaking sensitive config values such as API keys and tokens (#73).
+
+### Fixed
+
+- Improved startup diagnostics for malformed configuration roots and invalid JSON payloads (`ERROR` severity where appropriate) (#73).
+
 ## [v0.6.0] - 2026-01-23
 
 ### Added
