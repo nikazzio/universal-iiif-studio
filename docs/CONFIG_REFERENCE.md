@@ -55,6 +55,10 @@ Notes:
 - `settings.defaults.default_library` (`string`, default: `Vaticana`)
 - `settings.defaults.preferred_ocr_engine` (`string`, default: `openai`)
 
+## `settings.library`
+
+- `settings.library.default_mode` (`string`, default: `operativa`)
+
 ## `settings.ui`
 
 - `settings.ui.theme_preset` (`string`, default: `rosewater`)
@@ -133,11 +137,13 @@ UI/runtime notes:
 - Profile creation/edit/delete is handled from **Settings > PDF Export**.
 - In Settings, the profile catalog uses one selector with `Nuovo profilo...` for creation and a dedicated delete action.
 - Studio item Export only selects one profile for the current job.
+- Studio item Export keeps profile selection as the primary control; per-job overrides are optional and collapsed by default.
 - `max_parallel_page_fetch` is actively used for parallel remote high-res page staging.
 
 Backward compatibility:
 - legacy `settings.pdf.render_dpi` is mapped in-memory to:
   - `settings.pdf.viewer_dpi`
+  - `settings.pdf.ocr_dpi` (legacy compatibility only; not part of active UI/runtime controls)
 
 ## `settings.thumbnails`
 

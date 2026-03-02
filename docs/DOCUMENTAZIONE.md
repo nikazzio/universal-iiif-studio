@@ -25,19 +25,26 @@ Il file `config.json` è la singola fonte di verità.
 * `settings.pdf.create_pdf_from_images` (default: `false`): se non viene usato un PDF nativo, crea un PDF compilato dalle immagini scaricate.
 * `settings.pdf.viewer_dpi` (default: `150`): DPI usati per estrarre le immagini JPG dal PDF nativo per il viewer.
 * `settings.pdf.profiles`: catalogo preset PDF avanzati (`balanced`, `high_quality`, `archival_highres`, `lightweight`) con supporto custom globale.
+* `settings.pdf.profiles.catalog.<profilo>.image_source_mode`: definisce la sorgente immagini del profilo (`local_balanced`, `local_highres`, `remote_highres_temp`).
+* `settings.pdf.profiles.catalog.<profilo>.max_parallel_page_fetch`: limite di fetch parallelo quando il profilo usa il remoto high-res temporaneo.
 * `settings.storage.highres_temp_retention_hours`: retention dei file high-res temporanei usati per export avanzati.
+* `settings.storage.exports_retention_days`: retention globale degli export PDF salvati.
+* `settings.storage.thumbnails_retention_days`: retention della cache miniature usata nel tab Export.
 * `settings.storage.auto_prune_on_startup`: se attivo, applica pruning retention all'avvio (export + temp high-res).
 
 Nel pannello **Settings > PDF Export** trovi i controlli con help text esplicativi:
-* **Prefer Native PDF**: priorita al PDF della biblioteca se disponibile.
-* **Create PDF from Images**: attiva/disattiva la generazione del PDF compilato in fallback.
-* **PDF Viewer DPI**: qualità estrazione da PDF nativo.
-* **Default PDF Profile**: preset operativo globale.
-* **Catalogo Profili PDF**: editor unico con selettore profilo.
-  - scegli un profilo esistente per modificarlo;
-  - scegli `Nuovo profilo...` per crearne uno custom;
-  - usa il pulsante rosso **Elimina Profilo** per rimuovere il profilo selezionato;
-  - dopo create/delete la pagina viene ricaricata per aggiornare subito il catalogo selezionabile.
+* sub-tab **Predefiniti e copertina**:
+  - **Prefer Native PDF**: priorita al PDF della biblioteca se disponibile.
+  - **Create PDF from Images**: attiva/disattiva la generazione del PDF compilato in fallback.
+  - **PDF Viewer DPI**: qualità estrazione da PDF nativo.
+  - **Default PDF Profile**: preset operativo globale.
+  - metadati copertina (logo, curatore, descrizione) e default formato/compressione.
+* sub-tab **Catalogo Profili**:
+  - selettore unico profili con voce `Nuovo profilo...` per creare preset custom;
+  - editor completo del profilo (cover/colophon, compression, source mode, lato lungo max, JPEG quality, parallel fetch);
+  - toggle **Imposta come default globale**;
+  - pulsante rosso **Elimina Profilo**;
+  - dopo create/delete/update la pagina viene ricaricata per riallineare subito il catalogo disponibile in Export.
 
 Nel pannello **Settings > Viewer**:
 * sub-tab **Zoom**, **Defaults**, **Presets** per separare parametri OpenSeadragon e filtri visivi.
@@ -47,9 +54,18 @@ Nel pannello **Settings > Paths & System**:
 * sub-tab **Storage & Security** per retention, pruning, test live e CORS.
 
 Nel tab **Studio > Export**:
-* scegli il profilo per il job corrente;
-* visualizzi in alto la lista PDF già presenti;
-* usi i sub-tab `Crea PDF` / `Job` per separare configurazione e monitoraggio.
+* in alto visualizzi sempre l'inventario PDF locale gia presente per il documento;
+* usi i sub-tab `Crea PDF` / `Job` per separare configurazione e monitoraggio coda;
+* nel sub-tab `Crea PDF` il blocco principale e:
+  - **Profilo PDF** + pulsante **Gestisci profili** nella stessa riga;
+  - pannello override a scomparsa (**Personalizza override per questo job**) da aprire solo quando serve.
+* il pulsante finale **Crea PDF** usa:
+  - il profilo selezionato;
+  - eventuali override compilati nel pannello espanso;
+  - lo scope selezionato (`Tutte le pagine` oppure `Solo selezione`).
+* la griglia miniature mostra per ogni pagina:
+  - risoluzione **Locale** e **Online max** per confronto immediato;
+  - azione puntuale **High-Res** per scaricare solo la pagina necessaria.
 
 ### 🤖 Motori OCR
 
@@ -104,7 +120,7 @@ Quando avvii un download, il sistema decide la strategia migliore:
 1. **Controllo PDF Nativo**: Cerca se la biblioteca offre un PDF ufficiale.
    * **Se c'è** e `settings.pdf.prefer_native_pdf=true`: lo scarica e **estrae automaticamente** le pagine in immagini JPG ad alta risoluzione (nella cartella `scans/`). Questo garantisce che lo Studio funzioni anche con i PDF.
    * **Se non c'è**: Scarica le immagini dai server IIIF una per una.
-2. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
+1. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
 
 ### 🧪 Strategia immagini: come leggere davvero le opzioni
 
@@ -122,6 +138,15 @@ Indicazioni pratiche:
 * usa `default` per la maggior parte dei manoscritti;
 * usa `gray` o `bitonal` solo quando serve ridurre peso o forzare B/N per workflow OCR specifici;
 * se un server IIIF non supporta una quality, il downloader applica retry/fallback tramite la stessa pipeline di download.
+
+### 🧩 Strategia consigliata per manoscritti molto grandi
+
+Per collezioni con pagine molto pesanti, il flusso consigliato e:
+* mantieni nel repository locale una copia **bilanciata** per lavorare veloce in viewer e trascrizione;
+* usa il confronto **Locale vs Online max** nel tab `Studio > Export` per capire subito dove manca dettaglio;
+* scarica la high-res solo sulle pagine necessarie con il pulsante **High-Res** della miniatura;
+* quando serve un PDF finale ad altissima qualita, usa un profilo con `image_source_mode=remote_highres_temp`;
+* abilita `cleanup_temp_after_export` nel profilo per eliminare in automatico i temporanei high-res a fine export.
 
 ### 📚 Libreria Locale (Local Assets)
 
@@ -153,6 +178,19 @@ Accesso consigliato:
 * **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
 * **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
 * **Header stato asset**: in Studio vengono mostrati stato download (`saved/partial/complete/...`) e badge PDF (nativo/locale).
+
+### ℹ️ Tab Info (riordinato)
+
+Il tab `Info` e stato riorganizzato in sub-tab operative:
+* **Panoramica**: attributi principali documento (titolo, diritti, pagine, direzione lettura, ecc.).
+* **Pagina corrente**: metadati canvas e risorse per la pagina attiva.
+* **Metadati e fonti**: provider, `seeAlso`, endpoint manifesto/servizio IIIF.
+
+Dettagli UX attuali:
+* i link esterni sono resi con CTA esplicite (`Apri ... ↗`) e non mostrano URL lunghi in chiaro;
+* `Canvas ID` e cliccabile in `Pagina corrente` quando il valore e un URL valido;
+* `Diritti` in `Panoramica` e cliccabile se il manifest contiene un link licenza;
+* i blocchi `Vedi anche` sono responsivi e restano nel viewport anche su schermi stretti.
 
 ### 🎚️ Visual Tab
 

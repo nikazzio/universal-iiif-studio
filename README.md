@@ -36,6 +36,8 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
+- Studio Export with PDF profiles, optional per-job overrides, and job monitoring tab
+- Thumbnail-level resolution transparency (`Locale` vs `Online max`) with on-demand `High-Res` fetch
 - `src/` package layout with separated `core`, `ui`, and `cli` modules
 
 ## Run Modes
@@ -99,6 +101,7 @@ Meaning:
 - `images.download_strategy_custom`: size list used when `mode=custom`
 - `images.iiif_quality`: IIIF quality segment in image URLs (recommended `default`)
 - `pdf.profiles.default`: default export profile (`balanced`, `high_quality`, `archival_highres`, `lightweight`)
+- `pdf.profiles.catalog.<profile>.max_parallel_page_fetch`: parallel fetch cap for remote high-res temp exports
 - PDF profiles are created/edited in `Settings > PDF Export`; item Export tab only selects a profile per job
 
 ## Output Layout

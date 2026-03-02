@@ -1,65 +1,82 @@
 # Features Inactive Backlog
 
 Questa lista raccoglie opzioni/feature rimosse dalla UI o marcate come inattive durante il refactor dell'issue #46.
-L'obiettivo e' evitare opzioni fuorvianti e tenere tracciata una roadmap evolutiva implementabile.
+Obiettivo: evitare opzioni fuorvianti nella configurazione corrente e mantenere una roadmap evolutiva chiara.
 
-## Rimosse dalla UI (non operative nel runtime attuale)
+## Ambito
 
-1. `settings.system.download_workers`
-- Motivo rimozione: non collegata alla pipeline download effettiva (si usa il job queue manager).
-- Evoluzione proposta: supporto pool separato per download intra-documento con limite dinamico per host.
+- Stato del runtime: riferito all'implementazione attuale in `src/`.
+- Stato della UI: riferito ai pannelli Settings/Studio attuali.
+- Uso previsto: backlog tecnico per future evoluzioni, non guida utente.
 
-2. `settings.system.request_timeout`
-- Motivo rimozione: timeout runtime gestiti in punti specifici e non da questa chiave globale.
-- Evoluzione proposta: unificare timeout HTTP in un client centralizzato con override per provider.
+## Feature inattive o rimosse dalla UI
 
-3. `settings.system.ocr_concurrency`
-- Motivo rimozione: non agganciata allo scheduler OCR corrente.
-- Evoluzione proposta: coda OCR con massimo worker configurabile e priorita'.
+- `settings.system.download_workers`
+  - Stato attuale: rimosso dalla UI, non operativo nel runtime corrente.
+  - Motivo: la concorrenza download documento e gestita dal job queue manager (`max_concurrent_downloads`).
+  - Evoluzione proposta: pool separato per download intra-documento con limite dinamico per host.
 
-4. `settings.pdf.ocr_dpi`
-- Motivo rimozione: pipeline attuale usa `viewer_dpi` per estrazione immagini da PDF.
-- Evoluzione proposta: distinguere `viewer_dpi` e `ocr_dpi` in passaggi separati (viewer vs OCR preprocessing).
+- `settings.system.request_timeout`
+  - Stato attuale: rimosso dalla UI, non usato come chiave globale centralizzata.
+  - Motivo: timeout HTTP gestiti in punti specifici della pipeline.
+  - Evoluzione proposta: client HTTP centralizzato con policy timeout uniformi e override per provider.
 
-5. `settings.images.ocr_quality`
-- Motivo rimozione: non usata nella pipeline OCR effettiva.
-- Evoluzione proposta: quality profile OCR (denoise, sharpen, binarization, quality target).
+- `settings.system.ocr_concurrency`
+  - Stato attuale: rimosso dalla UI, non agganciato allo scheduler OCR corrente.
+  - Motivo: concorrenza OCR non esposta come controllo unico.
+  - Evoluzione proposta: coda OCR dedicata con `max_workers`, priorita e retry espliciti.
 
-6. `settings.thumbnails.columns`
-- Motivo rimozione: layout thumbnails pilotato da CSS grid responsivo, non da setting numerico.
-- Evoluzione proposta: preset layout thumbnails (compact/comfortable/research).
+- `settings.pdf.ocr_dpi`
+  - Stato attuale: non esposto in UI; non usato come parametro operativo principale.
+  - Motivo: pipeline corrente usa `settings.pdf.viewer_dpi` per l'estrazione immagini da PDF nativo.
+  - Evoluzione proposta: separare formalmente `viewer_dpi` (viewer) e `ocr_dpi` (preprocessing OCR).
 
-7. `settings.thumbnails.paginate_enabled`
-- Motivo rimozione: paginazione sempre attiva nello Studio Export.
-- Evoluzione proposta: toggle tra infinite scroll e paginazione.
+- `settings.images.ocr_quality`
+  - Stato attuale: rimosso dalla UI, non utilizzato dalla pipeline OCR effettiva.
+  - Motivo: assenza di un profilo OCR strutturato in runtime.
+  - Evoluzione proposta: profili OCR dedicati (denoise, sharpen, binarization, target quality).
 
-8. `settings.thumbnails.default_select_all`
-- Motivo rimozione: selezione gestita esplicitamente via comandi nel pannello export.
-- Evoluzione proposta: template operativi di selezione iniziale per workflow ripetitivi.
+- `settings.thumbnails.columns`
+  - Stato attuale: rimosso dalla UI.
+  - Motivo: layout miniature gestito da CSS grid responsive, non da numero colonne statico.
+  - Evoluzione proposta: preset di layout (`compact`, `comfortable`, `research`).
 
-9. `settings.thumbnails.actions_apply_to_all_default`
-- Motivo rimozione: nessuna azione bulk automatica agganciata a questa chiave.
-- Evoluzione proposta: modalita' bulk action persistente.
+- `settings.thumbnails.paginate_enabled`
+  - Stato attuale: rimosso dalla UI.
+  - Motivo: paginazione sempre attiva nello Studio Export.
+  - Evoluzione proposta: toggle tra paginazione e infinite scroll.
 
-10. `settings.thumbnails.hover_preview_*` e `inline_base64_max_tiles`
-- Motivo rimozione: pipeline hover non attiva nella UX corrente.
-- Evoluzione proposta: anteprima hover progressive con cache dedicata e budget memoria.
+- `settings.thumbnails.default_select_all`
+  - Stato attuale: rimosso dalla UI.
+  - Motivo: selezione iniziale gestita nel flusso Studio Export (inizializzazione lato pannello).
+  - Evoluzione proposta: template di selezione iniziale per workflow ripetitivi.
 
-## Nuove feature introdotte al posto delle opzioni inattive
+- `settings.thumbnails.actions_apply_to_all_default`
+  - Stato attuale: rimosso dalla UI.
+  - Motivo: nessuna azione bulk automatica agganciata a questa chiave.
+  - Evoluzione proposta: modalita bulk persistente con conferma operativa.
 
-1. Profili PDF avanzati con preset default e custom:
-- globali (`settings.pdf.profiles.catalog`)
-- override per documento (`settings.pdf.profiles.document_overrides`)
+- `settings.thumbnails.hover_preview_*` e `inline_base64_max_tiles`
+  - Stato attuale: rimosso dalla UI.
+  - Motivo: pipeline hover preview non attiva nella UX corrente.
+  - Evoluzione proposta: hover progressive con cache dedicata e budget memoria.
 
-2. Risoluzione trasparente per pagina:
-- confronto `online max` vs `locale` nello Studio Export.
+## Feature introdotte in sostituzione
 
-3. High-res on-demand:
-- download puntuale pagina high-res da UI export.
-- export `remote_highres_temp` con staging temporaneo.
+- Profili PDF avanzati con preset default e custom
+  - Chiavi: `settings.pdf.profiles.catalog`, `settings.pdf.profiles.default`.
+  - UX: catalogo profili centralizzato in `Settings > PDF Export`.
 
-## Note implementative per evoluzioni future
+- Gestione risoluzione trasparente per pagina in Studio Export
+  - UI: confronto `Locale` vs `Online max` nelle thumbnail card.
+  - Scopo: decidere in modo informato se lavorare su locale bilanciato o richiedere high-res.
 
-1. Introdurre versionamento schema config (`settings.schema_version`) per migrazioni controllate.
-2. Aggiungere endpoint diagnostici storage (`/api/storage/report`, `/api/storage/prune`).
-3. Valutare cache distribuita `info.json` per ridurre latency su manoscritti molto lunghi.
+- High-res on-demand per export
+  - UI: azione puntuale `High-Res` per singola pagina.
+  - Runtime: `remote_highres_temp` con staging temporaneo e cleanup opzionale post-export.
+
+## Backlog evolutivo raccomandato
+
+- Introdurre versionamento schema config (`settings.schema_version`) con migrazioni guidate.
+- Aggiungere endpoint diagnostici storage (`/api/storage/report`, `/api/storage/prune`).
+- Valutare cache distribuita `info.json` per ridurre latenza su manoscritti molto lunghi.
