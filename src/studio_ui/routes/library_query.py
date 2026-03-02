@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+from studio_ui.common.library_constants import to_optional_bool
 from studio_ui.common.title_utils import resolve_preferred_title
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.library_catalog import ITEM_TYPES, normalize_item_type
@@ -98,6 +99,9 @@ def _matches_query(doc: dict, query: str) -> bool:
             str(doc.get("shelfmark") or ""),
             str(doc.get("id") or ""),
             str(doc.get("library") or ""),
+            str(doc.get("author") or ""),
+            str(doc.get("description") or ""),
+            str(doc.get("publisher") or ""),
         ]
     ).lower()
     return q in haystack
@@ -169,18 +173,7 @@ def _thumbnail_url(row: dict) -> str:
 
 
 def _to_optional_bool(value) -> bool | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in {"1", "true", "yes", "y"}:
-        return True
-    if text in {"0", "false", "no", "n", ""}:
-        return False
-    return None
+    return to_optional_bool(value)
 
 
 def _pdf_dir_candidates(row: dict) -> list[Path]:
@@ -368,6 +361,10 @@ def _row_to_view_model(row: dict) -> dict:
         "has_missing_pages": bool(missing_pages),
         "item_type_source": row.get("item_type_source") or "auto",
         "item_type_confidence": float(row.get("item_type_confidence") or 0.0),
+        "author": str(row.get("author") or ""),
+        "description": str(row.get("description") or ""),
+        "publisher": str(row.get("publisher") or ""),
+        "attribution": str(row.get("attribution") or ""),
         "reference_text": str(row.get("reference_text") or ""),
         "shelfmark": str(row.get("shelfmark") or row.get("id") or ""),
         "source_detail_url": str(row.get("source_detail_url") or ""),

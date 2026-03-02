@@ -710,11 +710,20 @@ def parse_manifest_catalog(
     catalog_title = reference_text if _prefer_reference_title(reference_text, label, shelfmark, doc_id) else label
     manifest_id = str(manifest.get("@id") or manifest.get("id") or manifest_url or "").strip()
 
+    # Extract structured fields from merged metadata
+    _author_keys = ("author", "creator", "autore", "dc:creator", "dc.creator", "créateur")
+    _publisher_keys = ("publisher", "editore", "source", "dc:publisher", "dc.publisher", "éditeur")
+    meta_lower = {k.lower().strip(): v for k, v in merged_metadata_map.items()}
+    author = next((str(meta_lower[k]) for k in _author_keys if k in meta_lower and meta_lower[k]), "")
+    publisher = next((str(meta_lower[k]) for k in _publisher_keys if k in meta_lower and meta_lower[k]), "")
+
     return {
         "manifest_id": manifest_id,
         "label": label,
         "description": description,
         "attribution": attribution,
+        "author": author,
+        "publisher": publisher,
         "shelfmark": shelfmark,
         "date_label": date_label,
         "language_label": language_label,

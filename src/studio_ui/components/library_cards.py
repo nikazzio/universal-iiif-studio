@@ -9,88 +9,22 @@ from urllib.parse import quote
 
 from fasthtml.common import H3, A, Button, Details, Div, Form, Img, Option, P, Script, Select, Span, Summary
 
+from studio_ui.common.library_constants import (
+    ACTION_BUTTON_CLS,
+    CATEGORY_LABELS,
+    CATEGORY_SELECT_TONE,
+    LINK_BUTTON_CLS,
+    STATE_STYLE,
+    to_optional_bool,
+)
 from studio_ui.common.title_utils import truncate_title
 from universal_iiif_core.library_catalog import ITEM_TYPES
 
-_STATE_STYLE = {
-    "saved": ("Da scaricare", "app-chip app-chip-neutral"),
-    "queued": ("In coda", "app-chip app-chip-accent"),
-    "downloading": ("Download", "app-chip app-chip-primary"),
-    "running": ("Download", "app-chip app-chip-primary"),
-    "partial": ("Parziale", "app-chip app-chip-warning"),
-    "complete": ("Completo", "app-chip app-chip-success"),
-    "error": ("Errore", "app-chip app-chip-danger"),
-}
-_CATEGORY_LABELS = {
-    "manoscritto": "Manoscritto",
-    "libro a stampa": "Libro a stampa",
-    "incunabolo": "Incunabolo",
-    "periodico": "Periodico",
-    "musica/spartito": "Musica/Spartito",
-    "mappa/atlante": "Mappa/Atlante",
-    "miscellanea": "Miscellanea",
-    "non classificato": "Non classificato",
-}
-_SORT_LABELS = {
-    "priority": "Priorita operativa",
-    "recent": "Aggiornati di recente",
-    "title_az": "Titolo A-Z",
-    "pages_desc": "Piu pagine",
-}
-_ACTION_BUTTON_CLS = {
-    "primary": "app-btn app-btn-primary",
-    "success": "app-btn app-btn-primary",
-    "accent": "app-btn app-btn-accent",
-    "danger": "app-btn app-btn-danger",
-    "warning": "app-btn app-btn-accent",
-    "neutral": "app-btn app-btn-neutral",
-    "info": "app-btn app-btn-info",
-    "auto": "app-btn app-btn-accent",
-}
-_LINK_BUTTON_CLS = {
-    "primary": "app-btn app-btn-primary",
-    "neutral": "app-btn app-btn-neutral",
-    "external": "app-btn app-btn-accent",
-    "muted": "app-btn app-btn-muted",
-}
-_LIBRARY_FILTER_KEYS = [
-    "q",
-    "state",
-    "library_filter",
-    "category",
-    "mode",
-    "view",
-    "action_required",
-    "sort_by",
-]
-_CATEGORY_SELECT_TONE = {
-    "manoscritto": (
-        "bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-500/20 "
-        "dark:border-indigo-500/45 dark:text-indigo-200"
-    ),
-    "libro a stampa": (
-        "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/20 "
-        "dark:border-emerald-500/45 dark:text-emerald-200"
-    ),
-    "incunabolo": (
-        "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/45 dark:text-amber-200"
-    ),
-    "periodico": ("bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-500/20 dark:border-sky-500/45 dark:text-sky-200"),
-    "musica/spartito": (
-        "bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-500/20 "
-        "dark:border-fuchsia-500/45 dark:text-fuchsia-200"
-    ),
-    "mappa/atlante": (
-        "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-500/20 dark:border-teal-500/45 dark:text-teal-200"
-    ),
-    "miscellanea": (
-        "bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-500/20 "
-        "dark:border-violet-500/45 dark:text-violet-200"
-    ),
-    "non classificato": (
-        "bg-slate-100 border-slate-300 text-slate-700 dark:bg-slate-700/35 dark:border-slate-600 dark:text-slate-200"
-    ),
-}
+_STATE_STYLE = STATE_STYLE
+_CATEGORY_LABELS = CATEGORY_LABELS
+_ACTION_BUTTON_CLS = ACTION_BUTTON_CLS
+_LINK_BUTTON_CLS = LINK_BUTTON_CLS
+_CATEGORY_SELECT_TONE = CATEGORY_SELECT_TONE
 
 
 def _state_badge(state: str) -> Span:
@@ -246,18 +180,7 @@ def _category_form(doc: dict, item_type: str) -> Form:
 
 
 def _to_optional_bool(value) -> bool | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in {"1", "true", "yes", "y"}:
-        return True
-    if text in {"0", "false", "no", "n", ""}:
-        return False
-    return None
+    return to_optional_bool(value)
 
 
 def _pdf_technical_info(doc: dict) -> tuple[str, str]:
@@ -302,7 +225,135 @@ def _doc_card_dom_id(doc: dict) -> str:
     )
 
 
-def _metadata_items(doc: dict) -> list[tuple[str, str]]:
+_METADATA_LABEL_MAP: dict[str, str] = {
+    "author": "Autore",
+    "creator": "Autore",
+    "autore": "Autore",
+    "dc:creator": "Autore",
+    "dc.creator": "Autore",
+    "créateur": "Autore",
+    "contributor": "Contributore",
+    "title": "Titolo",
+    "titre": "Titolo",
+    "titolo": "Titolo",
+    "dc:title": "Titolo",
+    "dc.title": "Titolo",
+    "publisher": "Editore",
+    "editore": "Editore",
+    "éditeur": "Editore",
+    "dc:publisher": "Editore",
+    "dc.publisher": "Editore",
+    "source": "Fonte",
+    "date": "Data",
+    "issued": "Data",
+    "dc:date": "Data",
+    "dc.date": "Data",
+    "language": "Lingua",
+    "lingua": "Lingua",
+    "dc:language": "Lingua",
+    "dc.language": "Lingua",
+    "description": "Descrizione",
+    "descrizione": "Descrizione",
+    "dc:description": "Descrizione",
+    "dc.description": "Descrizione",
+    "shelfmark": "Segnatura",
+    "segnatura": "Segnatura",
+    "shelf mark": "Segnatura",
+    "call number": "Segnatura",
+    "cote": "Segnatura",
+    "type": "Tipo",
+    "dc:type": "Tipo",
+    "dc.type": "Tipo",
+    "genre": "Genere",
+    "subject": "Soggetto",
+    "soggetto": "Soggetto",
+    "dc:subject": "Soggetto",
+    "dc.subject": "Soggetto",
+    "material": "Materiale",
+    "format": "Formato",
+    "dc:format": "Formato",
+    "dc.format": "Formato",
+    "extent": "Dimensioni",
+    "dimensions": "Dimensioni",
+    "identifier": "Identificativo",
+    "dc:identifier": "Identificativo",
+    "dc.identifier": "Identificativo",
+    "relation": "Relazione",
+    "dc:relation": "Relazione",
+    "dc.relation": "Relazione",
+    "rights": "Diritti",
+    "dc:rights": "Diritti",
+    "dc.rights": "Diritti",
+    "license": "Licenza",
+    "repository": "Repository",
+    "collection": "Collezione",
+    "provenance": "Provenienza",
+    "ext_repository": "Repository",
+    "ext_collection": "Collezione",
+    "ext_institution": "Istituzione",
+}
+
+# Sections: key patterns mapped to section names
+_SECTION_IDENTIFICATION = {"autore", "titolo", "editore", "fonte", "data", "lingua", "segnatura"}
+_SECTION_CONTENT = {"descrizione", "tipo", "genere", "soggetto", "materiale"}
+_SECTION_PROVENANCE = {"repository", "collezione", "provenienza", "istituzione"}
+_SECTION_TECHNICAL = {"formato", "dimensioni", "identificativo", "relazione", "diritti", "licenza", "contributore"}
+
+
+def _categorize_metadata_item(label_it: str) -> str:
+    """Return the section name for a normalized Italian label."""
+    lbl = label_it.lower()
+    if lbl in _SECTION_IDENTIFICATION:
+        return "identification"
+    if lbl in _SECTION_CONTENT:
+        return "content"
+    if lbl in _SECTION_PROVENANCE:
+        return "provenance"
+    if lbl in _SECTION_TECHNICAL:
+        return "technical"
+    return "other"
+
+
+# Fields already shown in fixed header — skip in the item list
+_DRAWER_FIXED_KEYS = {
+    "shelfmark",
+    "segnatura",
+    "shelf mark",
+    "call number",
+    "cote",
+    "date",
+    "issued",
+    "dc:date",
+    "dc.date",
+    "language",
+    "lingua",
+    "dc:language",
+    "dc.language",
+    "title",
+    "titre",
+    "titolo",
+    "dc:title",
+    "dc.title",
+    "author",
+    "creator",
+    "autore",
+    "dc:creator",
+    "dc.creator",
+    "créateur",
+    "publisher",
+    "editore",
+    "éditeur",
+    "dc:publisher",
+    "dc.publisher",
+    "description",
+    "descrizione",
+    "dc:description",
+    "dc.description",
+    "source",
+}
+
+
+def _metadata_items(doc: dict) -> list[tuple[str, str, str]]:
     raw = str(doc.get("metadata_json") or "").strip()
     if not raw:
         return []
@@ -316,8 +367,18 @@ def _metadata_items(doc: dict) -> list[tuple[str, str]]:
     for key, value in payload.items():
         label = str(key or "").strip()
         text = str(value or "").strip()
-        if label and text:
-            out.append((label, text))
+        if not label or not text:
+            continue
+        # Skip fields shown in fixed header
+        if label.lower().strip() in _DRAWER_FIXED_KEYS:
+            continue
+        # Clean ext_ prefix
+        clean_key = label[4:] if label.lower().startswith("ext_") else label
+        # Normalize label
+        normalized = _METADATA_LABEL_MAP.get(label.lower().strip(), clean_key)
+        # Categorize for section grouping
+        section = _categorize_metadata_item(normalized)
+        out.append((normalized, text, section))
     return out
 
 
@@ -327,11 +388,16 @@ def _metadata_payload(doc: dict) -> str:
         "library": str(doc.get("library") or "Unknown"),
         "card_id": _doc_card_dom_id(doc),
         "title": str(doc.get("display_title") or doc.get("id") or "-"),
+        "author": str(doc.get("author") or ""),
+        "publisher": str(doc.get("publisher") or ""),
+        "description": str(doc.get("description") or ""),
+        "attribution": str(doc.get("attribution") or ""),
         "shelfmark": str(doc.get("shelfmark") or doc.get("id") or "-"),
         "date_label": str(doc.get("date_label") or ""),
         "language_label": str(doc.get("language_label") or ""),
         "reference_text": str(doc.get("reference_text") or ""),
         "source_detail_url": str(doc.get("source_detail_url") or ""),
+        "user_notes": str(doc.get("user_notes") or ""),
         "metadata_items": _metadata_items(doc),
     }
     text = json.dumps(payload, ensure_ascii=True)
@@ -363,6 +429,10 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     shelfmark = str(doc.get("shelfmark") or doc.get("id") or "-")
     library_name = str(doc.get("library") or "Unknown")
     thumb_url = str(doc.get("thumbnail_url") or "")
+    author = str(doc.get("author") or "")
+    publisher = str(doc.get("publisher") or "")
+    description = str(doc.get("description") or "")
+    user_notes = str(doc.get("user_notes") or "")
     pdf_source_label, pdf_local_count = _pdf_technical_info(doc)
     compact_title = _compact_label(title)
     compact_shelfmark = _compact_label(shelfmark)
@@ -391,9 +461,14 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         )
     )
 
-    utility_actions = [
-        _link_button("📖 Apri Studio", studio_href, tone="primary"),
-        _link_button("🔗 Scheda catalogo ↗", source_detail_url, tone="external", external=True),
+    # Button groups: primary actions, info links, maintenance/danger
+    primary_buttons = []
+    primary_action = _primary_action(doc)
+    if primary_action is not None:
+        primary_buttons.append(primary_action)
+    primary_buttons.append(_link_button("📖 Apri Studio", studio_href, tone="primary"))
+
+    info_buttons = [
         Button(
             "🧾 Metadati",
             type="button",
@@ -401,12 +476,26 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
             data_payload=_metadata_payload(doc),
             onclick="openLibraryMetadata(this.dataset.payload)",
         ),
+        _link_button("🔗 Scheda catalogo ↗", source_detail_url, tone="external", external=True),
     ]
-    primary_action = _primary_action(doc)
-    action_buttons = [*utility_actions]
-    if primary_action is not None:
-        action_buttons.append(primary_action)
-    action_buttons.extend(_maintenance_actions(doc))
+
+    danger_buttons = list(_maintenance_actions(doc))
+    danger_buttons.append(_delete_action(doc))
+
+    actions_block = Div(
+        # Primary actions — full size, prominent
+        Div(*primary_buttons, cls="flex flex-wrap items-center gap-2"),
+        # Visual separator between primary and secondary
+        Div(cls="border-t border-slate-200 dark:border-slate-700"),
+        # Info links — compact size (via app-btn-sm)
+        Div(*info_buttons, cls="flex flex-wrap items-center gap-1.5"),
+        # Maintenance / danger — compact, visually subdued
+        Div(
+            *danger_buttons,
+            cls="flex flex-wrap items-center gap-1.5 opacity-60",
+        ),
+        cls="mt-auto flex flex-col gap-2 pt-2",
+    )
 
     media_badges = Div(
         _state_badge(state),
@@ -429,19 +518,64 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     )
 
     card_title = truncate_title(title, max_len=70, suffix="[...]")
-    headline = Div(
+
+    # Build headline with author and publisher info
+    headline_children = [
         H3(
             card_title,
             title=title,
             cls="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight",
         ),
+    ]
+    if author:
+        headline_children.append(
+            P(
+                author,
+                cls="text-sm text-slate-600 dark:text-slate-300 italic",
+                title=author,
+            )
+        )
+    headline_children.append(
         Div(
             Span(library_name, cls="text-sm text-slate-700 dark:text-slate-200 font-semibold"),
             _category_form(doc, item_type),
             cls="flex flex-wrap items-center gap-2",
-        ),
-        P(f"Segnatura: {shelfmark}", cls="text-sm text-slate-500 dark:text-slate-400"),
-        cls="space-y-1 min-w-0",
+        )
+    )
+    headline_children.append(P(f"Segnatura: {shelfmark}", cls="text-sm text-slate-500 dark:text-slate-400"))
+    if publisher:
+        headline_children.append(
+            P(
+                f"Editore: {publisher}",
+                cls="text-xs text-slate-500 dark:text-slate-400",
+                title=publisher,
+            )
+        )
+    headline = Div(*headline_children, cls="space-y-1 min-w-0")
+
+    # Optional description preview (max 2 lines)
+    desc_block = (
+        P(
+            truncate_title(description, max_len=160, suffix="…"),
+            cls="text-xs text-slate-500 dark:text-slate-400 line-clamp-2",
+            title=description,
+        )
+        if description
+        else Div()
+    )
+
+    # User notes indicator
+    notes_block = (
+        Div(
+            Span("📝", cls="text-sm"),
+            Span(
+                truncate_title(user_notes, max_len=80, suffix="…"),
+                cls="text-xs text-slate-500 dark:text-slate-400 italic",
+            ),
+            cls="flex items-center gap-1",
+        )
+        if user_notes
+        else Div()
     )
 
     return Div(
@@ -456,11 +590,9 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
                 if show_reference
                 else Div()
             ),
-            Div(
-                *action_buttons,
-                _delete_action(doc),
-                cls="mt-auto flex flex-wrap items-center gap-2 pt-1",
-            ),
+            desc_block,
+            notes_block,
+            actions_block,
             cls="space-y-3 flex-1 min-w-0 flex flex-col",
         ),
         cls=(
@@ -611,7 +743,13 @@ def _metadata_drawer() -> Div:
                     cls="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-4 py-3",
                 ),
                 Div(
+                    # Fixed identification fields
                     Div(
+                        Div(
+                            Span("Autore:", cls="app-tech-key"),
+                            Span("-", id="library-meta-author", cls="app-tech-val"),
+                            cls="app-tech-row",
+                        ),
                         Div(
                             Span("Segnatura:", cls="app-tech-key"),
                             Span("-", id="library-meta-shelfmark", cls="app-tech-val"),
@@ -627,11 +765,34 @@ def _metadata_drawer() -> Div:
                             Span("-", id="library-meta-language", cls="app-tech-val"),
                             cls="app-tech-row",
                         ),
+                        Div(
+                            Span("Editore:", cls="app-tech-key"),
+                            Span("-", id="library-meta-publisher", cls="app-tech-val"),
+                            cls="app-tech-row hidden",
+                            id="library-meta-publisher-row",
+                        ),
+                        Div(
+                            Span("Attribuzione:", cls="app-tech-key"),
+                            Span("-", id="library-meta-attribution", cls="app-tech-val"),
+                            cls="app-tech-row hidden",
+                            id="library-meta-attribution-row",
+                        ),
                         id="library-meta-tech",
                         cls="app-tech-list",
                     ),
+                    # Description block
+                    P("", id="library-meta-description", cls="text-sm text-slate-600 dark:text-slate-300 hidden"),
+                    # Reference text
                     P("", id="library-meta-reference", cls="text-sm text-slate-600 dark:text-slate-300"),
-                    Div(id="library-meta-items", cls="space-y-1"),
+                    # User notes
+                    Div(
+                        Span("📝 ", cls="text-sm"),
+                        Span("", id="library-meta-notes", cls="text-sm text-slate-500 dark:text-slate-400 italic"),
+                        id="library-meta-notes-row",
+                        cls="hidden",
+                    ),
+                    # Metadata sections container
+                    Div(id="library-meta-items", cls="space-y-3"),
                     cls="p-4 space-y-3 overflow-y-auto flex-1",
                 ),
                 Div(
@@ -682,30 +843,57 @@ def _metadata_drawer() -> Div:
                     return false;
                 }
 
+                var SECTION_LABELS = {
+                    'content': 'Contenuto',
+                    'provenance': 'Provenienza',
+                    'technical': 'Tecnico',
+                    'other': 'Altro'
+                };
+
                 function renderMetaRows(items) {
-                    const holder = document.getElementById('library-meta-items');
+                    var holder = document.getElementById('library-meta-items');
                     if (!holder) return;
                     holder.innerHTML = '';
                     if (!Array.isArray(items) || !items.length) {
-                        const empty = document.createElement('p');
+                        var empty = document.createElement('p');
                         empty.className = 'text-sm text-slate-500 dark:text-slate-400';
                         empty.textContent = 'Nessun metadato dettagliato disponibile.';
                         holder.appendChild(empty);
                         return;
                     }
-                    items.forEach((entry) => {
+                    // Group by section
+                    var sections = {};
+                    items.forEach(function(entry) {
                         if (!Array.isArray(entry) || entry.length < 2) return;
-                        const row = document.createElement('div');
-                        row.className = 'leading-snug';
-                        const k = document.createElement('span');
-                        k.className = 'text-sm text-slate-500 dark:text-slate-400';
-                        k.textContent = String(entry[0] || '') + ': ';
-                        const v = document.createElement('span');
-                        v.className = 'text-sm text-slate-700 dark:text-slate-200';
-                        v.textContent = String(entry[1] || '');
-                        row.appendChild(k);
-                        row.appendChild(v);
-                        holder.appendChild(row);
+                        var section = (entry.length >= 3 && entry[2]) ? entry[2] : 'other';
+                        if (!sections[section]) sections[section] = [];
+                        sections[section].push(entry);
+                    });
+                    var order = ['content', 'provenance', 'technical', 'other'];
+                    order.forEach(function(sectionKey) {
+                        var sectionItems = sections[sectionKey];
+                        if (!sectionItems || !sectionItems.length) return;
+                        var sectionDiv = document.createElement('div');
+                        sectionDiv.className = 'space-y-1';
+                        var heading = document.createElement('h4');
+                        heading.className = 'text-xs font-semibold uppercase tracking-wide '
+                            + 'text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800';
+                        heading.textContent = SECTION_LABELS[sectionKey] || sectionKey;
+                        sectionDiv.appendChild(heading);
+                        sectionItems.forEach(function(entry) {
+                            var row = document.createElement('div');
+                            row.className = 'leading-snug';
+                            var k = document.createElement('span');
+                            k.className = 'text-sm text-slate-500 dark:text-slate-400';
+                            k.textContent = String(entry[0] || '') + ': ';
+                            var v = document.createElement('span');
+                            v.className = 'text-sm text-slate-700 dark:text-slate-200';
+                            v.textContent = String(entry[1] || '');
+                            row.appendChild(k);
+                            row.appendChild(v);
+                            sectionDiv.appendChild(row);
+                        });
+                        holder.appendChild(sectionDiv);
                     });
                 }
 
@@ -718,19 +906,28 @@ def _metadata_drawer() -> Div:
                     }
                 }
 
+                function setFieldVisible(elId, value, rowId) {
+                    var el = document.getElementById(elId);
+                    if (el) el.textContent = value || '-';
+                    if (rowId) {
+                        var row = document.getElementById(rowId);
+                        if (row) row.classList.toggle('hidden', !value);
+                    }
+                }
+
                 window.openLibraryMetadata = function (encoded) {
-                    const data = parsePayload(encoded);
+                    var data = parsePayload(encoded);
                     if (!data) return;
 
-                    const overlay = document.getElementById('library-meta-overlay');
-                    const sheet = document.getElementById('library-meta-sheet');
-                    const title = document.getElementById('library-meta-title');
-                    const shelfmark = document.getElementById('library-meta-shelfmark');
-                    const dateLabel = document.getElementById('library-meta-date');
-                    const language = document.getElementById('library-meta-language');
-                    const reference = document.getElementById('library-meta-reference');
-                    const refresh = document.getElementById('library-meta-refresh');
-                    const catalog = document.getElementById('library-meta-catalog');
+                    var overlay = document.getElementById('library-meta-overlay');
+                    var sheet = document.getElementById('library-meta-sheet');
+                    var title = document.getElementById('library-meta-title');
+                    var shelfmark = document.getElementById('library-meta-shelfmark');
+                    var dateLabel = document.getElementById('library-meta-date');
+                    var language = document.getElementById('library-meta-language');
+                    var reference = document.getElementById('library-meta-reference');
+                    var refresh = document.getElementById('library-meta-refresh');
+                    var catalog = document.getElementById('library-meta-catalog');
                     if (
                         !overlay || !sheet || !title || !shelfmark || !dateLabel || !language ||
                         !reference || !refresh || !catalog
@@ -741,16 +938,36 @@ def _metadata_drawer() -> Div:
                     dateLabel.textContent = data.date_label || '-';
                     language.textContent = data.language_label || '-';
 
+                    // Author
+                    setFieldVisible('library-meta-author', data.author || '');
+                    // Publisher
+                    setFieldVisible('library-meta-publisher', data.publisher || '', 'library-meta-publisher-row');
+                    // Attribution
+                    setFieldVisible('library-meta-attribution', data.attribution || '', 'library-meta-attribution-row');
+
+                    // Description
+                    var descEl = document.getElementById('library-meta-description');
+                    if (descEl) {
+                        descEl.textContent = data.description || '';
+                        descEl.classList.toggle('hidden', !data.description);
+                    }
+
+                    // User notes
+                    var notesEl = document.getElementById('library-meta-notes');
+                    var notesRow = document.getElementById('library-meta-notes-row');
+                    if (notesEl) notesEl.textContent = data.user_notes || '';
+                    if (notesRow) notesRow.classList.toggle('hidden', !data.user_notes);
+
                     reference.textContent = data.reference_text || '';
                     reference.classList.toggle('hidden', !data.reference_text);
                     renderMetaRows(data.metadata_items || []);
 
-                    const refreshUrl = '/api/library/refresh_metadata?doc_id='
+                    var refreshUrl = '/api/library/refresh_metadata?doc_id='
                         + encodeURIComponent(String(data.doc_id || ''))
                         + '&library='
                         + encodeURIComponent(String(data.library || 'Unknown'));
-                    const targetCard = String(data.card_id || '').trim();
-                    const cardRefreshUrl = refreshUrl + (targetCard ? '&card_only=1' : '');
+                    var targetCard = String(data.card_id || '').trim();
+                    var cardRefreshUrl = refreshUrl + (targetCard ? '&card_only=1' : '');
                     refresh.setAttribute('data-card-id', targetCard);
                     refresh.setAttribute('hx-target', targetCard ? ('#' + targetCard) : '#library-page');
                     refresh.setAttribute('hx-swap', 'outerHTML show:none');
@@ -774,34 +991,34 @@ def _metadata_drawer() -> Div:
 
                 window.closeLibraryMetadata = function (event) {
                     if (event && event.target && event.target.id !== 'library-meta-overlay') return;
-                    const overlay = document.getElementById('library-meta-overlay');
-                    const sheet = document.getElementById('library-meta-sheet');
+                    var overlay = document.getElementById('library-meta-overlay');
+                    var sheet = document.getElementById('library-meta-sheet');
                     if (overlay) overlay.classList.add('hidden');
                     if (sheet) sheet.classList.add('hidden');
                     document.body.classList.remove('overflow-hidden');
                 };
 
-                document.addEventListener('keydown', (event) => {
+                document.addEventListener('keydown', function(event) {
                     if (event.key === 'Escape') window.closeLibraryMetadata();
                 });
 
                 if (!window.__libraryScrollRestoreBound) {
                     window.__libraryScrollRestoreBound = true;
 
-                    document.body.addEventListener('htmx:beforeRequest', (event) => {
+                    document.body.addEventListener('htmx:beforeRequest', function(event) {
                         if (!isLibraryMutation(event.detail)) return;
-                        const isMetaRefresh = isMetadataRefreshRequest(event.detail);
-                        const appMain = document.getElementById('app-main');
+                        var isMetaRefresh = isMetadataRefreshRequest(event.detail);
+                        var appMain = document.getElementById('app-main');
                         if (appMain) {
                             window.__libraryScrollTop = appMain.scrollTop || 0;
                         }
                         if (isMetaRefresh) {
-                            const refreshBtn = document.getElementById('library-meta-refresh');
-                            const explicitCardId = refreshBtn
+                            var refreshBtn = document.getElementById('library-meta-refresh');
+                            var explicitCardId = refreshBtn
                                 ? String(refreshBtn.getAttribute('data-card-id') || '').trim()
                                 : '';
-                            const targetSelector = refreshBtn ? String(refreshBtn.getAttribute('hx-target') || '') : '';
-                            const targetCardId = explicitCardId || (
+                            var targetSelector = refreshBtn ? String(refreshBtn.getAttribute('hx-target') || '') : '';
+                            var targetCardId = explicitCardId || (
                                 targetSelector.startsWith('#library-card-')
                                     ? targetSelector.slice(1)
                                     : ''
@@ -814,23 +1031,23 @@ def _metadata_drawer() -> Div:
                             window.__libraryMetaRefreshContext = null;
                         }
                         if (!isMetaRefresh) {
-                            const active = document.activeElement;
+                            var active = document.activeElement;
                             if (active && typeof active.blur === 'function') active.blur();
                         }
                     });
 
-                    document.body.addEventListener('htmx:afterSwap', (event) => {
+                    document.body.addEventListener('htmx:afterSwap', function(event) {
                         if (!isLibraryMutation(event.detail)) return;
                         if (!event.detail || !event.detail.target) return;
-                        const targetId = event.detail.target.id || '';
+                        var targetId = event.detail.target.id || '';
 
                         if (isMetadataRefreshRequest(event.detail)) {
-                            const ctx = window.__libraryMetaRefreshContext || {};
-                            const cardId = String(ctx.cardId || '').trim();
+                            var ctx = window.__libraryMetaRefreshContext || {};
+                            var cardId = String(ctx.cardId || '').trim();
                             if (cardId && typeof window.openLibraryMetadata === 'function') {
-                                const card = document.getElementById(cardId);
-                                const opener = card ? card.querySelector('[data-payload]') : null;
-                                const payload = opener && opener.dataset ? opener.dataset.payload : '';
+                                var card = document.getElementById(cardId);
+                                var opener = card ? card.querySelector('[data-payload]') : null;
+                                var payload = opener && opener.dataset ? opener.dataset.payload : '';
                                 if (payload) {
                                     window.openLibraryMetadata(payload);
                                 }
@@ -839,11 +1056,11 @@ def _metadata_drawer() -> Div:
                         }
 
                         if (targetId !== 'app-main' && targetId !== 'library-page') return;
-                        const appMain = document.getElementById('app-main');
+                        var appMain = document.getElementById('app-main');
                         if (!appMain) return;
-                        const targetTop = Number(window.__libraryScrollTop);
+                        var targetTop = Number(window.__libraryScrollTop);
                         if (!Number.isFinite(targetTop)) return;
-                        window.requestAnimationFrame(() => {
+                        window.requestAnimationFrame(function() {
                             appMain.scrollTop = Math.max(0, targetTop);
                         });
                     });

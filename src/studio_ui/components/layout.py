@@ -563,6 +563,7 @@ def _style_tag():
         "padding: 0.52rem 0.82rem; border-radius: 0.62rem; border: 1px solid transparent; "
         "font-size: 0.875rem; font-weight: 600; line-height: 1.1; text-decoration: none; "
         "transition: all 0.15s ease; cursor: pointer; }\n",
+        ".app-btn-sm { padding: 0.32rem 0.56rem; font-size: 0.75rem; border-radius: 0.5rem; }\n",
         ".app-btn:hover { transform: translateY(-1px); }\n",
         ".app-btn:focus-visible { outline: 2px solid rgba(var(--app-accent-rgb), 0.45); outline-offset: 2px; }\n",
         ".app-btn-primary { background: var(--app-primary); color: var(--app-primary-ink); "

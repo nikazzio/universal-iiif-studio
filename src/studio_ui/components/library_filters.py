@@ -7,87 +7,20 @@ from urllib.parse import urlencode
 
 from fasthtml.common import A, Button, Details, Div, Form, Input, Option, P, Script, Select, Span, Summary
 
+from studio_ui.common.library_constants import (
+    ACTION_BUTTON_CLS,
+    CATEGORY_LABELS,
+    LINK_BUTTON_CLS,
+    SORT_LABELS,
+    STATE_STYLE,
+)
 from universal_iiif_core.library_catalog import ITEM_TYPES
 
-_STATE_STYLE = {
-    "saved": ("Da scaricare", "app-chip app-chip-neutral"),
-    "queued": ("In coda", "app-chip app-chip-accent"),
-    "downloading": ("Download", "app-chip app-chip-primary"),
-    "running": ("Download", "app-chip app-chip-primary"),
-    "partial": ("Parziale", "app-chip app-chip-warning"),
-    "complete": ("Completo", "app-chip app-chip-success"),
-    "error": ("Errore", "app-chip app-chip-danger"),
-}
-_CATEGORY_LABELS = {
-    "manoscritto": "Manoscritto",
-    "libro a stampa": "Libro a stampa",
-    "incunabolo": "Incunabolo",
-    "periodico": "Periodico",
-    "musica/spartito": "Musica/Spartito",
-    "mappa/atlante": "Mappa/Atlante",
-    "miscellanea": "Miscellanea",
-    "non classificato": "Non classificato",
-}
-_SORT_LABELS = {
-    "priority": "Priorita operativa",
-    "recent": "Aggiornati di recente",
-    "title_az": "Titolo A-Z",
-    "pages_desc": "Piu pagine",
-}
-_ACTION_BUTTON_CLS = {
-    "primary": "app-btn app-btn-primary",
-    "success": "app-btn app-btn-primary",
-    "accent": "app-btn app-btn-accent",
-    "danger": "app-btn app-btn-danger",
-    "warning": "app-btn app-btn-accent",
-    "neutral": "app-btn app-btn-neutral",
-    "info": "app-btn app-btn-info",
-    "auto": "app-btn app-btn-accent",
-}
-_LINK_BUTTON_CLS = {
-    "primary": "app-btn app-btn-primary",
-    "neutral": "app-btn app-btn-neutral",
-    "external": "app-btn app-btn-accent",
-    "muted": "app-btn app-btn-muted",
-}
-_LIBRARY_FILTER_KEYS = [
-    "q",
-    "state",
-    "library_filter",
-    "category",
-    "mode",
-    "view",
-    "action_required",
-    "sort_by",
-]
-_CATEGORY_SELECT_TONE = {
-    "manoscritto": (
-        "bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-500/20 "
-        "dark:border-indigo-500/45 dark:text-indigo-200"
-    ),
-    "libro a stampa": (
-        "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/20 "
-        "dark:border-emerald-500/45 dark:text-emerald-200"
-    ),
-    "incunabolo": (
-        "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/45 dark:text-amber-200"
-    ),
-    "periodico": ("bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-500/20 dark:border-sky-500/45 dark:text-sky-200"),
-    "musica/spartito": (
-        "bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-500/20 "
-        "dark:border-fuchsia-500/45 dark:text-fuchsia-200"
-    ),
-    "mappa/atlante": (
-        "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-500/20 dark:border-teal-500/45 dark:text-teal-200"
-    ),
-    "miscellanea": (
-        "bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-500/20 "
-        "dark:border-violet-500/45 dark:text-violet-200"
-    ),
-    "non classificato": (
-        "bg-slate-100 border-slate-300 text-slate-700 dark:bg-slate-700/35 dark:border-slate-600 dark:text-slate-200"
-    ),
-}
+_STATE_STYLE = STATE_STYLE
+_CATEGORY_LABELS = CATEGORY_LABELS
+_SORT_LABELS = SORT_LABELS
+_ACTION_BUTTON_CLS = ACTION_BUTTON_CLS
+_LINK_BUTTON_CLS = LINK_BUTTON_CLS
 
 
 def _normalize_mode(mode: str | None, *, default_mode: str = "operativa") -> str:

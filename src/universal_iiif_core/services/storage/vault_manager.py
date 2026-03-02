@@ -81,6 +81,11 @@ class VaultManager:
                 item_type_confidence REAL,
                 item_type_reason TEXT,
                 missing_pages_json TEXT,
+                author TEXT,
+                description TEXT,
+                publisher TEXT,
+                attribution TEXT,
+                thumbnail_url TEXT,
                 shelfmark TEXT,
                 date_label TEXT,
                 language_label TEXT,
@@ -199,6 +204,12 @@ class VaultManager:
         self._ensure_column(cursor, "manuscripts", "user_notes", "TEXT")
         self._ensure_column(cursor, "manuscripts", "metadata_json", "TEXT")
         self._ensure_column(cursor, "manuscripts", "last_sync_at", "TIMESTAMP")
+        self._ensure_column(cursor, "manuscripts", "author", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "description", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "publisher", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "attribution", "TEXT")
+        self._ensure_column(cursor, "manuscripts", "thumbnail_url", "TEXT")
+        self._backfill_metadata_fields(cursor)
         cursor.execute(
             """
             UPDATE manuscripts
@@ -245,6 +256,48 @@ class VaultManager:
             )
         """)
 
+    def _backfill_metadata_fields(self, cursor: sqlite3.Cursor) -> None:
+        """Populate author/description/publisher from metadata_json for existing rows."""
+        cursor.execute(
+            """
+            SELECT id, metadata_json FROM manuscripts
+            WHERE metadata_json IS NOT NULL
+              AND metadata_json != ''
+              AND metadata_json != '{}'
+              AND (author IS NULL OR author = '')
+            """
+        )
+        author_keys = {"author", "creator", "autore", "dc:creator", "dc.creator", "créateur"}
+        desc_keys = {"description", "descrizione", "dc:description", "dc.description"}
+        publisher_keys = {"publisher", "editore", "source", "dc:publisher", "dc.publisher", "éditeur"}
+        for row in cursor.fetchall():
+            ms_id, raw_json = row[0], row[1]
+            try:
+                meta = json.loads(raw_json)
+            except Exception:  # noqa: S112
+                continue
+            if not isinstance(meta, dict):
+                continue
+            meta_lower = {k.lower().strip(): v for k, v in meta.items()}
+            author = next((str(meta_lower[k]) for k in author_keys if k in meta_lower and meta_lower[k]), None)
+            desc = next((str(meta_lower[k]) for k in desc_keys if k in meta_lower and meta_lower[k]), None)
+            publisher = next((str(meta_lower[k]) for k in publisher_keys if k in meta_lower and meta_lower[k]), None)
+            if author or desc or publisher:
+                parts = []
+                values: list[Any] = []
+                if author:
+                    parts.append("author = ?")
+                    values.append(author)
+                if desc:
+                    parts.append("description = ?")
+                    values.append(desc)
+                if publisher:
+                    parts.append("publisher = ?")
+                    values.append(publisher)
+                values.append(ms_id)
+                sql = "UPDATE manuscripts SET " + ", ".join(parts) + " WHERE id = ?"  # noqa: S608
+                cursor.execute(sql, values)
+
     def upsert_manuscript(self, manuscript_id: str, **kwargs):
         """Insert or update a manuscript record."""
         valid_keys = (
@@ -265,6 +318,11 @@ class VaultManager:
             "item_type_confidence",
             "item_type_reason",
             "missing_pages_json",
+            "author",
+            "description",
+            "publisher",
+            "attribution",
+            "thumbnail_url",
             "shelfmark",
             "date_label",
             "language_label",
@@ -321,6 +379,11 @@ class VaultManager:
                         item_type_confidence,
                         item_type_reason,
                         missing_pages_json,
+                        author,
+                        description,
+                        publisher,
+                        attribution,
+                        thumbnail_url,
                         shelfmark,
                         date_label,
                         language_label,
@@ -330,7 +393,11 @@ class VaultManager:
                         metadata_json,
                         last_sync_at,
                         error_log
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
                     """,
                     values,
                 )
@@ -368,6 +435,11 @@ class VaultManager:
                         item_type_confidence = ?,
                         item_type_reason = ?,
                         missing_pages_json = ?,
+                        author = ?,
+                        description = ?,
+                        publisher = ?,
+                        attribution = ?,
+                        thumbnail_url = ?,
                         shelfmark = ?,
                         date_label = ?,
                         language_label = ?,

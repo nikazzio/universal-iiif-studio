@@ -495,7 +495,7 @@ def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchR
             "thumb": thumb_url or "",
             "library": "Vaticana",
             "language": meta_map.get("language", ""),
-            "publisher": meta_map.get("shelfmark", ms_id),
+            "publisher": meta_map.get("publisher", meta_map.get("source", "")),
             "raw": {"page_count": page_count},
         }
 
