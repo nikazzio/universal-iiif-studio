@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ...config_manager import get_config_manager
+from ...exceptions import DatabaseError
 from ...logger import get_logger
 from ...utils import ensure_dir, load_json, save_json
 from ..storage.vault_manager import VaultManager
@@ -69,7 +70,7 @@ class OCRStorage:
                             "user_notes": row.get("user_notes") or "",
                         }
                     )
-        except Exception as e:
+        except DatabaseError:
             logger.error(f"Failed to list documents from DB: {e}")
             # Fallback to file system if DB fails
             return self._list_documents_fs()
@@ -105,7 +106,7 @@ class OCRStorage:
             m = self.vault.get_manuscript(doc_id)
             if m and m.get("local_path"):
                 doc_path = Path(m["local_path"])
-        except Exception as exc:
+        except DatabaseError:
             logger.debug("Vault lookup failed for %s: %s", doc_id, exc)
 
         # 2. Fallback: Path Construction with Tolerance
@@ -332,7 +333,7 @@ class OCRStorage:
                 shutil.rmtree(root_dir)
                 logger.info("✅ Physical files removed: %s", root_dir)
                 return True
-            except Exception as e:
+            except OSError:
                 logger.error("❌ Failed to remove physical files: %s", e)
                 return False
 

@@ -30,7 +30,7 @@ def _kraken_enabled() -> bool:
         from ...config_manager import get_config_manager
 
         return bool(get_config_manager().get_setting("ocr.kraken_enabled", False))
-    except Exception:
+    except (ImportError, ModuleNotFoundError, OSError):
         return False
 
 
@@ -135,7 +135,7 @@ class KrakenProvider:
         if KRAKEN_AVAILABLE and model_path:
             try:
                 self.model = models.load_any(model_path)
-            except Exception as e:
+            except (OSError, ValueError):
                 self.error = f"Errore caricamento modello: {e}"
         else:
             self.error = KRAKEN_IMPORT_ERROR or "Kraken non disponibile o modello non specificato"
@@ -179,7 +179,7 @@ class KrakenProvider:
                 lines.append(OCRLine(text, conf, box))
 
             return OCRResult("\n".join(full_text), lines, "Kraken")
-        except Exception as e:
+        except (OSError, ValueError):
             return OCRResult("", [], "Kraken", error=str(e))
 
 
@@ -226,7 +226,7 @@ class GoogleVisionProvider:
                             lines.append(OCRLine(text, conf, box))
 
             return OCRResult(full_text, lines, "Google Vision")
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError, KeyError):
             return OCRResult("", [], "Google Vision", error=str(e))
 
 
@@ -253,7 +253,7 @@ class HFInferenceProvider:
 
         try:
             lines_data, full_text = self._process_with_kraken_lines(image)
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError):
             return OCRResult("", [], "Hugging Face", error=str(e))
 
         if not lines_data:
@@ -305,7 +305,7 @@ class HFInferenceProvider:
                 res = r.json()
                 text = res[0].get("generated_text", "") if isinstance(res, list) else res.get("generated_text", "")
                 return {"text": text}
-            except Exception as e:
+            except (ValueError, KeyError, TypeError):
                 return {"error": str(e)}
         return {"error": "Timeout"}
 
@@ -405,7 +405,7 @@ class OpenAIProvider:
             lines = [OCRLine(line_text.strip()) for line_text in text.split("\n") if line_text.strip()]
 
             return OCRResult(text, lines, f"OpenAI ({self.model})")
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError):
             logger.exception("OpenAI OCR Error: %s", e)
             return OCRResult("", [], "OpenAI", error=str(e))
 
@@ -473,7 +473,7 @@ class AnthropicProvider:
             lines = [OCRLine(line_text.strip()) for line_text in text.split("\n") if line_text.strip()]
 
             return OCRResult(text, lines, f"Anthropic ({self.model})")
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError):
             return OCRResult("", [], "Anthropic", error=str(e))
 
 
@@ -627,5 +627,5 @@ class OCRProcessor:
             if isinstance(image_input, Image.Image):
                 return image_input
             return Image.open(image_input)
-        except Exception as e:
+        except (OSError, ValueError):
             return {"error": f"Errore caricamento immagine: {e}"}
