@@ -113,7 +113,7 @@ def _handle_json_fallback(resp: requests.Response) -> Any | None:
             return json.loads(decoded.decode("utf-8"))
         except ImportError:
             logger.debug("Brotli compression detected but 'brotli' package not installed.")
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as exc:
             logger.exception(
                 "Brotli decompression failed for response from %s: %s",
                 getattr(resp, "url", "unknown"),
@@ -127,7 +127,7 @@ def _handle_json_fallback(resp: requests.Response) -> Any | None:
         if text.startswith("\ufeff"):
             text = text[1:]
         return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"JSON fallback parsing failed: {e}")
         # Log anteprima per debug
         logger.debug(f"Response preview: {resp.text[:200]}")
@@ -155,7 +155,7 @@ def save_json(path, data):
         if p.exists():
             p.unlink()
         temp_p.rename(p)
-    except OSError:
+    except OSError as e:
         logger.error(f"Failed to save JSON to {path}: {e}")
 
 
@@ -177,7 +177,7 @@ def ensure_dir(path: str | os.PathLike | None):
         return
     try:
         Path(path).mkdir(parents=True, exist_ok=True)
-    except OSError:
+    except OSError as e:
         logger.error(f"Could not create directory {path}: {e}")
 
 
@@ -187,7 +187,7 @@ def clean_dir(path: str | os.PathLike):
     if p.exists():
         try:
             shutil.rmtree(p)
-        except OSError:
+        except OSError as e:
             logger.error(f"Error cleaning directory {path}: {e}")
 
 

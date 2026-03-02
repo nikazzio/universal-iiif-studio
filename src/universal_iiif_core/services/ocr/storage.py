@@ -70,7 +70,7 @@ class OCRStorage:
                             "user_notes": row.get("user_notes") or "",
                         }
                     )
-        except DatabaseError:
+        except DatabaseError as e:
             logger.error(f"Failed to list documents from DB: {e}")
             # Fallback to file system if DB fails
             return self._list_documents_fs()
@@ -106,7 +106,7 @@ class OCRStorage:
             m = self.vault.get_manuscript(doc_id)
             if m and m.get("local_path"):
                 doc_path = Path(m["local_path"])
-        except DatabaseError:
+        except DatabaseError as exc:
             logger.debug("Vault lookup failed for %s: %s", doc_id, exc)
 
         # 2. Fallback: Path Construction with Tolerance
@@ -333,7 +333,7 @@ class OCRStorage:
                 shutil.rmtree(root_dir)
                 logger.info("✅ Physical files removed: %s", root_dir)
                 return True
-            except OSError:
+            except OSError as e:
                 logger.error("❌ Failed to remove physical files: %s", e)
                 return False
 
