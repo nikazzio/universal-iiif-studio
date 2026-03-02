@@ -76,7 +76,9 @@ def setup_logging():
         file_handler.setLevel(effective_level)  # Ensure handler level is set
         app_logger.addHandler(file_handler)
     except Exception as e:
-        print(f"FAILED TO SETUP FILE LOGGING: {e}")
+        sys.stderr.write(f"FAILED TO SETUP FILE LOGGING: {e}\n")
+        # Fallback: at least console handler should work
+        app_logger.error(f"Failed to setup file logging: {e}", exc_info=True)
 
     app_logger.info("Localized logging system initialized (Level: %s) -> %s", log_level, log_file)
 
