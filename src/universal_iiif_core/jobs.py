@@ -6,12 +6,14 @@ from collections.abc import Callable
 from typing import Any
 
 from .config_manager import get_config_manager
+from .exceptions import DatabaseError
 from .logger import get_logger
 from .services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
 
 # This module intentionally shields the UI from unexpected job exceptions.
+# Line 206 worker boundary and line 239 callback boundary remain broad.
 # pylint: disable=broad-exception-caught
 
 
@@ -43,7 +45,7 @@ class JobManager:
         try:
             if job_type == "download":
                 self._maybe_create_db_record(job_id, db_job_id, job_kwargs)
-        except Exception:
+        except DatabaseError:
             logger.exception("Failed to record download job %s in vault DB", db_job_id or job_id)
         if job_type == "download":
             self._enqueue_download_job(job_id, db_job_id)
@@ -130,7 +132,7 @@ class JobManager:
                 current=0,
                 total=0,
             )
-        except Exception:
+        except DatabaseError:
             logger.debug("Failed to mark queued for %s", db_job_id or job_id, exc_info=True)
         with self._lock:
             self._download_queue.append(job_id)
@@ -180,7 +182,7 @@ class JobManager:
                     queue_position=idx,
                     priority=int(info.get("priority") or 0),
                 )
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed queue position update for %s", db_job_id, exc_info=True)
 
     def _worker_wrapper(
@@ -243,7 +245,7 @@ class JobManager:
                 return
             try:
                 self._update_db_safe(db_job_id or job_id, status="running", current=current, total=total)
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed to update vault DB progress for %s", db_job_id or job_id, exc_info=True)
 
         return update_progress
@@ -258,14 +260,14 @@ class JobManager:
         try:
             self._update_db_safe(db_job_id or job_id, status="running")
             VaultManager().update_download_job(db_job_id or job_id, 0, 0, status="running", queue_position=0)
-        except Exception:
+        except DatabaseError:
             logger.debug("_update_db_safe failed to mark running for %s", db_job_id or job_id, exc_info=True)
 
     def _mark_success(self, job_id: str, result: Any, job_type: str, db_job_id: str | None) -> None:
         if job_type == "download":
             try:
                 self._update_db_safe(db_job_id or job_id, status="completed")
-            except Exception:
+            except DatabaseError:
                 logger.exception("Failed to mark job completed in vault DB: %s", db_job_id or job_id)
 
         with self._lock:
@@ -283,7 +285,7 @@ class JobManager:
         if job_type == "download":
             try:
                 self._update_db_safe(db_job_id or job_id, status=target_status, error=target_message)
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed to mark %s in vault DB: %s", target_status, db_job_id or job_id, exc_info=True)
         with self._lock:
             self._jobs[job_id]["status"] = target_status
@@ -299,7 +301,7 @@ class JobManager:
             try:
                 # Keep DB state synchronized before exposing final in-memory status.
                 self._update_db_safe(db_job_id or job_id, status="error", error=error_text)
-            except Exception:
+            except DatabaseError:
                 logger.exception("Failed to write failure to vault DB for %s", db_job_id or job_id)
 
         with self._lock:
@@ -350,7 +352,7 @@ class JobManager:
                 current=curr,
                 total=total,
             )
-        except Exception:
+        except DatabaseError:
             logger.exception("Failed to write final state for %s", db_job_id or job_id)
 
     # --- DB helper methods to keep complexity low ---
@@ -362,19 +364,19 @@ class JobManager:
             manifest_url = str(kwargs.get("manifest_url") or "") if isinstance(kwargs, dict) else ""
             target = db_job_id or job_id
             vault.create_download_job(target, doc_id, library, manifest_url)
-        except Exception:
+        except DatabaseError:
             logger.debug("_maybe_create_db_record failed for %s", db_job_id or job_id, exc_info=True)
 
     def _mark_db_running(self, db_job_id: str) -> None:
         try:
             VaultManager().update_download_job(db_job_id, 0, 0, status="running")
-        except Exception:
+        except DatabaseError:
             logger.debug("_mark_db_running failed for %s", db_job_id, exc_info=True)
 
     def _update_db_progress(self, db_job_id: str, current: int, total: int) -> None:
         try:
             VaultManager().update_download_job(db_job_id, current=current, total=total, status="running")
-        except Exception:
+        except DatabaseError:
             logger.debug("_update_db_progress failed for %s", db_job_id, exc_info=True)
 
     def _update_db_safe(
@@ -404,7 +406,7 @@ class JobManager:
                 c = existing_current if current is None else int(current)
                 t = existing_total if total is None else int(total)
                 vm.update_download_job(db_job_id, current=c, total=t, status=(status or "running"), error=error)
-        except Exception:
+        except DatabaseError:
             logger.debug("_update_db_safe failed for %s", db_job_id, exc_info=True)
 
     def _mark_db_completed(self, db_job_id: str) -> None:
@@ -415,14 +417,14 @@ class JobManager:
             total = int(existing.get("total", 0) or 0)
             # If totals unknown, default to 0/0
             vm.update_download_job(db_job_id, current=curr, total=total, status="completed", error=None)
-        except Exception:
+        except DatabaseError:
             logger.debug("_mark_db_completed failed for %s", db_job_id, exc_info=True)
 
     def _mark_db_error(self, db_job_id: str, error: str | None = None, progress: int | None = None) -> None:
         try:
             curr = progress or 0
             VaultManager().update_download_job(db_job_id, current=curr, total=curr, status="error", error=error)
-        except Exception:
+        except DatabaseError:
             logger.debug("_mark_db_error failed for %s", db_job_id, exc_info=True)
 
     def request_cancel(self, id_or_db_id: str) -> bool:
@@ -459,7 +461,7 @@ class JobManager:
         for db_id in to_mark_cancelled:
             try:
                 self._update_db_safe(db_id, status="cancelled", error="Cancelled by user")
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed to mark queued job cancelled: %s", db_id, exc_info=True)
         return found
 
@@ -505,12 +507,12 @@ class JobManager:
         for db_id in to_mark_cancelling:
             try:
                 update_db_safe(db_id, status="cancelling", error="Pausing")
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed to mark job cancelling while pausing: %s", db_id, exc_info=True)
         for db_id in to_mark_paused:
             try:
                 update_db_safe(db_id, status="paused", error="Paused by user")
-            except Exception:
+            except DatabaseError:
                 logger.debug("Failed to mark job paused: %s", db_id, exc_info=True)
 
     def request_pause(self, id_or_db_id: str) -> bool:
