@@ -649,12 +649,19 @@ def _style_tag():
         "'Liberation Mono', 'Courier New', monospace; }\n",
         ".dark .app-tech-key { color: #94a3b8; }\n",
         ".dark .app-tech-val { color: #e2e8f0; }\n",
-        ".studio-tablist { display: flex; gap: 0.35rem; border-bottom: 1px solid rgba(148, 163, 184, 0.35); "
-        "padding: 0.45rem 1rem; background: rgba(var(--app-primary-rgb), 0.06); }\n",
-        ".dark .studio-tablist { border-bottom-color: rgba(71, 85, 105, 0.65); background: rgba(15, 23, 42, 0.55); }\n",
+        ".studio-tablist { display: flex; gap: 0.35rem; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; "
+        "border: 1px solid rgba(148, 163, 184, 0.34); border-bottom: 0; border-radius: 0.9rem 0.9rem 0 0; "
+        "padding: 0.45rem 0.65rem; background: rgba(var(--app-primary-rgb), 0.08); scrollbar-width: thin; }\n",
+        ".studio-tablist::-webkit-scrollbar { height: 6px; }\n",
+        ".studio-tablist::-webkit-scrollbar-thumb { background: rgba(var(--app-primary-rgb), 0.34); "
+        "border-radius: 999px; }\n",
+        ".dark .studio-tablist { border-color: rgba(71, 85, 105, 0.64); background: rgba(15, 23, 42, 0.62); }\n",
+        ".studio-tabpanes { border: 1px solid rgba(148, 163, 184, 0.34); border-top: 0; "
+        "border-radius: 0 0 0.9rem 0.9rem; background: rgba(255, 255, 255, 0.88); }\n",
+        ".dark .studio-tabpanes { border-color: rgba(71, 85, 105, 0.64); background: rgba(2, 6, 23, 0.72); }\n",
         ".studio-tab { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; "
-        "padding: 0.52rem 0.72rem; border: 1px solid transparent; border-bottom-width: 2px; "
-        "border-radius: 0.62rem 0.62rem 0 0; font-size: 0.92rem; font-weight: 600; color: #475569; "
+        "white-space: nowrap; flex: 0 0 auto; padding: 0.5rem 0.72rem; border: 1px solid transparent; "
+        "border-radius: 0.62rem; font-size: 0.88rem; font-weight: 600; color: #475569; "
         "background: transparent; transition: all 0.15s ease; }\n",
         ".studio-tab:hover { color: #0f172a; background: rgba(var(--app-primary-rgb), 0.12); }\n",
         ".dark .studio-tab { color: #94a3b8; }\n",
@@ -663,6 +670,49 @@ def _style_tag():
         "background: rgba(var(--app-primary-rgb), 0.16); }\n",
         ".dark .studio-tab-active { color: #f8fafc; background: rgba(var(--app-primary-rgb), 0.30); "
         "border-color: rgba(var(--app-primary-rgb), 0.66); }\n",
+        ".studio-export-subtabs { display: inline-flex; align-items: center; gap: 0.2rem; "
+        "padding: 0.2rem; border: 1px solid rgba(var(--app-primary-rgb), 0.25); border-radius: 0.8rem; "
+        "background: rgba(var(--app-primary-rgb), 0.08); }\n",
+        ".studio-export-subtab { border: none; background: transparent; color: #475569; "
+        "font-size: 0.8rem; font-weight: 700; line-height: 1.1; padding: 0.5rem 0.7rem; border-radius: 0.62rem; "
+        "cursor: pointer; transition: all 0.14s ease; }\n",
+        ".studio-export-subtab:hover { background: rgba(var(--app-primary-rgb), 0.14); color: #1e293b; }\n",
+        ".studio-export-subtab-active { background: rgba(var(--app-primary-rgb), 0.92); color: #f8fafc; "
+        "box-shadow: 0 6px 14px rgba(var(--app-primary-rgb), 0.26); }\n",
+        ".dark .studio-export-subtabs { border-color: rgba(var(--app-primary-rgb), 0.46); "
+        "background: rgba(var(--app-primary-rgb), 0.20); }\n",
+        ".dark .studio-export-subtab { color: #cbd5e1; }\n",
+        ".dark .studio-export-subtab:hover { background: rgba(var(--app-primary-rgb), 0.28); color: #f8fafc; }\n",
+        ".dark .studio-export-subtab-active { background: rgba(var(--app-primary-rgb), 0.84); color: #f8fafc; }\n",
+        ".studio-export-scope-group { display: inline-flex; gap: 0.15rem; padding: 0.2rem; "
+        "border-radius: 0.7rem; border: 1px solid rgba(var(--app-primary-rgb), 0.22); "
+        "background: rgba(var(--app-primary-rgb), 0.05); }\n",
+        ".studio-export-scope-btn { border: none; border-radius: 0.55rem; background: transparent; color: #475569; "
+        "font-size: 0.75rem; font-weight: 700; line-height: 1.1; padding: 0.42rem 0.64rem; cursor: pointer; "
+        "transition: all 0.14s ease; }\n",
+        ".studio-export-scope-btn:hover { background: rgba(var(--app-primary-rgb), 0.12); color: #1e293b; }\n",
+        ".studio-export-scope-btn-active { background: var(--app-accent); color: var(--app-accent-ink); "
+        "box-shadow: 0 4px 12px rgba(var(--app-accent-rgb), 0.28); }\n",
+        ".dark .studio-export-scope-group { border-color: rgba(var(--app-primary-rgb), 0.44); "
+        "background: rgba(var(--app-primary-rgb), 0.16); }\n",
+        ".dark .studio-export-scope-btn { color: #cbd5e1; }\n",
+        ".dark .studio-export-scope-btn:hover { background: rgba(var(--app-primary-rgb), 0.26); color: #f8fafc; }\n",
+        ".studio-thumb-meta { border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 0.65rem; "
+        "padding: 0.38rem 0.5rem; background: rgba(255, 255, 255, 0.7); display: grid; gap: 0.36rem; }\n",
+        ".dark .studio-thumb-meta { border-color: rgba(71, 85, 105, 0.75); background: rgba(15, 23, 42, 0.68); }\n",
+        ".studio-thumb-dims { display: grid; gap: 0.2rem; }\n",
+        ".studio-thumb-dims-row { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; "
+        "min-width: 0; }\n",
+        ".studio-thumb-dims-label { color: #64748b; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.01em; "
+        "text-transform: uppercase; }\n",
+        ".studio-thumb-dims-value { color: #0f172a; font-size: 0.72rem; font-weight: 600; line-height: 1.2; "
+        "font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', "
+        "monospace; text-align: right; }\n",
+        ".dark .studio-thumb-dims-label { color: #94a3b8; }\n",
+        ".dark .studio-thumb-dims-value { color: #e2e8f0; }\n",
+        ".studio-thumb-action { display: flex; justify-content: flex-end; }\n",
+        ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
+        "padding: 0.34rem 0.54rem !important; }\n",
         ".studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.66) !important; "
         "background: rgba(var(--app-primary-rgb), 0.10) !important; }\n",
         ".dark .studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.74) !important; "

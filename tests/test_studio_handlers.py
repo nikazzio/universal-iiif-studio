@@ -243,6 +243,17 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
     assert 'id="studio-export-subtab-btn-jobs"' in rendered
     assert 'id="studio-export-subtab-build"' in rendered
     assert 'id="studio-export-subtab-jobs"' in rendered
+    assert 'class="studio-export-subtabs' in rendered
+    assert 'class="studio-export-subtab studio-export-subtab-active"' in rendered
+    assert 'id="studio-export-scope-all"' in rendered
+    assert 'id="studio-export-scope-custom"' in rendered
+    assert 'id="studio-export-selection-mode"' in rendered
+    assert 'id="studio-export-overrides-toggle"' in rendered
+    assert 'id="studio-export-overrides-panel"' in rendered
+    assert "Crea PDF rapido (tutte le pagine)" not in rendered
+    assert "Crea PDF selezionato" not in rendered
+    assert "studio-thumb-meta" in rendered
+    assert "studio-thumb-highres-btn" in rendered
     assert "studio-export-profile-form" not in rendered
     assert "window.__studioExportListenersBound" in rendered
     assert "initStudioExport();" in rendered

@@ -108,7 +108,7 @@ def render_studio_tabs(
             data_export_loaded="1" if export_fragment is not None else "0",
             data_export_url=export_url or "",
         ),
-        cls="flex-1 overflow-y-auto p-4",
+        cls="studio-tabpanes flex-1 overflow-y-auto p-4",
     )
 
     switch_script = Script("""
