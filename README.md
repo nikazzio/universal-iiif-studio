@@ -36,6 +36,8 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
+- Studio Export with PDF profiles, optional per-job overrides, and job monitoring tab
+- Thumbnail-level resolution transparency (`Locale` vs `Online max`) with on-demand `High-Res` fetch
 - `src/` package layout with separated `core`, `ui`, and `cli` modules
 
 ## Run Modes
@@ -74,11 +76,18 @@ Key PDF settings:
 ```json
 {
   "settings": {
+    "images": {
+      "download_strategy_mode": "balanced",
+      "download_strategy_custom": ["3000", "1740", "max"],
+      "iiif_quality": "default"
+    },
     "pdf": {
       "viewer_dpi": 150,
-      "ocr_dpi": 300,
       "prefer_native_pdf": true,
-      "create_pdf_from_images": false
+      "create_pdf_from_images": false,
+      "profiles": {
+        "default": "balanced"
+      }
     }
   }
 }
@@ -88,7 +97,12 @@ Meaning:
 - `prefer_native_pdf`: if manifest `rendering` contains a native PDF, native flow is attempted first
 - `create_pdf_from_images`: when native PDF is not used, build a PDF from downloaded images only if `true`
 - `viewer_dpi`: DPI used when extracting JPG pages from native PDF for the web viewer
-- `ocr_dpi`: OCR-oriented DPI setting
+- `images.download_strategy_mode`: preset ordering for IIIF size fallback (`balanced|quality_first|fast|archival|custom`)
+- `images.download_strategy_custom`: size list used when `mode=custom`
+- `images.iiif_quality`: IIIF quality segment in image URLs (recommended `default`)
+- `pdf.profiles.default`: default export profile (`balanced`, `high_quality`, `archival_highres`, `lightweight`)
+- `pdf.profiles.catalog.<profile>.max_parallel_page_fetch`: parallel fetch cap for remote high-res temp exports
+- PDF profiles are created/edited in `Settings > PDF Export`; item Export tab only selects a profile per job
 
 ## Output Layout
 

@@ -133,8 +133,52 @@ class PageDownloader:
         )
 
     def _get_strategy(self) -> list[str]:
-        raw = self.cm.get_setting("images.download_strategy", ["max", "3000", "1740"])
-        return [str(item) for item in raw if item]
+        if bool(getattr(self.downloader, "force_max_resolution", False)):
+            return ["max"]
+        mode = str(self.cm.get_setting("images.download_strategy_mode", "custom") or "custom").strip().lower()
+        preset_map = {
+            "balanced": ["3000", "1740", "max"],
+            "fast": ["1740", "1200", "max"],
+            "quality_first": ["max", "3000", "1740"],
+            "archival": ["max"],
+        }
+        if mode in preset_map:
+            return preset_map[mode]
+
+        custom_raw = self.cm.get_setting("images.download_strategy_custom", [])
+        custom_values = self._normalize_strategy_values(custom_raw)
+        if custom_values:
+            return custom_values
+
+        legacy_raw = self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"])
+        legacy_values = self._normalize_strategy_values(legacy_raw)
+        return legacy_values or ["3000", "1740", "max"]
+
+    @staticmethod
+    def _normalize_strategy_values(raw: Any) -> list[str]:
+        if isinstance(raw, str):
+            candidates = [token.strip() for token in raw.split(",") if token.strip()]
+        elif isinstance(raw, list):
+            candidates = [str(item).strip() for item in raw if str(item).strip()]
+        else:
+            candidates = []
+
+        out: list[str] = []
+        seen: set[str] = set()
+        for token in candidates:
+            norm = token.lower()
+            if norm == "max":
+                value = "max"
+            elif token.isdigit() and int(token) > 0:
+                value = token
+            else:
+                continue
+
+            if value in seen:
+                continue
+            out.append(value)
+            seen.add(value)
+        return out
 
     @staticmethod
     def _format_dimension(value: str) -> str:
@@ -183,6 +227,8 @@ class PageDownloader:
 
     def resume_cached(self) -> tuple[str, dict[str, Any]] | None:
         """Expose resume logic so callers can avoid a full download."""
+        if bool(getattr(self.downloader, "force_redownload", False)):
+            return None
         if not self.base_url:
             return None
         return self._resume_existing_scan(self.base_url)
@@ -205,6 +251,9 @@ class IIIFDownloader:
         library: str = "Unknown",
         job_id: str | None = None,
         show_progress: bool = True,
+        force_max_resolution: bool = False,
+        force_redownload: bool = False,
+        overwrite_existing_scans: bool = False,
     ):
         """Initialize the IIIFDownloader."""
         # basic configuration
@@ -217,6 +266,9 @@ class IIIFDownloader:
         self.library = library
         self.job_id: str | None = job_id
         self.show_progress = show_progress
+        self.force_max_resolution = bool(force_max_resolution)
+        self.force_redownload = bool(force_redownload)
+        self.overwrite_existing_scans = bool(overwrite_existing_scans)
 
         # load manifest and derive human label (for display, NOT for storage)
         self.manifest: dict[str, Any] = get_json(manifest_url) or {}
@@ -942,6 +994,10 @@ class IIIFDownloader:
             dest = self.scans_dir / p.name
             if not dest.exists():
                 shutil.move(str(p), str(dest))
+            elif self.overwrite_existing_scans:
+                shutil.copy2(str(p), str(dest))
+                with suppress(OSError):
+                    p.unlink()
             else:
                 # In case of partial resume or overwrite
                 pass

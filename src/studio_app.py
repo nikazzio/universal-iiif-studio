@@ -49,6 +49,7 @@ async def lifespan(app):
     """Gestione del ciclo di vita dell'app FastHTML."""
     # Startup: reset any stale DB jobs and kick off housekeeping in background
     try:
+        from universal_iiif_core.services.export.service import prune_storage_on_startup
         from universal_iiif_core.services.storage.vault_manager import VaultManager
 
         def _housekeeping():
@@ -57,6 +58,7 @@ async def lifespan(app):
                 removed = vm2.cleanup_stale_data(retention_hours=24)
                 if removed:
                     logger.info(f"Cleaned up {removed} stale download job(s) and temp data")
+                prune_storage_on_startup()
             except Exception:
                 logger.debug("Housekeeping cleanup failed", exc_info=True)
 

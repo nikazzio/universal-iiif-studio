@@ -175,7 +175,7 @@ def settings_content() -> Div:
     # Recreate the real tab buttons for clarity (kept here to allow localization)
     tab_buttons = Div(
         Button("General", type="button", data_tab="general", cls="settings-tab settings-tab-active"),
-        Button("Performance", type="button", data_tab="performance", cls="settings-tab"),
+        Button("Processing", type="button", data_tab="performance", cls="settings-tab"),
         Button("PDF Export", type="button", data_tab="pdf", cls="settings-tab"),
         Button("Images / OCR", type="button", data_tab="images", cls="settings-tab"),
         Button("Thumbnails", type="button", data_tab="thumbnails", cls="settings-tab"),

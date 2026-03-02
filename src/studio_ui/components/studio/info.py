@@ -1,6 +1,7 @@
 """Studio Info and Visual Tabs Components."""
 
 import json
+import re
 
 from fasthtml.common import H3, H4, A, Button, Div, Img, Input, Label, P, Script, Span
 
@@ -56,6 +57,41 @@ def _resolve_url(item):
     if isinstance(item, dict):
         return item.get("@id") or item.get("id") or item.get("href")
     return None
+
+
+def _looks_like_url(value):
+    if not isinstance(value, str):
+        return False
+    return value.strip().lower().startswith(("http://", "https://"))
+
+
+def _extract_first_url(text: str | None):
+    if not text:
+        return None
+    match = re.search(r"https?://\S+", text)
+    if not match:
+        return None
+    return match.group(0).rstrip(").,;")
+
+
+def _inline_external_link(url: str | None, *, label: str | None = None):
+    if not _looks_like_url(url):
+        return label or "N/D"
+    link_label = (label or "").strip()
+    if not link_label or link_label == url or _looks_like_url(link_label):
+        link_label = "Apri risorsa esterna"
+    if not link_label.endswith("↗"):
+        link_label = f"{link_label} ↗"
+    return A(
+        link_label,
+        href=url,
+        target="_blank",
+        rel="noreferrer",
+        cls=(
+            "text-sm font-semibold text-slate-700 dark:text-slate-200 underline decoration-dotted "
+            "underline-offset-2 hover:text-slate-900 dark:hover:text-white break-all"
+        ),
+    )
 
 
 def _thumbnail_url(descriptor):
@@ -137,21 +173,38 @@ def _render_see_also(entries, title):
             url = _resolve_url(entry)
             label = _flatten_text(entry.get("label")) or url
         if url:
+            display_label = (label or "Risorsa esterna").strip()
+            if not display_label or display_label == url or display_label.lower().startswith(("http://", "https://")):
+                display_label = "Risorsa esterna"
             items.append(
-                A(
-                    label,
-                    href=url,
-                    target="_blank",
-                    rel="noreferrer",
-                    cls="text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200",
+                Div(
+                    Div(
+                        Span(
+                            display_label,
+                            cls="text-sm font-semibold text-slate-700 dark:text-slate-200 break-all",
+                        ),
+                        cls="min-w-0",
+                    ),
+                    A(
+                        "Apri risorsa ↗",
+                        href=url,
+                        target="_blank",
+                        rel="noreferrer",
+                        cls="app-btn app-btn-neutral text-xs w-fit",
+                    ),
+                    cls=(
+                        "grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-start sm:items-center gap-2 "
+                        "p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 "
+                        "dark:bg-slate-900/45 min-w-0"
+                    ),
                 )
             )
     if not items:
         return None
     return Div(
         H4(title, cls="text-xs font-bold uppercase tracking-[0.3em] text-slate-400"),
-        Div(*items, cls="flex flex-wrap gap-2"),
-        cls="space-y-2",
+        Div(*items, cls="grid gap-2"),
+        cls="space-y-2 w-full",
     )
 
 
@@ -167,20 +220,20 @@ def _render_providers(entries):
             continue
         link = (
             A(
-                "Sito",
+                "Apri sito ↗",
                 href=homepage,
                 target="_blank",
                 rel="noreferrer",
-                cls="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200",
+                cls="app-btn app-btn-neutral text-xs",
             )
             if homepage
             else None
         )
         rows.append(
             Div(
-                Span(name or "Provider", cls="text-sm font-semibold text-slate-700 dark:text-slate-200"),
+                Span(name or "Provider", cls="text-sm font-semibold text-slate-700 dark:text-slate-200 break-all"),
                 link or Span("Indirizzo non disponibile", cls="text-xs text-slate-500"),
-                cls="flex items-center justify-between gap-2",
+                cls="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-start sm:items-center gap-2 min-w-0",
             )
         )
     if not rows:
@@ -189,6 +242,70 @@ def _render_providers(entries):
         H4("Provider IIIF", cls="text-xs font-bold uppercase tracking-[0.3em] text-slate-400"),
         Div(*rows, cls="space-y-2"),
         cls="space-y-3",
+    )
+
+
+def _external_link_value(url: str | None, *, cta: str):
+    if not url:
+        return "N/D"
+    return Div(
+        A(
+            f"{cta} ↗",
+            href=url,
+            target="_blank",
+            rel="noreferrer",
+            cls="app-btn app-btn-neutral text-xs w-fit",
+        ),
+        cls="min-w-0",
+    )
+
+
+def _info_subtabs_script():
+    return Script(
+        """
+        (function() {
+            function activate(panel, tabName) {
+                const target = (tabName || 'overview').trim();
+                panel.dataset.infoActiveTab = target;
+                panel.querySelectorAll('[data-info-tab-btn]').forEach((btn) => {
+                    const active = (btn.dataset.infoTabBtn || '') === target;
+                    btn.classList.toggle('studio-export-subtab-active', active);
+                    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+                panel.querySelectorAll('[data-info-tab-pane]').forEach((pane) => {
+                    const active = (pane.dataset.infoTabPane || '') === target;
+                    pane.classList.toggle('hidden', !active);
+                });
+            }
+
+            function bind(root) {
+                const panel =
+                    (root && root.querySelector && root.querySelector('#studio-info-panel')) ||
+                    (root && root.id === 'studio-info-panel' ? root : null) ||
+                    document.getElementById('studio-info-panel');
+                if (!panel) return;
+
+                if (panel.dataset.infoTabsBound !== '1') {
+                    panel.dataset.infoTabsBound = '1';
+                    panel.querySelectorAll('[data-info-tab-btn]').forEach((btn) => {
+                        btn.addEventListener('click', () => activate(panel, btn.dataset.infoTabBtn || 'overview'));
+                    });
+                }
+                activate(panel, panel.dataset.infoActiveTab || 'overview');
+            }
+
+            if (!window.__studioInfoTabsBound) {
+                window.__studioInfoTabsBound = true;
+                document.addEventListener('DOMContentLoaded', () => bind(document));
+                document.body.addEventListener('htmx:afterSwap', (evt) => {
+                    const target = evt && evt.detail ? evt.detail.target : null;
+                    bind(target || document);
+                });
+            }
+
+            bind(document);
+        })();
+        """
     )
 
 
@@ -205,7 +322,12 @@ def info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library
     attribution = _flatten_text(manifest.get("attribution") or meta.get("attribution") or library)
     manifest_id = _resolve_url(manifest.get("@id") or manifest.get("id"))
     manifest_link = meta.get("manifest_url") or manifest_id
-    rights_label = _flatten_text(manifest.get("rights") or manifest.get("license"))
+    rights_raw = manifest.get("rights") or manifest.get("license")
+    rights_label = _flatten_text(rights_raw)
+    rights_url = _resolve_url(rights_raw)
+    if not _looks_like_url(rights_url):
+        rights_url = _extract_first_url(rights_label)
+    rights_value = _inline_external_link(rights_url, label=rights_label) if rights_url else rights_label
     viewing_direction = manifest.get("viewingDirection") or manifest.get("viewingdirection")
     viewing_hint = manifest.get("viewingHint")
     canvases = _canvases_from_manifest(manifest)
@@ -218,7 +340,8 @@ def info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library
     manifest_metadata_section = _render_metadata_grid(manifest.get("metadata"), "Metadati principali")
     manifest_see_also = _render_see_also(manifest.get("seeAlso"), "Vedi anche (manifesto)")
     providers_section = _render_providers(manifest.get("provider") or manifest.get("providers"))
-    resource = _image_resources(canvas)[0] if _image_resources(canvas) else None
+    image_resources = _image_resources(canvas)
+    resource = image_resources[0] if image_resources else None
     resource_format = _flatten_text(resource.get("format")) if resource else ""
     resource_dims = ""
     if resource and resource.get("width") and resource.get("height"):
@@ -248,56 +371,115 @@ def info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library
         info_row("Biblioteca", library),
         info_row("Biblioteca (attribuzione)", attribution),
         info_row("ID Documento", doc_id),
-        info_row("ID Manifesto", manifest_id),
-        info_row(
-            "Manifesto ufficiale",
-            A("Apri manifest", href=manifest_link, target="_blank", rel="noreferrer") if manifest_link else "N/D",
-        ),
-        info_row("Diritti", rights_label),
+        info_row("Diritti", rights_value),
         info_row("Pagine rilevate", str(total_pages)),
         info_row("Canvases IIIF", f"{canvas_count}") if canvas_count else info_row("Canvases IIIF", "N/D"),
         info_row("Data download", meta.get("download_date")),
-        info_row("Viewing direction", viewing_direction),
-        info_row("Viewing hint", viewing_hint),
+        info_row("Direzione di lettura", viewing_direction),
+        info_row("Indicazione di lettura", viewing_hint),
     ]
     page_rows = [
+        info_row("Pagina corrente", f"{page_idx} / {canvas_count or total_pages or 'N/D'}"),
         info_row("Etichetta pagina", canvas_label),
-        info_row("Canvas ID", canvas_id),
+        info_row("Canvas ID", _inline_external_link(canvas_id, label="Apri canvas")),
         info_row("Dimensioni canvas", f"{canvas.get('width', 'N/D')} × {canvas.get('height', 'N/D')} px"),
         info_row("Formato immagine", resource_format),
         info_row("Dimensioni immagine", resource_dims),
-        info_row(
-            "Immagine IIIF",
-            A("Apri risorsa", href=resource_url, target="_blank", rel="noreferrer") if resource_url else "N/D",
-        ),
-        info_row(
-            "Servizio IIIF",
-            A("Endpoint", href=service, target="_blank", rel="noreferrer") if service else "N/D",
-        ),
     ]
+    links_rows = [
+        info_row("Manifesto ufficiale", _external_link_value(manifest_link, cta="Apri manifesto")),
+        info_row("Immagine IIIF", _external_link_value(resource_url, cta="Apri immagine")),
+        info_row("Servizio IIIF", _external_link_value(service, cta="Apri endpoint IIIF")),
+    ]
+
+    metadata_blocks = [
+        providers_section,
+        manifest_metadata_section,
+        canvas_metadata_section,
+        manifest_see_also,
+        canvas_see_also,
+    ]
+    metadata_blocks = [block for block in metadata_blocks if block is not None]
+    metadata_content = (
+        Div(*metadata_blocks, cls="space-y-4")
+        if metadata_blocks
+        else Div(
+            "Nessun metadato aggiuntivo disponibile nel manifest corrente.",
+            cls=(
+                "text-sm text-slate-500 dark:text-slate-400 p-4 rounded-xl border border-dashed "
+                "border-slate-300 dark:border-slate-700"
+            ),
+        )
+    )
+
+    overview_pane = Div(
+        Div(
+            H3("Panoramica documento", cls="text-lg font-black text-slate-900 dark:text-white"),
+            P(description, cls="text-sm text-slate-600 dark:text-slate-300") if description else None,
+            Div(*document_rows, cls="grid gap-4 sm:grid-cols-2"),
+            cls="space-y-4",
+        ),
+        Div(canvas_preview, cls="space-y-2") if canvas_preview else Div(),
+        cls="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4",
+        **{"data-info-tab-pane": "overview"},
+    )
+
+    page_pane = Div(
+        Div(
+            H3("Pagina corrente", cls="text-lg font-black text-slate-900 dark:text-white"),
+            Div(*page_rows, cls="grid gap-4 sm:grid-cols-2"),
+            cls="space-y-4",
+        ),
+        Div(canvas_preview, cls="space-y-2") if canvas_preview else Div(),
+        cls="hidden grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4",
+        **{"data-info-tab-pane": "page"},
+    )
+
+    metadata_pane = Div(
+        Div(
+            H3("Metadati e fonti IIIF", cls="text-lg font-black text-slate-900 dark:text-white"),
+            Div(*links_rows, cls="grid gap-4 sm:grid-cols-2"),
+            metadata_content,
+            cls="space-y-4",
+        ),
+        cls="hidden",
+        **{"data-info-tab-pane": "metadata"},
+    )
+
     return [
         Div(
             Div(
-                H3("Documento in esame", cls="text-lg font-black text-slate-900 dark:text-white"),
-                P(description, cls="text-sm text-slate-600 dark:text-slate-300") if description else None,
-                Div(*document_rows, cls="grid gap-4 sm:grid-cols-2"),
-                providers_section or Div(),
-                manifest_metadata_section or Div(),
-                manifest_see_also or Div(),
-                canvas_preview and Div(canvas_preview, cls="mt-2"),
-                cls="space-y-4",
+                Button(
+                    "Panoramica",
+                    type="button",
+                    cls="studio-export-subtab studio-export-subtab-active",
+                    aria_selected="true",
+                    **{"data-info-tab-btn": "overview"},
+                ),
+                Button(
+                    "Pagina corrente",
+                    type="button",
+                    cls="studio-export-subtab",
+                    aria_selected="false",
+                    **{"data-info-tab-btn": "page"},
+                ),
+                Button(
+                    "Metadati e fonti",
+                    type="button",
+                    cls="studio-export-subtab",
+                    aria_selected="false",
+                    **{"data-info-tab-btn": "metadata"},
+                ),
+                cls="studio-export-subtabs",
             ),
             Div(
-                H3(
-                    f"Pagina {page_idx} di {canvas_count or total_pages}",
-                    cls="text-lg font-black text-slate-900 dark:text-white",
-                ),
-                Div(*page_rows, cls="grid gap-4 sm:grid-cols-2"),
-                canvas_metadata_section or Div(),
-                canvas_see_also or Div(),
-                canvas_preview and Div(canvas_preview, cls="block lg:hidden"),
+                overview_pane,
+                page_pane,
+                metadata_pane,
                 cls="space-y-4",
             ),
+            _info_subtabs_script(),
+            id="studio-info-panel",
             cls=(
                 "space-y-6 p-6 bg-white dark:bg-slate-900 rounded-2xl border "
                 "border-slate-200 dark:border-slate-700 shadow-lg",

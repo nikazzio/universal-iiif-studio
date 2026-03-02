@@ -82,7 +82,16 @@ def analyze_manifest(manifest_url: str) -> dict[str, Any]:
     }
 
 
-def start_downloader_thread(manifest_url: str, doc_id: str, library: str, target_pages: set[int] | None = None) -> str:
+def start_downloader_thread(
+    manifest_url: str,
+    doc_id: str,
+    library: str,
+    target_pages: set[int] | None = None,
+    *,
+    force_max_resolution: bool = False,
+    force_redownload: bool = False,
+    overwrite_existing_scans: bool = False,
+) -> str:
     """Start a background IIIF download and persist progress into the DB.
 
     The function returns a stable download_id (HASH) which can be used by the UI
@@ -123,6 +132,9 @@ def start_downloader_thread(manifest_url: str, doc_id: str, library: str, target
             "db_job_id": job_id,  # Chiave per API/DB
             "folder_name": doc_id,  # Usa doc_id direttamente come nome cartella
             "target_pages": set(target_pages or set()),
+            "force_max_resolution": bool(force_max_resolution),
+            "force_redownload": bool(force_redownload),
+            "overwrite_existing_scans": bool(overwrite_existing_scans),
         },
         job_type="download",
     )
@@ -138,6 +150,9 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
     db_job_id = str(kwargs.get("db_job_id") or "")
     folder_name = kwargs.get("folder_name")
     target_pages = kwargs.get("target_pages")
+    force_max_resolution = bool(kwargs.get("force_max_resolution", False))
+    force_redownload = bool(kwargs.get("force_redownload", False))
+    overwrite_existing_scans = bool(kwargs.get("overwrite_existing_scans", False))
 
     # Thread-local DB manager for safety
     vault = VaultManager()
@@ -176,6 +191,9 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
             progress_callback=db_progress_hook,
             job_id=db_job_id,
             show_progress=False,
+            force_max_resolution=force_max_resolution,
+            force_redownload=force_redownload,
+            overwrite_existing_scans=overwrite_existing_scans,
         )
 
         # Pass DB hook and cancellation checker to the runtime `run` call

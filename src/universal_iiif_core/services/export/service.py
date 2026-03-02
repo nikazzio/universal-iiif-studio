@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import Any
 
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.export_studio import build_professional_pdf, clean_filename
+from universal_iiif_core.iiif_resolution import fetch_highres_page_image
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.pdf_profiles import resolve_effective_profile
 from universal_iiif_core.services.ocr.storage import OCRStorage
-from universal_iiif_core.utils import load_json
+from universal_iiif_core.utils import load_json, save_json
 
 logger = get_logger(__name__)
 
@@ -257,6 +262,109 @@ def _load_logo_bytes(logo_path: str) -> bytes | None:
         return None
 
 
+def _prune_stale_highres_temp_dirs(*, temp_root: Path, cutoff: float) -> None:
+    for candidate in temp_root.glob("*_hr_*"):
+        with suppress(OSError):
+            if candidate.stat().st_mtime >= cutoff:
+                continue
+            if candidate.is_dir():
+                for child in candidate.glob("*"):
+                    with suppress(OSError):
+                        child.unlink()
+                candidate.rmdir()
+            else:
+                candidate.unlink()
+
+
+def _materialize_highres_page(
+    *,
+    page: int,
+    staging_root: Path,
+    scans_dir: Path,
+    manifest: dict[str, Any],
+    iiif_quality: str,
+    force_remote_refetch: bool,
+) -> None:
+    out_file = staging_root / f"pag_{page - 1:04d}.jpg"
+    local_file = scans_dir / f"pag_{page - 1:04d}.jpg"
+
+    fetched = False
+    if force_remote_refetch or not local_file.exists():
+        ok, _message = fetch_highres_page_image(
+            manifest,
+            page,
+            out_file,
+            iiif_quality=iiif_quality,
+        )
+        fetched = bool(ok and out_file.exists())
+
+    if not fetched and local_file.exists():
+        with suppress(OSError):
+            out_file.write_bytes(local_file.read_bytes())
+
+
+def _prepare_remote_highres_scans(
+    *,
+    doc_id: str,
+    selected_pages: list[int],
+    paths: dict[str, Path],
+    iiif_quality: str,
+    force_remote_refetch: bool,
+    max_parallel_page_fetch: int,
+) -> Path:
+    data_dir = Path(paths["data"])
+    manifest = load_json(paths["manifest"]) or {}
+    scans_dir = Path(paths["scans"])
+    cm = get_config_manager()
+    temp_root = cm.get_temp_dir()
+    retention_h = int(cm.get_setting("storage.highres_temp_retention_hours", 6) or 6)
+    cutoff = time.time() - (retention_h * 3600)
+    _prune_stale_highres_temp_dirs(temp_root=temp_root, cutoff=cutoff)
+
+    staging_root = Path(mkdtemp(prefix=f"{clean_filename(doc_id)}_hr_", dir=str(temp_root)))
+
+    workers = max(1, min(int(max_parallel_page_fetch or 1), 8))
+    if workers <= 1 or len(selected_pages) <= 1:
+        for page in selected_pages:
+            _materialize_highres_page(
+                page=page,
+                staging_root=staging_root,
+                scans_dir=scans_dir,
+                manifest=manifest,
+                iiif_quality=iiif_quality,
+                force_remote_refetch=force_remote_refetch,
+            )
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [
+                executor.submit(
+                    _materialize_highres_page,
+                    page=page,
+                    staging_root=staging_root,
+                    scans_dir=scans_dir,
+                    manifest=manifest,
+                    iiif_quality=iiif_quality,
+                    force_remote_refetch=force_remote_refetch,
+                )
+                for page in selected_pages
+            ]
+            for future in as_completed(futures):
+                with suppress(Exception):
+                    future.result()
+
+    cache_path = data_dir / "last_highres_staging.json"
+    with suppress(Exception):
+        save_json(
+            cache_path,
+            {
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "staging_path": str(staging_root),
+                "pages": selected_pages,
+            },
+        )
+    return staging_root
+
+
 def _pdf_output_path(doc_id: str, pdf_dir: Path, selection_mode: str, selected_pages: list[int]) -> Path:
     prefix = _build_output_prefix(doc_id)
     stamp = _timestamp()
@@ -271,6 +379,29 @@ def _pdf_output_path(doc_id: str, pdf_dir: Path, selection_mode: str, selected_p
             sel = f"p{first}-{last}_n{len(selected_pages)}"
         name = f"{prefix}_{sel}_{stamp}.pdf"
     return pdf_dir / name
+
+
+def _prune_item_pdf_exports(*, pdf_dir: Path, max_exports_per_item: int) -> None:
+    keep = max(1, int(max_exports_per_item or 1))
+    export_files = sorted(
+        [p for p in pdf_dir.glob("*_export_*.pdf") if p.is_file()],
+        key=lambda p: p.stat().st_mtime if p.exists() else 0,
+        reverse=True,
+    )
+    for stale in export_files[keep:]:
+        with suppress(OSError):
+            stale.unlink()
+
+
+def _prune_global_exports_dir(*, exports_dir: Path, retention_days: int) -> None:
+    keep_seconds = max(1, int(retention_days or 1)) * 86400
+    cutoff = time.time() - keep_seconds
+    for node in exports_dir.glob("**/*"):
+        with suppress(OSError):
+            if not node.is_file():
+                continue
+            if node.stat().st_mtime < cutoff:
+                node.unlink()
 
 
 def list_item_pdf_files(doc_id: str, library: str) -> list[dict[str, Any]]:
@@ -319,6 +450,13 @@ def _export_single_item_to_output(
     cover_curator: str | None,
     cover_description: str | None,
     cover_logo_path: str | None,
+    profile_name: str | None = None,
+    image_source_mode: str = "local_balanced",
+    image_max_long_edge_px: int = 0,
+    image_jpeg_quality: int = 82,
+    force_remote_refetch: bool = False,
+    cleanup_temp_after_export: bool = True,
+    max_parallel_page_fetch: int = 2,
 ) -> Path:
     doc_id = str(item.get("doc_id") or "").strip()
     library = str(item.get("library") or "").strip()
@@ -329,6 +467,21 @@ def _export_single_item_to_output(
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = Path(paths["scans"])
     selected_pages = resolve_selected_pages(scans_dir, selection_mode, selected_pages_raw)
+    cm = get_config_manager()
+    _resolved_profile_name, profile = resolve_effective_profile(
+        cm,
+        doc_id=doc_id,
+        library=library,
+        selected_profile=profile_name,
+    )
+    source_mode = str(image_source_mode or profile.get("image_source_mode") or "local_balanced")
+    effective_compression = str(compression or profile.get("compression") or "Standard")
+    effective_max_edge = int(image_max_long_edge_px or profile.get("image_max_long_edge_px") or 0)
+    effective_jpeg_quality = int(image_jpeg_quality or profile.get("jpeg_quality") or 82)
+    effective_remote_refetch = bool(force_remote_refetch or profile.get("force_remote_refetch", False))
+    effective_cleanup = bool(cleanup_temp_after_export and profile.get("cleanup_temp_after_export", True))
+    effective_parallel_fetch = int(max_parallel_page_fetch or profile.get("max_parallel_page_fetch") or 2)
+    effective_parallel_fetch = max(1, min(effective_parallel_fetch, 8))
 
     if export_format == "zip_images":
         return _zip_selected_images(scans_dir, selected_pages, output_path)
@@ -344,22 +497,46 @@ def _export_single_item_to_output(
 
         cover_title = str(metadata.get("title") or metadata.get("label") or doc_id)
         source_url = str(metadata.get("manifest") or metadata.get("manifest_url") or "")
-        return build_professional_pdf(
-            doc_dir=Path(paths["root"]),
-            output_path=output_path,
-            selected_pages=selected_pages,
-            cover_title=cover_title,
-            cover_curator=curator,
-            cover_description=description,
-            manifest_meta=metadata if isinstance(metadata, dict) else {},
-            transcription_json=transcription if isinstance(transcription, dict) else None,
-            mode=_mode_for_pdf(export_format),
-            compression=compression,
-            source_url=source_url,
-            cover_logo_bytes=logo_bytes,
-            include_cover=include_cover,
-            include_colophon=include_colophon,
-        )
+        export_scans_dir = scans_dir
+        staging_dir: Path | None = None
+        try:
+            if source_mode == "remote_highres_temp":
+                staging_dir = _prepare_remote_highres_scans(
+                    doc_id=doc_id,
+                    selected_pages=selected_pages,
+                    paths=paths,
+                    iiif_quality=str(cm.get_setting("images.iiif_quality", "default") or "default"),
+                    force_remote_refetch=effective_remote_refetch,
+                    max_parallel_page_fetch=effective_parallel_fetch,
+                )
+                export_scans_dir = staging_dir
+
+            return build_professional_pdf(
+                doc_dir=Path(paths["root"]),
+                output_path=output_path,
+                selected_pages=selected_pages,
+                cover_title=cover_title,
+                cover_curator=curator,
+                cover_description=description,
+                manifest_meta=metadata if isinstance(metadata, dict) else {},
+                transcription_json=transcription if isinstance(transcription, dict) else None,
+                mode=_mode_for_pdf(export_format),
+                compression=effective_compression,
+                source_url=source_url,
+                cover_logo_bytes=logo_bytes,
+                include_cover=include_cover,
+                include_colophon=include_colophon,
+                image_dir=export_scans_dir,
+                image_max_long_edge_px=effective_max_edge,
+                image_jpeg_quality=effective_jpeg_quality,
+            )
+        finally:
+            if staging_dir and effective_cleanup:
+                with suppress(OSError):
+                    for child in staging_dir.glob("*"):
+                        with suppress(OSError):
+                            child.unlink()
+                    staging_dir.rmdir()
 
     raise ExportFeatureNotAvailableError(f"Formato non implementato: {export_format}")
 
@@ -378,6 +555,13 @@ def execute_single_item_export(
     cover_curator: str | None = None,
     cover_description: str | None = None,
     cover_logo_path: str | None = None,
+    profile_name: str | None = None,
+    image_source_mode: str = "local_balanced",
+    image_max_long_edge_px: int = 0,
+    image_jpeg_quality: int = 82,
+    force_remote_refetch: bool = False,
+    cleanup_temp_after_export: bool = True,
+    max_parallel_page_fetch: int = 2,
 ) -> Path:
     """Execute one single-item export and save PDFs under item `pdf/`."""
     _ensure_supported_target(export_format, destination)
@@ -399,7 +583,7 @@ def execute_single_item_export(
     else:
         output_path = _pdf_output_path(doc_id, pdf_dir, selection_mode, selected_pages)
 
-    return _export_single_item_to_output(
+    artifact = _export_single_item_to_output(
         item=item,
         export_format=export_format,
         selection_mode=selection_mode,
@@ -411,7 +595,18 @@ def execute_single_item_export(
         cover_curator=cover_curator,
         cover_description=cover_description,
         cover_logo_path=cover_logo_path,
+        profile_name=profile_name,
+        image_source_mode=image_source_mode,
+        image_max_long_edge_px=image_max_long_edge_px,
+        image_jpeg_quality=image_jpeg_quality,
+        force_remote_refetch=force_remote_refetch,
+        cleanup_temp_after_export=cleanup_temp_after_export,
+        max_parallel_page_fetch=max_parallel_page_fetch,
     )
+    if export_format in {"pdf_images", "pdf_searchable", "pdf_facing"}:
+        max_keep = int(get_config_manager().get_setting("storage.max_exports_per_item", 5) or 5)
+        _prune_item_pdf_exports(pdf_dir=pdf_dir, max_exports_per_item=max_keep)
+    return artifact
 
 
 def _bundle_outputs(outputs: list[Path], output_path: Path) -> Path:
@@ -445,6 +640,13 @@ def _execute_single_item_job(
     cover_curator: str | None,
     cover_description: str | None,
     cover_logo_path: str | None,
+    profile_name: str | None,
+    image_source_mode: str,
+    image_max_long_edge_px: int,
+    image_jpeg_quality: int,
+    force_remote_refetch: bool,
+    cleanup_temp_after_export: bool,
+    max_parallel_page_fetch: int,
 ) -> Path:
     if progress_callback:
         progress_callback(0, 1, "Preparing export")
@@ -461,6 +663,13 @@ def _execute_single_item_job(
         cover_curator=cover_curator,
         cover_description=cover_description,
         cover_logo_path=cover_logo_path,
+        profile_name=profile_name,
+        image_source_mode=image_source_mode,
+        image_max_long_edge_px=image_max_long_edge_px,
+        image_jpeg_quality=image_jpeg_quality,
+        force_remote_refetch=force_remote_refetch,
+        cleanup_temp_after_export=cleanup_temp_after_export,
+        max_parallel_page_fetch=max_parallel_page_fetch,
     )
     if progress_callback:
         progress_callback(1, 1, "Item 1/1 completato")
@@ -482,6 +691,13 @@ def _execute_batch_job(
     cover_curator: str | None,
     cover_description: str | None,
     cover_logo_path: str | None,
+    profile_name: str | None,
+    image_source_mode: str,
+    image_max_long_edge_px: int,
+    image_jpeg_quality: int,
+    force_remote_refetch: bool,
+    cleanup_temp_after_export: bool,
+    max_parallel_page_fetch: int,
 ) -> Path:
     out_dir = get_config_manager().get_exports_dir() / clean_filename(job_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -512,6 +728,13 @@ def _execute_batch_job(
             cover_curator=cover_curator,
             cover_description=cover_description,
             cover_logo_path=cover_logo_path,
+            profile_name=profile_name,
+            image_source_mode=image_source_mode,
+            image_max_long_edge_px=image_max_long_edge_px,
+            image_jpeg_quality=image_jpeg_quality,
+            force_remote_refetch=force_remote_refetch,
+            cleanup_temp_after_export=cleanup_temp_after_export,
+            max_parallel_page_fetch=max_parallel_page_fetch,
         )
         artifacts.append(artifact)
 
@@ -540,12 +763,24 @@ def execute_export_job(
     cover_curator: str | None = None,
     cover_description: str | None = None,
     cover_logo_path: str | None = None,
+    profile_name: str | None = None,
+    image_source_mode: str = "local_balanced",
+    image_max_long_edge_px: int = 0,
+    image_jpeg_quality: int = 82,
+    force_remote_refetch: bool = False,
+    cleanup_temp_after_export: bool = True,
+    max_parallel_page_fetch: int = 2,
 ) -> Path:
     """Execute one export job for one or multiple items and return final output path."""
     if not items:
         raise ValueError("Nessun item selezionato per export.")
 
     _ensure_supported_target(export_format, destination)
+    cm = get_config_manager()
+    _prune_global_exports_dir(
+        exports_dir=cm.get_exports_dir(),
+        retention_days=int(cm.get_setting("storage.exports_retention_days", 30) or 30),
+    )
 
     if len(items) == 1:
         return _execute_single_item_job(
@@ -562,6 +797,13 @@ def execute_export_job(
             cover_curator=cover_curator,
             cover_description=cover_description,
             cover_logo_path=cover_logo_path,
+            profile_name=profile_name,
+            image_source_mode=image_source_mode,
+            image_max_long_edge_px=image_max_long_edge_px,
+            image_jpeg_quality=image_jpeg_quality,
+            force_remote_refetch=force_remote_refetch,
+            cleanup_temp_after_export=cleanup_temp_after_export,
+            max_parallel_page_fetch=max_parallel_page_fetch,
         )
     return _execute_batch_job(
         job_id=job_id,
@@ -577,4 +819,26 @@ def execute_export_job(
         cover_curator=cover_curator,
         cover_description=cover_description,
         cover_logo_path=cover_logo_path,
+        profile_name=profile_name,
+        image_source_mode=image_source_mode,
+        image_max_long_edge_px=image_max_long_edge_px,
+        image_jpeg_quality=image_jpeg_quality,
+        force_remote_refetch=force_remote_refetch,
+        cleanup_temp_after_export=cleanup_temp_after_export,
+        max_parallel_page_fetch=max_parallel_page_fetch,
     )
+
+
+def prune_storage_on_startup() -> None:
+    """Apply startup pruning policy for export artifacts and temp high-res files."""
+    cm = get_config_manager()
+    if not bool(cm.get_setting("storage.auto_prune_on_startup", False)):
+        return
+
+    _prune_global_exports_dir(
+        exports_dir=cm.get_exports_dir(),
+        retention_days=int(cm.get_setting("storage.exports_retention_days", 30) or 30),
+    )
+    retention_h = int(cm.get_setting("storage.highres_temp_retention_hours", 6) or 6)
+    cutoff = time.time() - (retention_h * 3600)
+    _prune_stale_highres_temp_dirs(temp_root=cm.get_temp_dir(), cutoff=cutoff)

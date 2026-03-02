@@ -5,60 +5,34 @@
         "temp_dir": "data/local/temp_images",
         "models_dir": "data/local/models",
         "logs_dir": "data/local/logs",
-        "snippets_dir": "data/local/snippets"
+        "snippets_dir": "data/local/snippets",
     },
-    "security": {
-        "allowed_origins": [
-            "http://localhost:8000",
-            "http://127.0.0.1:8000"
-        ]
-    },
-    "api_keys": {
-        "openai": "",
-        "anthropic": "",
-        "google_vision": "",
-        "huggingface": ""
-    },
+    "security": {"allowed_origins": ["http://localhost:8000", "http://127.0.0.1:8000"]},
+    "api_keys": {"openai": "", "anthropic": "", "google_vision": "", "huggingface": ""},
     "settings": {
-        "system": {
-            "download_workers": 4,
-            "max_concurrent_downloads": 2,
-            "ocr_concurrency": 1,
-            "request_timeout": 30
-        },
-        "defaults": {
-            "default_library": "Vaticana",
-            "preferred_ocr_engine": "openai"
-        },
-        "library": {
-            "default_mode": "operativa"
-        },
+        "system": {"max_concurrent_downloads": 2},
+        "defaults": {"default_library": "Vaticana", "preferred_ocr_engine": "openai"},
+        "library": {"default_mode": "operativa"},
         "ui": {
             "theme_preset": "rosewater",
             "theme_primary_color": "#7B8CC7",
             "theme_accent_color": "#E8A6B6",
             "theme_color": "#E8A6B6",
             "items_per_page": 25,
-            "toast_duration": 3000
+            "toast_duration": 3000,
         },
         "images": {
-            "download_strategy": [
-                "max",
-                "3000",
-                "1740"
-            ],
+            "download_strategy_mode": "balanced",
+            "download_strategy_custom": ["3000", "1740", "max"],
+            "download_strategy": ["3000", "1740", "max"],
             "iiif_quality": "default",
             "viewer_quality": 95,
-            "ocr_quality": 95,
-            "tile_stitch_max_ram_gb": 2
+            "probe_remote_max_resolution": true,
+            "tile_stitch_max_ram_gb": 2,
         },
-        "ocr": {
-            "ocr_engine": "openai",
-            "kraken_enabled": false
-        },
+        "ocr": {"ocr_engine": "openai", "kraken_enabled": false},
         "pdf": {
             "viewer_dpi": 150,
-            "ocr_dpi": 300,
             "prefer_native_pdf": true,
             "create_pdf_from_images": false,
             "export": {
@@ -66,52 +40,82 @@
                 "default_compression": "Standard",
                 "include_cover": true,
                 "include_colophon": true,
-                "description_rows": 3
+                "description_rows": 3,
             },
-            "cover": {
-                "logo_path": "",
-                "curator": "",
-                "description": ""
-            }
+            "cover": {"logo_path": "", "curator": "", "description": ""},
+            "profiles": {
+                "default": "balanced",
+                "catalog": {
+                    "balanced": {
+                        "label": "Balanced",
+                        "compression": "Standard",
+                        "include_cover": true,
+                        "include_colophon": true,
+                        "image_source_mode": "local_balanced",
+                        "image_max_long_edge_px": 2600,
+                        "jpeg_quality": 82,
+                        "force_remote_refetch": false,
+                        "cleanup_temp_after_export": true,
+                        "max_parallel_page_fetch": 2,
+                    },
+                    "high_quality": {
+                        "label": "High Quality",
+                        "compression": "High-Res",
+                        "include_cover": true,
+                        "include_colophon": true,
+                        "image_source_mode": "local_highres",
+                        "image_max_long_edge_px": 3800,
+                        "jpeg_quality": 92,
+                        "force_remote_refetch": false,
+                        "cleanup_temp_after_export": true,
+                        "max_parallel_page_fetch": 2,
+                    },
+                    "archival_highres": {
+                        "label": "Archival High-Res",
+                        "compression": "High-Res",
+                        "include_cover": true,
+                        "include_colophon": true,
+                        "image_source_mode": "remote_highres_temp",
+                        "image_max_long_edge_px": 0,
+                        "jpeg_quality": 95,
+                        "force_remote_refetch": true,
+                        "cleanup_temp_after_export": true,
+                        "max_parallel_page_fetch": 1,
+                    },
+                    "lightweight": {
+                        "label": "Lightweight",
+                        "compression": "Light",
+                        "include_cover": false,
+                        "include_colophon": false,
+                        "image_source_mode": "local_balanced",
+                        "image_max_long_edge_px": 1500,
+                        "jpeg_quality": 65,
+                        "force_remote_refetch": false,
+                        "cleanup_temp_after_export": true,
+                        "max_parallel_page_fetch": 3,
+                    },
+                },
+                "document_overrides": {},
+            },
         },
         "thumbnails": {
             "max_long_edge_px": 320,
             "jpeg_quality": 70,
-            "columns": 6,
-            "paginate_enabled": true,
             "page_size": 48,
-            "page_size_options": [
-                24,
-                48,
-                72,
-                96
-            ],
-            "default_select_all": true,
-            "actions_apply_to_all_default": false,
-            "hover_preview_enabled": true,
-            "hover_preview_max_long_edge_px": 900,
-            "hover_preview_jpeg_quality": 82,
-            "hover_preview_delay_ms": 550,
-            "inline_base64_max_tiles": 120,
-            "hover_preview_max_tiles": 72
+            "page_size_options": [24, 48, 72, 96],
         },
-        "housekeeping": {
-            "temp_cleanup_days": 7
+        "housekeeping": {"temp_cleanup_days": 7},
+        "storage": {
+            "exports_retention_days": 30,
+            "thumbnails_retention_days": 14,
+            "highres_temp_retention_hours": 6,
+            "auto_prune_on_startup": false,
+            "max_exports_per_item": 5,
         },
-        "logging": {
-            "level": "INFO"
-        },
-        "testing": {
-            "run_live_tests": false
-        },
+        "logging": {"level": "INFO"},
+        "testing": {"run_live_tests": false},
         "viewer": {
-            "mirador": {
-                "openSeadragonOptions": {
-                    "maxZoomPixelRatio": 5,
-                    "maxZoomLevel": 25,
-                    "minZoomLevel": 0.35
-                }
-            },
+            "mirador": {"openSeadragonOptions": {"maxZoomPixelRatio": 5, "maxZoomLevel": 25, "minZoomLevel": 0.35}},
             "visual_filters": {
                 "defaults": {
                     "brightness": 1.0,
@@ -119,7 +123,7 @@
                     "saturation": 1.0,
                     "hue": 0,
                     "invert": false,
-                    "grayscale": false
+                    "grayscale": false,
                 },
                 "presets": {
                     "default": {
@@ -128,7 +132,7 @@
                         "saturation": 1.0,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false
+                        "grayscale": false,
                     },
                     "night": {
                         "brightness": 0.9,
@@ -136,7 +140,7 @@
                         "saturation": 0.9,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false
+                        "grayscale": false,
                     },
                     "contrast": {
                         "brightness": 1.05,
@@ -144,10 +148,10 @@
                         "saturation": 1.2,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false
-                    }
-                }
-            }
-        }
-    }
+                        "grayscale": false,
+                    },
+                },
+            },
+        },
+    },
 }

@@ -447,6 +447,98 @@ def _add_transcription_page(
         page_index += 1
 
 
+def _resolve_compression_profile(
+    *,
+    compression: str,
+    image_max_long_edge_px: int | None,
+    image_jpeg_quality: int | None,
+) -> CompressionProfile:
+    """Build effective compression profile from preset + optional runtime overrides."""
+    base_profile = COMPRESSION_PROFILES.get(compression) or COMPRESSION_PROFILES["Standard"]
+    max_edge = base_profile.max_long_edge_px
+    jpeg_quality = base_profile.jpeg_quality
+
+    if image_max_long_edge_px is not None:
+        try:
+            parsed_max_edge = int(image_max_long_edge_px)
+            max_edge = None if parsed_max_edge <= 0 else parsed_max_edge
+        except (TypeError, ValueError):
+            max_edge = base_profile.max_long_edge_px
+
+    if image_jpeg_quality is not None:
+        try:
+            parsed_quality = int(image_jpeg_quality)
+            jpeg_quality = max(40, min(parsed_quality, 100))
+        except (TypeError, ValueError):
+            jpeg_quality = base_profile.jpeg_quality
+
+    return CompressionProfile(base_profile.name, max_edge, jpeg_quality)
+
+
+def _append_selected_scan_pages(
+    *,
+    doc: fitz.Document,
+    scans_dir: Path,
+    selected_pages: list[int],
+    trans_map: dict[int, str],
+    mode: str,
+    profile: CompressionProfile,
+    progress_callback: Callable[[int, int], None] | None,
+) -> tuple[int, int, int]:
+    """Append selected page images (and optional transcription pages) to output PDF."""
+    original_bytes_total = 0
+    encoded_bytes_total = 0
+    images_added = 0
+    total_pages_to_process = len(selected_pages)
+
+    for idx, page_idx in enumerate(selected_pages):
+        if progress_callback:
+            progress_callback(idx, total_pages_to_process)
+
+        img_path = scans_dir / f"pag_{page_idx - 1:04d}.jpg"
+        if not img_path.exists():
+            continue
+
+        img_bytes, _ = _prepare_image_bytes(img_path, profile)
+        with contextlib.suppress(OSError):
+            original_bytes_total += int(img_path.stat().st_size)
+
+        encoded_bytes_total += len(img_bytes)
+        images_added += 1
+
+        page_text = trans_map.get(page_idx, "")
+        page_label = f"Pag. {page_idx}"
+
+        if mode == "Testo a fronte":
+            _add_image_page(
+                doc,
+                img_bytes=img_bytes,
+                visible_text="",
+                searchable_text="",
+                mode="Solo immagini",
+                page_label=page_label,
+            )
+            _add_transcription_page(
+                doc,
+                text=page_text,
+                page_label=f"Trascrizione · Pag. {page_idx}",
+                include_header=True,
+            )
+            continue
+
+        searchable_text = page_text if mode == "PDF Ricercabile" else ""
+        _add_image_page(
+            doc,
+            img_bytes=img_bytes,
+            visible_text="",
+            searchable_text=searchable_text,
+            mode=mode,
+            page_label=page_label,
+        )
+
+    return original_bytes_total, encoded_bytes_total, images_added
+
+
 def build_professional_pdf(
     *,
     doc_dir: Path,
@@ -464,15 +556,22 @@ def build_professional_pdf(
     progress_callback: Callable[[int, int], None] | None = None,
     include_cover: bool = True,
     include_colophon: bool = True,
+    image_dir: Path | None = None,
+    image_max_long_edge_px: int | None = None,
+    image_jpeg_quality: int | None = None,
 ) -> Path:
     """Assemble [Cover] + [Selected Pages] + [Colophon] into a single PDF.
 
     Page indices are 1-based.
     """
-    profile = COMPRESSION_PROFILES.get(compression) or COMPRESSION_PROFILES["Standard"]
+    profile = _resolve_compression_profile(
+        compression=compression,
+        image_max_long_edge_px=image_max_long_edge_px,
+        image_jpeg_quality=image_jpeg_quality,
+    )
     trans_map = _load_transcription_map(transcription_json)
 
-    scans_dir = doc_dir / "scans"
+    scans_dir = Path(image_dir) if image_dir else (doc_dir / "scans")
     if not scans_dir.exists():
         raise FileNotFoundError(f"Directory scans non trovata: {scans_dir}")
 
@@ -491,58 +590,15 @@ def build_professional_pdf(
                 logo_bytes=cover_logo_bytes,
             )
 
-        original_bytes_total = 0
-        encoded_bytes_total = 0
-        images_added = 0
-        total_pages_to_process = len(selected_pages)
-
-        for idx, page_idx in enumerate(selected_pages):
-            if progress_callback:
-                progress_callback(idx, total_pages_to_process)
-
-            img_path = scans_dir / f"pag_{page_idx - 1:04d}.jpg"
-            if not img_path.exists():
-                continue
-
-            img_bytes, _ = _prepare_image_bytes(img_path, profile)
-            with contextlib.suppress(OSError):
-                original_bytes_total += int(img_path.stat().st_size)
-
-            encoded_bytes_total += len(img_bytes)
-            images_added += 1
-            page_text = trans_map.get(page_idx, "")
-
-            page_label = f"Pag. {page_idx}"
-
-            if mode == "Testo a fronte":
-                # Facing-pages style: left scan page, right transcription page.
-                _add_image_page(
-                    doc,
-                    img_bytes=img_bytes,
-                    visible_text="",
-                    searchable_text="",
-                    mode="Solo immagini",
-                    page_label=page_label,
-                )
-                _add_transcription_page(
-                    doc,
-                    text=page_text,
-                    page_label=f"Trascrizione · Pag. {page_idx}",
-                    include_header=True,
-                )
-                continue
-
-            visible_text = page_text if mode == "Testo a fronte" else ""
-            searchable_text = page_text if mode == "PDF Ricercabile" else ""
-
-            _add_image_page(
-                doc,
-                img_bytes=img_bytes,
-                visible_text=visible_text,
-                searchable_text=searchable_text,
-                mode=mode,
-                page_label=page_label,
-            )
+        original_bytes_total, encoded_bytes_total, images_added = _append_selected_scan_pages(
+            doc=doc,
+            scans_dir=scans_dir,
+            selected_pages=selected_pages,
+            trans_map=trans_map,
+            mode=mode,
+            profile=profile,
+            progress_callback=progress_callback,
+        )
 
         if include_colophon:
             _add_colophon_page(
