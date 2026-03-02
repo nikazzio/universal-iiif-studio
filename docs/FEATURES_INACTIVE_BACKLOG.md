@@ -1,82 +1,82 @@
-# Features Inactive Backlog
+# Inactive Features Backlog
 
-Questa lista raccoglie opzioni/feature rimosse dalla UI o marcate come inattive durante il refactor dell'issue #46.
-Obiettivo: evitare opzioni fuorvianti nella configurazione corrente e mantenere una roadmap evolutiva chiara.
+This document tracks options/features removed from the UI or marked as inactive during issue #46 refactoring.
+Goal: avoid misleading configuration controls in the current product while keeping a clear, implementable evolution backlog.
 
-## Ambito
+## Scope
 
-- Stato del runtime: riferito all'implementazione attuale in `src/`.
-- Stato della UI: riferito ai pannelli Settings/Studio attuali.
-- Uso previsto: backlog tecnico per future evoluzioni, non guida utente.
+- Runtime status: based on the current implementation under `src/`.
+- UI status: based on the current Settings/Studio panels.
+- Intended use: technical backlog for future work, not end-user guidance.
 
-## Feature inattive o rimosse dalla UI
+## Inactive or Removed UI Features
 
 - `settings.system.download_workers`
-  - Stato attuale: rimosso dalla UI, non operativo nel runtime corrente.
-  - Motivo: la concorrenza download documento e gestita dal job queue manager (`max_concurrent_downloads`).
-  - Evoluzione proposta: pool separato per download intra-documento con limite dinamico per host.
+  - Current status: removed from UI, not active in the current runtime.
+  - Reason: document download concurrency is handled by the job queue manager (`max_concurrent_downloads`).
+  - Proposed evolution: dedicated intra-document download pool with dynamic per-host limits.
 
 - `settings.system.request_timeout`
-  - Stato attuale: rimosso dalla UI, non usato come chiave globale centralizzata.
-  - Motivo: timeout HTTP gestiti in punti specifici della pipeline.
-  - Evoluzione proposta: client HTTP centralizzato con policy timeout uniformi e override per provider.
+  - Current status: removed from UI, not used as a single global key.
+  - Reason: HTTP timeouts are managed in specific pipeline points.
+  - Proposed evolution: centralized HTTP client with uniform timeout policy and provider-specific overrides.
 
 - `settings.system.ocr_concurrency`
-  - Stato attuale: rimosso dalla UI, non agganciato allo scheduler OCR corrente.
-  - Motivo: concorrenza OCR non esposta come controllo unico.
-  - Evoluzione proposta: coda OCR dedicata con `max_workers`, priorita e retry espliciti.
+  - Current status: removed from UI, not wired to the current OCR scheduler.
+  - Reason: OCR concurrency is not exposed as a single runtime control.
+  - Proposed evolution: dedicated OCR queue with `max_workers`, priority, and explicit retry policy.
 
 - `settings.pdf.ocr_dpi`
-  - Stato attuale: non esposto in UI; non usato come parametro operativo principale.
-  - Motivo: pipeline corrente usa `settings.pdf.viewer_dpi` per l'estrazione immagini da PDF nativo.
-  - Evoluzione proposta: separare formalmente `viewer_dpi` (viewer) e `ocr_dpi` (preprocessing OCR).
+  - Current status: not exposed in UI; not used as a primary active control.
+  - Reason: current pipeline uses `settings.pdf.viewer_dpi` for native-PDF image extraction.
+  - Proposed evolution: formal separation between `viewer_dpi` (viewer extraction) and `ocr_dpi` (OCR preprocessing).
 
 - `settings.images.ocr_quality`
-  - Stato attuale: rimosso dalla UI, non utilizzato dalla pipeline OCR effettiva.
-  - Motivo: assenza di un profilo OCR strutturato in runtime.
-  - Evoluzione proposta: profili OCR dedicati (denoise, sharpen, binarization, target quality).
+  - Current status: removed from UI, not used by the active OCR pipeline.
+  - Reason: no structured OCR quality profile is currently active.
+  - Proposed evolution: dedicated OCR profiles (denoise, sharpen, binarization, target quality).
 
 - `settings.thumbnails.columns`
-  - Stato attuale: rimosso dalla UI.
-  - Motivo: layout miniature gestito da CSS grid responsive, non da numero colonne statico.
-  - Evoluzione proposta: preset di layout (`compact`, `comfortable`, `research`).
+  - Current status: removed from UI.
+  - Reason: thumbnail layout is controlled by responsive CSS grid, not by static column count.
+  - Proposed evolution: thumbnail layout presets (`compact`, `comfortable`, `research`).
 
 - `settings.thumbnails.paginate_enabled`
-  - Stato attuale: rimosso dalla UI.
-  - Motivo: paginazione sempre attiva nello Studio Export.
-  - Evoluzione proposta: toggle tra paginazione e infinite scroll.
+  - Current status: removed from UI.
+  - Reason: pagination is always active in Studio Export.
+  - Proposed evolution: toggle between pagination and infinite scroll.
 
 - `settings.thumbnails.default_select_all`
-  - Stato attuale: rimosso dalla UI.
-  - Motivo: selezione iniziale gestita nel flusso Studio Export (inizializzazione lato pannello).
-  - Evoluzione proposta: template di selezione iniziale per workflow ripetitivi.
+  - Current status: removed from UI.
+  - Reason: initial selection behavior is managed directly in the Studio Export panel flow.
+  - Proposed evolution: reusable initial-selection templates for repetitive workflows.
 
 - `settings.thumbnails.actions_apply_to_all_default`
-  - Stato attuale: rimosso dalla UI.
-  - Motivo: nessuna azione bulk automatica agganciata a questa chiave.
-  - Evoluzione proposta: modalita bulk persistente con conferma operativa.
+  - Current status: removed from UI.
+  - Reason: no automatic bulk-action flow is currently bound to this key.
+  - Proposed evolution: persistent bulk-action mode with explicit confirmation.
 
-- `settings.thumbnails.hover_preview_*` e `inline_base64_max_tiles`
-  - Stato attuale: rimosso dalla UI.
-  - Motivo: pipeline hover preview non attiva nella UX corrente.
-  - Evoluzione proposta: hover progressive con cache dedicata e budget memoria.
+- `settings.thumbnails.hover_preview_*` and `inline_base64_max_tiles`
+  - Current status: removed from UI.
+  - Reason: hover-preview pipeline is not active in the current UX.
+  - Proposed evolution: progressive hover previews with dedicated cache and memory budget control.
 
-## Feature introdotte in sostituzione
+## Features Introduced in Replacement
 
-- Profili PDF avanzati con preset default e custom
-  - Chiavi: `settings.pdf.profiles.catalog`, `settings.pdf.profiles.default`.
-  - UX: catalogo profili centralizzato in `Settings > PDF Export`.
+- Advanced PDF profiles with default + custom presets
+  - Keys: `settings.pdf.profiles.catalog`, `settings.pdf.profiles.default`.
+  - UX: centralized profile catalog in `Settings > PDF Export`.
 
-- Gestione risoluzione trasparente per pagina in Studio Export
-  - UI: confronto `Locale` vs `Online max` nelle thumbnail card.
-  - Scopo: decidere in modo informato se lavorare su locale bilanciato o richiedere high-res.
+- Per-page resolution transparency in Studio Export
+  - UI: `Locale` vs `Online max` comparison in thumbnail cards.
+  - Goal: enable informed decisions on local balanced workflow vs targeted high-resolution fetches.
 
-- High-res on-demand per export
-  - UI: azione puntuale `High-Res` per singola pagina.
-  - Runtime: `remote_highres_temp` con staging temporaneo e cleanup opzionale post-export.
+- On-demand high-resolution fetch for export
+  - UI: per-page `High-Res` action.
+  - Runtime: `remote_highres_temp` temporary staging with optional post-export cleanup.
 
-## Backlog evolutivo raccomandato
+## Recommended Evolution Backlog
 
-- Introdurre versionamento schema config (`settings.schema_version`) con migrazioni guidate.
-- Aggiungere endpoint diagnostici storage (`/api/storage/report`, `/api/storage/prune`).
-- Valutare cache distribuita `info.json` per ridurre latenza su manoscritti molto lunghi.
+- Introduce configuration schema versioning (`settings.schema_version`) with guided migrations.
+- Add storage diagnostics endpoints (`/api/storage/report`, `/api/storage/prune`).
+- Evaluate distributed `info.json` cache for lower latency on very large manuscripts.
