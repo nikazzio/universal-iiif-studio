@@ -7,6 +7,7 @@ from typing import Any
 
 import fitz  # PyMuPDF
 
+from ...exceptions import DatabaseError
 from ...library_catalog import normalize_item_type
 from ...logger import get_logger
 
@@ -52,7 +53,7 @@ class VaultManager:
             if columns and not required_cols.issubset(columns):
                 logger.warning("Old DB schema detected. Recreating 'manuscripts' table (Beta reset).")
                 force_recreate = True
-        except Exception as exc:
+        except DatabaseError as exc:
             logger.debug("Schema check failed: %s", exc)
 
         if force_recreate:
@@ -439,7 +440,7 @@ class VaultManager:
             from ...config_manager import get_config_manager
 
             temp_root = Path(get_config_manager().get_temp_dir())
-        except Exception:
+        except DatabaseError:
             temp_root = None
 
         for row in rows:
@@ -551,7 +552,7 @@ class VaultManager:
                 return default
             try:
                 return json.loads(raw)
-            except Exception:
+            except DatabaseError:
                 return default
         finally:
             conn.close()
@@ -645,7 +646,7 @@ class VaultManager:
                             try:
                                 shutil.rmtree(candidate)
                                 logger.info("Removed manuscript folder from disk: %s", candidate)
-                            except Exception:
+                            except OSError:
                                 logger.debug("Failed to remove manuscript folder %s", candidate, exc_info=True)
                     else:
                         logger.debug(
@@ -653,7 +654,7 @@ class VaultManager:
                             candidate,
                             downloads_base,
                         )
-                except Exception:
+                except OSError:
                     logger.debug("Error while attempting to remove manuscript folder", exc_info=True)
 
             return deleted
@@ -919,7 +920,7 @@ class VaultManager:
                         try:
                             ms = self.get_manuscript(doc_id)
                             title = ms.get("title") if ms else None
-                        except Exception:
+                        except DatabaseError:
                             title = None
 
                     log_message = "Download update: job=%s doc=%s title=%s %s/%s status=%s"
@@ -928,7 +929,7 @@ class VaultManager:
                         logger.info(log_message, *log_args)
                     else:
                         logger.debug(log_message, *log_args)
-                except Exception:
+                except DatabaseError:
                     logger.debug("Failed to log download update for job %s", job_id, exc_info=True)
                 finally:
                     self._download_progress_cache[job_id] = progress_key
@@ -1346,9 +1347,9 @@ class VaultManager:
 
                             shutil.rmtree(p)
                             logger.info("Pruned stale temp folder: %s", p)
-                        except Exception:
+                        except OSError:
                             logger.debug("Failed to remove temp folder %s", p, exc_info=True)
-            except Exception:
+            except OSError:
                 logger.debug("Failed to cleanup temp dirs for stale jobs", exc_info=True)
 
             return len(job_ids)
