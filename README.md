@@ -147,4 +147,5 @@ No results in Discovery for a known Gallica title
 - User/feature guide: `docs/DOCUMENTAZIONE.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
+- Issue triage and governance policy: `docs/ISSUE_TRIAGE_POLICY.md`
 - Contributor/agent rules: `AGENTS.md`
