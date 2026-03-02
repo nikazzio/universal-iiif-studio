@@ -162,4 +162,5 @@ No results in Discovery for a known Gallica title
 - Architecture: `docs/ARCHITECTURE.md`
 - Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
 - Inactive/evolution backlog: `docs/FEATURES_INACTIVE_BACKLOG.md`
+- Wiki maintenance model and sync workflow: `docs/WIKI_MAINTENANCE.md`
 - Contributor/agent rules: `AGENTS.md`
