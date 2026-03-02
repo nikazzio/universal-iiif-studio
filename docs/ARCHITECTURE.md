@@ -16,6 +16,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
   * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations.
   * `discovery_handlers.py`: Orchestrates search, add-to-library, and download manager actions.
   * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
+  * `library_query.py`: Shared filtering/query/view-model helpers for Library routes.
 * **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
 
 ### 2. Core Business Logic (`universal_iiif_core/`)
@@ -26,6 +27,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **Downloader Logic**:
   * Implements the **Golden Flow** (Native PDF check -> Extraction -> Fallback to IIIF).
   * Manages threading and DB updates.
+  * Split across `logic/downloader.py` (orchestrator), `logic/downloader_pdf.py` (PDF/native pipeline), and `logic/downloader_runtime.py` (canvas/runtime pipeline).
 * **Network Layer (`utils.py`)**:
   * Provides a resilient `requests.Session`.
   * Handles WAF Bypass (Browser User-Agents, Dynamic Brotli).
@@ -33,6 +35,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
   * Abstracts differences between local Kraken models and Cloud APIs (OpenAI/Anthropic).
 * **Storage**:
   * `VaultManager`: SQLite interface for metadata and job tracking (`queued/running/partial/complete` states).
+  * `vault_snippets.py` and `vault_jobs.py` hold extracted repository-style methods attached to `VaultManager`.
 
 ---
 
