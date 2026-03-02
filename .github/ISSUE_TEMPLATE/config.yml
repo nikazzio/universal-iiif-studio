@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md
+    about: Read the user and workflow documentation before opening an issue.
