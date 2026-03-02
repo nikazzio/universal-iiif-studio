@@ -87,14 +87,21 @@ def generate_pdf_from_images(image_paths, output_path):
         images = []
         for p in image_paths:
             if Path(p).exists():
-                img = PILImage.open(p)
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                images.append(img)
+                with PILImage.open(p) as img:
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    # Copy image data to prevent closing before save
+                    img_copy = img.copy()
+                    images.append(img_copy)
 
         if images:
-            images[0].save(output_path, save_all=True, append_images=images[1:])
-            return True, f"PDF creato con successo: {output_path}"
+            try:
+                images[0].save(output_path, save_all=True, append_images=images[1:])
+                return True, f"PDF creato con successo: {output_path}"
+            finally:
+                # Close all image copies
+                for img in images:
+                    img.close()
 
         return False, "Nessuna immagine valida trovata."
     except Exception as e:
