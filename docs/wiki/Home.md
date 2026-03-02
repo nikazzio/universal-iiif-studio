@@ -4,11 +4,11 @@ This wiki is maintained from repository sources under `docs/wiki/`.
 
 ## Pages
 
-- [Getting Started](Getting-Started)
-- [Configuration](Configuration)
-- [Studio Workflow](Studio-Workflow)
-- [PDF Export Profiles](PDF-Export-Profiles)
-- [FAQ](FAQ)
+- [Getting Started](Getting-Started.md)
+- [Configuration](Configuration.md)
+- [Studio Workflow](Studio-Workflow.md)
+- [PDF Export Profiles](PDF-Export-Profiles.md)
+- [FAQ](FAQ.md)
 
 ## Maintenance Policy
 

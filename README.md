@@ -1,7 +1,7 @@
 # Universal IIIF Downloader & Studio
 
-[![CI](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/ci.yml)
-[![Release](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/release.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-downloader/actions/workflows/release.yml)
+[![CI](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml)
+[![Release](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/release.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/release.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-46a2f1?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
@@ -13,8 +13,8 @@ Developer-focused toolkit for downloading IIIF manuscripts and working with them
 ## Quickstart
 
 ```bash
-git clone https://github.com/nikazzio/universal-iiif-downloader.git
-cd universal-iiif-downloader
+git clone https://github.com/nikazzio/universal-iiif-studio.git
+cd universal-iiif-studio
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
