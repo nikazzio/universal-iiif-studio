@@ -632,7 +632,7 @@ class IIIFDownloader:
 
         try:
             self.logger.info(f"Generating PDF for {len(files)} pages...")
-            print("Creating Professional PDF with Cover & Colophon...")
+            self.logger.info("Creating Professional PDF with Cover & Colophon...")
 
             with tqdm(total=len(files), desc="Generating PDF", unit="page") as pbar:
 
@@ -656,7 +656,7 @@ class IIIFDownloader:
                 )
 
             self.logger.info(f"PDF Generated successfully: {output_path}")
-            print(f"✅ PDF Created: {output_path}")
+            self.logger.info(f"✅ PDF Created: {output_path}")
         except Exception as e:
             self.logger.error(f"Failed to generate professional PDF: {e}", exc_info=True)
             # Fallback to simple image append if needed, but let's trust the new system

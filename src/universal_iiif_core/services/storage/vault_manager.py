@@ -715,7 +715,7 @@ class VaultManager:
                 # Convert to PNG bytes
                 return pix.tobytes("png")
         except Exception as e:
-            print(f"Error extracting snippet with fitz: {e}")
+            logger.error(f"Error extracting snippet with fitz: {e}", exc_info=True)
             return None
 
     def save_snippet(
