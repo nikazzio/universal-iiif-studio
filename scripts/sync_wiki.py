@@ -140,13 +140,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    """Run wiki synchronization from local source files to the wiki git repository."""
-    args = _parse_args()
-
-    source_root = Path(args.source_root).resolve()
-    wiki_dir = Path(args.wiki_dir).resolve()
-
+def _validate_source_root(source_root: Path) -> None:
     if not source_root.exists():
         raise SystemExit(f"source-root not found: {source_root}")
     if not source_root.is_dir():
@@ -154,17 +148,21 @@ def main() -> int:
     if not (source_root / "Home.md").exists():
         raise SystemExit(f"Home.md is required in source-root: {source_root / 'Home.md'}")
 
-    repo_slug = (args.repo or _detect_repo_slug() or "").strip()
+
+def _resolve_repo_slug(explicit_repo: str | None) -> str:
+    repo_slug = (explicit_repo or _detect_repo_slug() or "").strip()
     if not repo_slug:
         raise SystemExit("Unable to determine repository slug. Pass --repo owner/repo.")
+    return repo_slug
 
+
+def _print_run_context(*, repo_slug: str, source_root: Path, wiki_dir: Path) -> None:
     print(f"Repository: {repo_slug}")
     print(f"Source root: {source_root}")
     print(f"Wiki dir: {wiki_dir}")
 
-    token = os.getenv("GITHUB_TOKEN")
-    remote_url = _build_wiki_remote(repo_slug, token)
 
+def _clone_or_update_wiki_or_exit(*, remote_url: str, wiki_dir: Path) -> None:
     try:
         _clone_or_update_wiki(remote_url=remote_url, wiki_dir=wiki_dir)
     except subprocess.CalledProcessError as exc:
@@ -177,20 +175,21 @@ def main() -> int:
             msg = f"{msg}\n{stderr}"
         raise SystemExit(msg) from exc
 
-    copied, removed = _sync_files(source_root=source_root, wiki_dir=wiki_dir, prune=bool(args.prune))
 
-    if args.dry_run:
-        has_changes = _has_changes(wiki_dir)
-        print("DRY RUN: no commit, no push.")
-        print(f"Files copied: {copied}, files removed: {removed}")
-        if has_changes:
-            print("DRY RUN: wiki changes detected.")
-        else:
-            print("DRY RUN: wiki already up to date.")
-        if args.push:
-            print("DRY RUN: --push ignored.")
-        return 0
+def _handle_dry_run(*, wiki_dir: Path, copied: int, removed: int, push_requested: bool) -> int:
+    has_changes = _has_changes(wiki_dir)
+    print("DRY RUN: no commit, no push.")
+    print(f"Files copied: {copied}, files removed: {removed}")
+    if has_changes:
+        print("DRY RUN: wiki changes detected.")
+    else:
+        print("DRY RUN: wiki already up to date.")
+    if push_requested:
+        print("DRY RUN: --push ignored.")
+    return 0
 
+
+def _commit_and_maybe_push(*, args: argparse.Namespace, wiki_dir: Path, copied: int, removed: int) -> int:
     _configure_git_identity(wiki_dir=wiki_dir, name=args.git_user_name, email=args.git_user_email)
     _run(["git", "add", "-A"], cwd=wiki_dir)
 
@@ -207,10 +206,32 @@ def main() -> int:
         branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=wiki_dir).stdout.strip()
         _run(["git", "push", "origin", branch], cwd=wiki_dir)
         print("Pushed wiki changes.")
-    else:
-        print("Push skipped. Re-run with --push to publish changes.")
+        return 0
 
+    print("Push skipped. Re-run with --push to publish changes.")
     return 0
+
+
+def main() -> int:
+    """Run wiki synchronization from local source files to the wiki git repository."""
+    args = _parse_args()
+
+    source_root = Path(args.source_root).resolve()
+    wiki_dir = Path(args.wiki_dir).resolve()
+    _validate_source_root(source_root)
+    repo_slug = _resolve_repo_slug(args.repo)
+    _print_run_context(repo_slug=repo_slug, source_root=source_root, wiki_dir=wiki_dir)
+
+    token = os.getenv("GITHUB_TOKEN")
+    remote_url = _build_wiki_remote(repo_slug, token)
+    _clone_or_update_wiki_or_exit(remote_url=remote_url, wiki_dir=wiki_dir)
+
+    copied, removed = _sync_files(source_root=source_root, wiki_dir=wiki_dir, prune=bool(args.prune))
+
+    if args.dry_run:
+        return _handle_dry_run(wiki_dir=wiki_dir, copied=copied, removed=removed, push_requested=args.push)
+
+    return _commit_and_maybe_push(args=args, wiki_dir=wiki_dir, copied=copied, removed=removed)
 
 
 if __name__ == "__main__":

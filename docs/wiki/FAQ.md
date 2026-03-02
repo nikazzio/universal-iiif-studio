@@ -78,14 +78,14 @@ python scripts/sync_wiki.py --repo owner/repo --dry-run
 - then publish with `--push`,
 - ensure CI has `contents: write` and wiki is enabled.
 
-More details: [WIKI_MAINTENANCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/WIKI_MAINTENANCE.md)
+More details: [WIKI_MAINTENANCE.md](../WIKI_MAINTENANCE.md)
 
 ## 9) Where should I edit wiki pages?
 
 Always edit source pages in `docs/wiki/` inside the main repository.  
 The GitHub wiki is a publish target, not the source of truth.
 
-More details: [WIKI_MAINTENANCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/WIKI_MAINTENANCE.md)
+More details: [WIKI_MAINTENANCE.md](../WIKI_MAINTENANCE.md)
 
 ## 10) Where is the complete configuration reference?
 
