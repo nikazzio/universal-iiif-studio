@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
@@ -104,7 +105,7 @@ def fetch_highres_page_image(
             img.verify()
 
         return True, "ok"
-    except (requests.RequestException, json.JSONDecodeError):
+    except (requests.RequestException, json.JSONDecodeError) as exc:
         if out_path.exists():
             with suppress(OSError):
                 out_path.unlink()

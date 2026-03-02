@@ -1,4 +1,5 @@
 import base64
+import json
 import time
 import warnings
 from collections.abc import Callable
@@ -135,7 +136,7 @@ class KrakenProvider:
         if KRAKEN_AVAILABLE and model_path:
             try:
                 self.model = models.load_any(model_path)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as e:
                 self.error = f"Errore caricamento modello: {e}"
         else:
             self.error = KRAKEN_IMPORT_ERROR or "Kraken non disponibile o modello non specificato"
@@ -179,7 +180,7 @@ class KrakenProvider:
                 lines.append(OCRLine(text, conf, box))
 
             return OCRResult("\n".join(full_text), lines, "Kraken")
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
             return OCRResult("", [], "Kraken", error=str(e))
 
 
@@ -226,7 +227,7 @@ class GoogleVisionProvider:
                             lines.append(OCRLine(text, conf, box))
 
             return OCRResult(full_text, lines, "Google Vision")
-        except (requests.RequestException, json.JSONDecodeError, KeyError):
+        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
             return OCRResult("", [], "Google Vision", error=str(e))
 
 
@@ -253,7 +254,7 @@ class HFInferenceProvider:
 
         try:
             lines_data, full_text = self._process_with_kraken_lines(image)
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, json.JSONDecodeError) as e:
             return OCRResult("", [], "Hugging Face", error=str(e))
 
         if not lines_data:
@@ -305,7 +306,7 @@ class HFInferenceProvider:
                 res = r.json()
                 text = res[0].get("generated_text", "") if isinstance(res, list) else res.get("generated_text", "")
                 return {"text": text}
-            except (ValueError, KeyError, TypeError):
+            except (ValueError, KeyError, TypeError) as e:
                 return {"error": str(e)}
         return {"error": "Timeout"}
 
