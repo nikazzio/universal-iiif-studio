@@ -80,20 +80,20 @@ def _encode_jpeg_bytes(img: PILImage.Image, quality: int) -> bytes:
 
 
 def _prepare_image_bytes(image_path: Path, profile: CompressionProfile) -> tuple[bytes, tuple[int, int]]:
-    img = PILImage.open(str(image_path))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
+    with PILImage.open(str(image_path)) as img:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
-    if profile.max_long_edge_px:
-        w, h = img.size
-        long_edge = max(w, h)
-        if long_edge > profile.max_long_edge_px:
-            scale = profile.max_long_edge_px / float(long_edge)
-            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-            img = img.resize(new_size, PILImage.Resampling.LANCZOS)
+        if profile.max_long_edge_px:
+            w, h = img.size
+            long_edge = max(w, h)
+            if long_edge > profile.max_long_edge_px:
+                scale = profile.max_long_edge_px / float(long_edge)
+                new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+                img = img.resize(new_size, PILImage.Resampling.LANCZOS)
 
-    raw = _encode_jpeg_bytes(img, profile.jpeg_quality)
-    return raw, img.size
+        raw = _encode_jpeg_bytes(img, profile.jpeg_quality)
+        return raw, img.size
 
 
 def _add_cover_page(  # noqa: C901

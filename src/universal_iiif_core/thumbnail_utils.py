@@ -78,18 +78,18 @@ def ensure_thumbnail(
         if not scan_path.exists():
             return None
 
-        img = PILImage.open(str(scan_path))
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+        with PILImage.open(str(scan_path)) as img:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
 
-        w, h = img.size
-        long_edge = max(w, h)
-        if long_edge > max_long_edge_px:
-            scale = max_long_edge_px / float(long_edge)
-            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-            img = img.resize(new_size, PILImage.Resampling.LANCZOS)
+            w, h = img.size
+            long_edge = max(w, h)
+            if long_edge > max_long_edge_px:
+                scale = max_long_edge_px / float(long_edge)
+                new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+                img = img.resize(new_size, PILImage.Resampling.LANCZOS)
 
-        img.save(str(out_path), format="JPEG", quality=int(jpeg_quality), optimize=True, progressive=True)
+            img.save(str(out_path), format="JPEG", quality=int(jpeg_quality), optimize=True, progressive=True)
         return out_path
     except (OSError, ValueError):
         return None
@@ -123,18 +123,18 @@ def ensure_hover_preview(
         if not scan_path.exists():
             return None
 
-        img = PILImage.open(str(scan_path))
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+        with PILImage.open(str(scan_path)) as img:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
 
-        w, h = img.size
-        long_edge = max(w, h)
-        if long_edge > max_long_edge_px:
-            scale = max_long_edge_px / float(long_edge)
-            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-            img = img.resize(new_size, PILImage.Resampling.LANCZOS)
+            w, h = img.size
+            long_edge = max(w, h)
+            if long_edge > max_long_edge_px:
+                scale = max_long_edge_px / float(long_edge)
+                new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+                img = img.resize(new_size, PILImage.Resampling.LANCZOS)
 
-        img.save(str(out_path), format="JPEG", quality=int(jpeg_quality), optimize=True, progressive=True)
+            img.save(str(out_path), format="JPEG", quality=int(jpeg_quality), optimize=True, progressive=True)
         return out_path
     except (OSError, ValueError):
         return None

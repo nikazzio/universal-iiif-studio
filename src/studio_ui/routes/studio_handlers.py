@@ -699,21 +699,21 @@ def run_ocr_async(doc_id: str, library: str, page: int, engine: str, model: str 
                 }
                 return
 
-            img = Image.open(str(image_path))
-            logger.debug("📸 Image loaded successfully: %s (%s)", image_path, img.size)
+            with Image.open(str(image_path)) as img:
+                logger.debug("📸 Image loaded successfully: %s (%s)", image_path, img.size)
 
-            # Instantiate processor with all keys
-            processor = OCRProcessor(
-                openai_api_key=get_api_key("openai"),
-                anthropic_api_key=get_api_key("anthropic"),
-                google_api_key=get_api_key("google_vision"),
-                hf_token=get_api_key("huggingface"),
-            )
+                # Instantiate processor with all keys
+                processor = OCRProcessor(
+                    openai_api_key=get_api_key("openai"),
+                    anthropic_api_key=get_api_key("anthropic"),
+                    google_api_key=get_api_key("google_vision"),
+                    hf_token=get_api_key("huggingface"),
+                )
 
-            logger.debug("🚀 Dispatching OCR request to processor...")
+                logger.debug("🚀 Dispatching OCR request to processor...")
 
-            # Use unified entry point
-            res = processor.process_page(img, engine=engine, model=model)
+                # Use unified entry point
+                res = processor.process_page(img, engine=engine, model=model)
 
             if res.get("error"):
                 logger.error("❌ OCR Error for %s p%s: %s", doc_id, page_idx, res["error"])
