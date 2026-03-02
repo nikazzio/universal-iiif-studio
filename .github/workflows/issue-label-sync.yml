@@ -1,0 +1,96 @@
+name: Issue Label Sync
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync labels from issue form fields
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+
+            const allowed = {
+              type: new Set([
+                "type:feature",
+                "type:bug",
+                "type:docs",
+                "type:chore",
+                "type:refactor",
+                "type:perf",
+                "type:ci",
+                "type:test",
+                "type:security",
+              ]),
+              priority: new Set(["priority:P0", "priority:P1", "priority:P2", "priority:P3"]),
+              area: new Set([
+                "area:discovery",
+                "area:library",
+                "area:studio",
+                "area:export",
+                "area:providers",
+                "area:desktop",
+                "area:roadmap",
+              ]),
+              semver: new Set(["major", "minor", "patch", "semver:none"]),
+              status: new Set([
+                "status:triage",
+                "status:ready",
+                "status:in-progress",
+                "status:blocked",
+                "status:needs-info",
+              ]),
+            };
+
+            function extractSectionValue(sectionTitle) {
+              const escaped = sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const re = new RegExp(`###\\s+${escaped}\\s*\\n+([\\s\\S]*?)(?=\\n###\\s+|$)`, "i");
+              const match = body.match(re);
+              if (!match) return null;
+              const raw = match[1]
+                .split("\n")
+                .map((line) => line.trim())
+                .find((line) => line && !line.startsWith(">"));
+              if (!raw) return null;
+              return raw.replace(/^-+\s*/, "").trim();
+            }
+
+            function pickAllowed(value, group) {
+              if (!value) return null;
+              const exact = [...allowed[group]].find((x) => x.toLowerCase() === value.toLowerCase());
+              if (exact) return exact;
+              const token = value.split(/\s+/)[0].trim();
+              return [...allowed[group]].find((x) => x.toLowerCase() === token.toLowerCase()) || null;
+            }
+
+            const extracted = [
+              pickAllowed(extractSectionValue("Type Label"), "type"),
+              pickAllowed(extractSectionValue("Priority Label"), "priority"),
+              pickAllowed(extractSectionValue("Area Label"), "area"),
+              pickAllowed(extractSectionValue("Semver Label"), "semver"),
+              pickAllowed(extractSectionValue("Status Label"), "status") || "status:triage",
+            ].filter(Boolean);
+
+            const managedPrefixes = ["type:", "priority:", "area:", "status:"];
+            const managedSingles = new Set(["major", "minor", "patch", "semver:none"]);
+            const current = issue.labels.map((l) => l.name);
+            const keep = current.filter(
+              (name) => !managedPrefixes.some((prefix) => name.startsWith(prefix)) && !managedSingles.has(name),
+            );
+            const finalLabels = [...new Set([...keep, ...extracted])];
+
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels: finalLabels,
+            });

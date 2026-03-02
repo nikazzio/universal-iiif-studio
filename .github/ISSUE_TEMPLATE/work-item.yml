@@ -1,0 +1,114 @@
+name: Work Item
+description: Structured issue for features, bugs, docs, and maintenance tasks.
+title: "type(scope): short summary"
+labels: ["status:triage"]
+body:
+  - type: dropdown
+    id: type_label
+    attributes:
+      label: Type Label
+      description: Primary work type.
+      options:
+        - type:feature
+        - type:bug
+        - type:docs
+        - type:chore
+        - type:refactor
+        - type:perf
+        - type:ci
+        - type:test
+        - type:security
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority_label
+    attributes:
+      label: Priority Label
+      description: Execution priority.
+      options:
+        - priority:P0
+        - priority:P1
+        - priority:P2
+        - priority:P3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area_label
+    attributes:
+      label: Area Label
+      description: Product area impacted by this issue.
+      options:
+        - area:discovery
+        - area:library
+        - area:studio
+        - area:export
+        - area:providers
+        - area:desktop
+        - area:roadmap
+    validations:
+      required: true
+
+  - type: dropdown
+    id: semver_label
+    attributes:
+      label: Semver Label
+      description: Expected release impact when this issue is delivered.
+      options:
+        - major
+        - minor
+        - patch
+        - semver:none
+    validations:
+      required: true
+
+  - type: dropdown
+    id: status_label
+    attributes:
+      label: Status Label
+      description: Current execution state.
+      options:
+        - status:triage
+        - status:ready
+        - status:in-progress
+        - status:blocked
+        - status:needs-info
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this work matters now.
+      placeholder: Problem statement, user pain, and expected outcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in and out of scope.
+      placeholder: In scope / Out of scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Concrete checks for completion.
+      placeholder: |
+        1. ...
+        1. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Optional implementation notes, links, or risks.
