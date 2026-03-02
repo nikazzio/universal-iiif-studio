@@ -115,6 +115,11 @@ def _parse_args() -> argparse.Namespace:
         default="docs(wiki): sync from docs/wiki",
         help="Commit message used when changes are detected.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run synchronization checks without creating commits or pushing.",
+    )
     parser.add_argument("--push", action="store_true", help="Push commit to remote wiki repository.")
     parser.add_argument(
         "--prune",
@@ -153,6 +158,10 @@ def main() -> int:
     if not repo_slug:
         raise SystemExit("Unable to determine repository slug. Pass --repo owner/repo.")
 
+    print(f"Repository: {repo_slug}")
+    print(f"Source root: {source_root}")
+    print(f"Wiki dir: {wiki_dir}")
+
     token = os.getenv("GITHUB_TOKEN")
     remote_url = _build_wiki_remote(repo_slug, token)
 
@@ -169,6 +178,19 @@ def main() -> int:
         raise SystemExit(msg) from exc
 
     copied, removed = _sync_files(source_root=source_root, wiki_dir=wiki_dir, prune=bool(args.prune))
+
+    if args.dry_run:
+        has_changes = _has_changes(wiki_dir)
+        print("DRY RUN: no commit, no push.")
+        print(f"Files copied: {copied}, files removed: {removed}")
+        if has_changes:
+            print("DRY RUN: wiki changes detected.")
+        else:
+            print("DRY RUN: wiki already up to date.")
+        if args.push:
+            print("DRY RUN: --push ignored.")
+        return 0
+
     _configure_git_identity(wiki_dir=wiki_dir, name=args.git_user_name, email=args.git_user_email)
     _run(["git", "add", "-A"], cwd=wiki_dir)
 

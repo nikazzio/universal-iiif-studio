@@ -18,7 +18,13 @@ This project uses a "docs-as-source, wiki-as-publish" model.
 
 1. Edit wiki pages under `docs/wiki/`.
 1. Commit and merge to `main`.
-1. Run:
+1. Validate with dry-run:
+
+```bash
+python scripts/sync_wiki.py --repo owner/repo --dry-run
+```
+
+1. Publish with:
 
 ```bash
 python scripts/sync_wiki.py --repo owner/repo --push
@@ -34,7 +40,8 @@ Notes:
 A workflow can publish from `main`:
 
 - Trigger on pushes affecting wiki sources.
-- Run `scripts/sync_wiki.py --push`.
+- Run a dry-run smoke test first.
+- If dry-run passes, run `scripts/sync_wiki.py --push`.
 - Use `GITHUB_TOKEN` with `contents: write`.
 
 ## Script Options
@@ -48,5 +55,6 @@ Most useful flags:
 - `--repo owner/repo`
 - `--source-root docs/wiki`
 - `--wiki-dir /tmp/iiif-wiki-sync`
+- `--dry-run`
 - `--push`
 - `--no-prune`
