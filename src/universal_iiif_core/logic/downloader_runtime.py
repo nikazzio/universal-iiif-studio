@@ -59,6 +59,7 @@ def run(
     self.extract_metadata()
     canvases = self.get_canvases()
     total_pages = len(canvases)
+    self.expected_total_canvases = total_pages
     selected_pages, canvas_plan = self._build_canvas_plan(canvases, target_pages)
     operation_total = len(canvas_plan)
     if operation_total == 0:
@@ -84,7 +85,7 @@ def run(
 
     valid = [f for f in downloaded if f]
     try:
-        final_files = self._finalize_downloads(valid)
+        final_files = [] if (should_cancel and should_cancel()) else self._finalize_downloads(valid)
     except Exception as exc:
         self.vault.update_status(self.ms_id, "error", str(exc))
         raise
@@ -230,49 +231,76 @@ def _store_page_stats(self, page_stats):
 
 
 def _finalize_downloads(self, valid):
-    final_files = []
-    for temp_file in valid:
-        p = Path(temp_file)
-        dest = self.scans_dir / p.name
+    _ = valid
+    total_expected = int(getattr(self, "expected_total_canvases", 0) or getattr(self, "total_canvases", 0) or 0)
+    known_pages = _known_page_numbers(self)
+    expected_pages = set(range(1, total_expected + 1)) if total_expected > 0 else set()
+
+    # Keep staged files in temp until the full manuscript is available.
+    if total_expected > 0 and not expected_pages.issubset(known_pages):
+        return []
+
+    for staged_file in sorted(self.temp_dir.glob("pag_*.jpg")):
+        dest = self.scans_dir / staged_file.name
         if not dest.exists():
-            shutil.move(str(p), str(dest))
-        elif self.overwrite_existing_scans:
-            shutil.copy2(str(p), str(dest))
-            with suppress(OSError):
-                p.unlink()
-        final_files.append(str(dest))
+            shutil.move(str(staged_file), str(dest))
+            continue
+        if self.overwrite_existing_scans:
+            shutil.copy2(str(staged_file), str(dest))
+        with suppress(OSError):
+            staged_file.unlink()
+
     try:
         clean_dir(self.temp_dir)
     except OSError:
         with suppress(Exception):
             self.logger.debug("Failed to clean temp dir %s", self.temp_dir, exc_info=True)
 
-    return final_files
+    return [str(path) for path in sorted(self.scans_dir.glob("pag_*.jpg"))]
 
 
 def _sync_asset_state(self, total_expected: int) -> None:
-    scan_count = len(list(self.scans_dir.glob("pag_*.jpg")))
+    scans_pages = _page_numbers_in_dir(self.scans_dir)
+    temp_pages = _page_numbers_in_dir(self.temp_dir)
+    known_pages = scans_pages | temp_pages
+    known_count = len(known_pages)
     pdf_available = 1 if any(self.pdf_dir.glob("*.pdf")) else 0
-    if scan_count <= 0 and total_expected > 0:
+    if known_count <= 0 and total_expected > 0:
         state = "saved"
-    elif total_expected <= 0 or scan_count >= total_expected:
+    elif total_expected <= 0 or known_count >= total_expected:
         state = "complete"
     else:
         state = "partial"
     missing = []
-    if total_expected > 0 and scan_count < total_expected:
-        existing = {int(p.stem.split("_")[-1]) + 1 for p in self.scans_dir.glob("pag_*.jpg")}
-        missing = [i for i in range(1, total_expected + 1) if i not in existing]
+    if total_expected > 0 and known_count < total_expected:
+        missing = [i for i in range(1, total_expected + 1) if i not in known_pages]
     self.vault.upsert_manuscript(
         self.ms_id,
         status=state,
         asset_state=state,
         total_canvases=total_expected,
-        downloaded_canvases=scan_count,
+        downloaded_canvases=known_count,
         pdf_local_available=pdf_available,
         missing_pages_json=json.dumps(missing),
         last_sync_at=time.strftime("%Y-%m-%d %H:%M:%S"),
     )
+
+
+def _page_numbers_in_dir(directory: Path) -> set[int]:
+    pages: set[int] = set()
+    if not directory.exists():
+        return pages
+    for image in directory.glob("pag_*.jpg"):
+        stem = image.stem or ""
+        try:
+            pages.add(int(stem.split("_")[-1]) + 1)
+        except ValueError:
+            continue
+    return pages
+
+
+def _known_page_numbers(self) -> set[int]:
+    return _page_numbers_in_dir(self.scans_dir) | _page_numbers_in_dir(self.temp_dir)
 
 
 def run_batch_ocr(self, image_files: list[str], model_name: str):

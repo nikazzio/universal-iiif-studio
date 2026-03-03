@@ -151,3 +151,44 @@ def test_list_jobs_active_includes_stop_transitional_states():
     assert "job_pausing" in active
     assert "job_cancelling" in active
     assert "job_done" not in active
+
+
+def test_resume_submission_preserves_existing_progress(tmp_path, monkeypatch):
+    """Requeued runs with same db_job_id must keep prior current/total counters."""
+    db_path = str(tmp_path / "vault.db")
+    monkeypatch.setattr(jobs_mod, "VaultManager", lambda: VaultManager(db_path))
+    monkeypatch.setattr(jobs_mod, "get_config_manager", lambda: _Cfg())
+
+    job_manager._jobs.clear()
+    job_manager._download_queue.clear()
+    job_manager._active_downloads.clear()
+
+    vm = VaultManager(db_path)
+    vm.create_download_job("job_resume_keep", "DOC_KEEP", "Gallica", "https://example.org/manifest.json")
+    vm.update_download_job("job_resume_keep", current=4, total=12, status="paused", error=None)
+
+    def _slow_task(progress_callback=None, should_cancel=None, **kwargs):
+        time.sleep(0.12)
+        return "ok"
+
+    jid = job_manager.submit_job(
+        _slow_task,
+        kwargs={
+            "db_job_id": "job_resume_keep",
+            "doc_id": "DOC_KEEP",
+            "library": "Gallica",
+            "manifest_url": "https://example.org/manifest.json",
+        },
+        job_type="download",
+    )
+
+    time.sleep(0.03)
+    row = vm.get_download_job("job_resume_keep") or {}
+    assert int(row.get("current") or 0) == 4
+    assert int(row.get("total") or 0) == 12
+
+    for _ in range(100):
+        snapshot = job_manager.get_job(jid) or {}
+        if str(snapshot.get("status") or "").lower() in {"completed", "failed", "cancelled"}:
+            break
+        time.sleep(0.01)

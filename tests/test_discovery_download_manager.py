@@ -173,6 +173,7 @@ def test_download_manager_paused_job_shows_resume_and_remove():
     text = repr(fragment)
     assert "Riprendi" in text
     assert "Rimuovi" in text
+    assert "2/10 pagine" in text
 
 
 def test_download_manager_uses_truncated_display_title():

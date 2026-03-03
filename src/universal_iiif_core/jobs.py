@@ -143,15 +143,18 @@ class JobManager:
         return True
 
     def _enqueue_download_job(self, job_id: str, db_job_id: str | None) -> None:
+        target_id = db_job_id or job_id
+        current, total = 0, 0
         try:
+            current, total = self._read_db_progress(target_id)
             self._update_db_safe(
-                db_job_id or job_id,
+                target_id,
                 status="queued",
-                current=0,
-                total=0,
+                current=current,
+                total=total,
             )
         except DatabaseError:
-            logger.debug("Failed to mark queued for %s", db_job_id or job_id, exc_info=True)
+            logger.debug("Failed to mark queued for %s", target_id, exc_info=True)
         with self._lock:
             self._download_queue.append(job_id)
             self._refresh_queue_positions_locked()
@@ -198,10 +201,11 @@ class JobManager:
             info["queue_position"] = idx
             db_job_id = info.get("db_job_id") or job_id
             try:
+                current, total = self._read_db_progress(str(db_job_id))
                 VaultManager().update_download_job(
                     db_job_id,
-                    current=0,
-                    total=0,
+                    current=current,
+                    total=total,
                     status="queued",
                     queue_position=idx,
                     priority=int(info.get("priority") or 0),
@@ -347,9 +351,19 @@ class JobManager:
             library = str(kwargs.get("library") or "-") if isinstance(kwargs, dict) else "-"
             manifest_url = str(kwargs.get("manifest_url") or "") if isinstance(kwargs, dict) else ""
             target = db_job_id or job_id
+            previous = vault.get_download_job(target) or {}
+            prev_current = int(previous.get("current", 0) or 0)
+            prev_total = int(previous.get("total", 0) or 0)
             vault.create_download_job(target, doc_id, library, manifest_url)
+            if prev_current > 0 or prev_total > 0:
+                vault.update_download_job(target, current=prev_current, total=prev_total, status="queued", error=None)
         except DatabaseError:
             logger.debug("_maybe_create_db_record failed for %s", db_job_id or job_id, exc_info=True)
+
+    @staticmethod
+    def _read_db_progress(db_job_id: str) -> tuple[int, int]:
+        row = VaultManager().get_download_job(db_job_id) or {}
+        return int(row.get("current", 0) or 0), int(row.get("total", 0) or 0)
 
     def _mark_db_running(self, db_job_id: str) -> None:
         try:
@@ -391,10 +405,7 @@ class JobManager:
                 is_transitional = target_status in {"queued", "running", "cancelling", "pausing"}
                 preserves_terminal = is_transitional and existing_status in terminal_statuses
                 preserves_stop_transition = target_status == "running" and existing_status in {"cancelling", "pausing"}
-                if (
-                    preserves_terminal
-                    or preserves_stop_transition
-                ):
+                if preserves_terminal or preserves_stop_transition:
                     target_status = existing_status
                 existing_current = int(existing.get("current", 0) or 0)
                 existing_total = int(existing.get("total", existing_current) or existing_current)

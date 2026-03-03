@@ -521,7 +521,7 @@ class VaultManager:
             scans_dir = local_path / "scans" if local_path else None
             scans_pages = self._scan_page_numbers(scans_dir)
             temp_pages = self._scan_page_numbers((temp_root / manuscript_id) if temp_root and manuscript_id else None)
-            known_pages = scans_pages or temp_pages
+            known_pages = scans_pages | temp_pages
             scans_count = len(scans_pages)
             temp_count = len(temp_pages)
             total = int(row.get("total_canvases") or 0)

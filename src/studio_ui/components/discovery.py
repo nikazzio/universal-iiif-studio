@@ -819,26 +819,35 @@ def _download_job_actions(status: str, job_id: str, doc_id: str, library: str) -
 
 
 def _download_job_progress(status: str, current: int, total: int, percent: int, error: str) -> Div:
+    counts_line = P(f"{current}/{total} pagine", cls="text-[11px] text-slate-400 mt-1")
     progress = Div(
         Div(
             Div(cls="h-2 rounded bg-indigo-500", style=f"width: {percent}%"),
             cls="w-full bg-slate-700 rounded h-2",
         ),
-        P(f"{current}/{total} ({percent}%)", cls="text-[11px] text-slate-400 mt-1") if total > 0 else "",
+        P(f"{current}/{total} ({percent}%)", cls="text-[11px] text-slate-400 mt-1") if total > 0 else counts_line,
         cls="mt-2",
     )
     if status == "queued":
-        return Div(P("In attesa di uno slot libero...", cls="text-[11px] text-slate-400 mt-2"), cls="mt-1")
+        return Div(counts_line, P("In attesa di uno slot libero...", cls="text-[11px] text-slate-400 mt-2"), cls="mt-1")
     if status == "cancelling":
-        return Div(P("Richiesta di arresto in corso...", cls="text-[11px] text-amber-300 mt-2"), cls="mt-1")
+        return Div(
+            counts_line,
+            P("Richiesta di arresto in corso...", cls="text-[11px] text-amber-300 mt-2"),
+            cls="mt-1",
+        )
     if status == "pausing":
-        return Div(P("Messa in pausa in corso...", cls="text-[11px] text-amber-300 mt-2"), cls="mt-1")
+        return Div(counts_line, P("Messa in pausa in corso...", cls="text-[11px] text-amber-300 mt-2"), cls="mt-1")
     if status == "paused":
-        return Div(P("Download in pausa.", cls="text-[11px] text-violet-300 mt-2"), cls="mt-1")
+        return Div(counts_line, P("Download in pausa.", cls="text-[11px] text-violet-300 mt-2"), cls="mt-1")
     if status == "cancelled":
-        return Div(P("Download annullato dall'utente.", cls="text-[11px] text-slate-300 mt-2"), cls="mt-1")
+        return Div(
+            counts_line,
+            P("Download annullato dall'utente.", cls="text-[11px] text-slate-300 mt-2"),
+            cls="mt-1",
+        )
     if status == "error" and error:
-        return Div(P(error, cls="text-[11px] text-rose-300 mt-2"), cls="mt-1")
+        return Div(counts_line, P(error, cls="text-[11px] text-rose-300 mt-2"), cls="mt-1")
     return progress
 
 
