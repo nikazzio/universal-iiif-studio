@@ -12,7 +12,15 @@ Il file `config.json` è la singola fonte di verità.
 
 ### ⚙️ Sistema e Download
 
-* `settings.system.max_concurrent_downloads`: Numero massimo di download documento in esecuzione contemporanea (default: 2). Gli altri job restano in coda.
+Parametri **sempre globali** (valgono per tutte le biblioteche):
+* `settings.network.global.max_concurrent_download_jobs`: Numero massimo di download documento in esecuzione contemporanea (default: 2). Gli altri job restano in coda.
+* `settings.network.global.connect_timeout_s`: timeout apertura connessione HTTP.
+* `settings.network.global.read_timeout_s`: timeout lettura risposta HTTP.
+* `settings.network.global.transport_retries`: retry trasporto lato client HTTP.
+
+Parametri **override per biblioteca** (attivi solo con `settings.network.libraries.<lib>.use_custom_policy=true`):
+* `workers_per_job`, `min_delay_s`, `max_delay_s`, `retry_max_attempts`, `backoff_base_s`, `backoff_cap_s`, `respect_retry_after`.
+
 * `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
 * `settings.images.probe_remote_max_resolution`: Abilita il probing automatico della risoluzione massima online per pagina.
 * `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi size IIIF.

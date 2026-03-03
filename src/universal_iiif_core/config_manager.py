@@ -12,12 +12,19 @@ from __future__ import annotations
 import json
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from .config_validation import SEVERITY_ERROR, validate_config
 from .logger import get_logger
+from .network_policy import (
+    DEFAULT_NETWORK_SETTINGS,
+    OBSOLETE_SETTING_KEYS,
+    migrate_legacy_network_settings,
+    normalize_network_settings,
+)
 
 logger = get_logger(__name__)
 
@@ -44,9 +51,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         "huggingface": "",
     },
     "settings": {
-        "system": {
-            "max_concurrent_downloads": 2,
-        },
         "defaults": {
             "default_library": "Vaticana",
             "preferred_ocr_engine": "openai",
@@ -213,6 +217,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
                 },
             },
         },
+        "network": DEFAULT_NETWORK_SETTINGS,
     },
 }
 
@@ -318,6 +323,12 @@ class ConfigManager:
                 with suppress(KeyError):
                     del pdf_cfg["render_dpi"]
 
+        settings_node = data.get("settings")
+        if not isinstance(settings_node, dict):
+            data["settings"] = {}
+            settings_node = data["settings"]
+        migrate_legacy_network_settings(settings_node)
+
         _log_validation_report(data)
 
         return cls(path=cfg_path, _data=data)
@@ -331,6 +342,33 @@ class ConfigManager:
         """Persist the current config data to disk."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def create_backup(self) -> Path:
+        """Create a timestamped backup of config.json and return its path."""
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = self.path.with_name(f"{self.path.stem}.backup.{stamp}{self.path.suffix}")
+        backup_path.write_text(json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8")
+        return backup_path
+
+    def normalize_runtime_settings(self) -> None:
+        """Normalize runtime settings and keep legacy/network compatibility in sync."""
+        settings_node = self._data.setdefault("settings", {})
+        if not isinstance(settings_node, dict):
+            self._data["settings"] = {}
+            settings_node = self._data["settings"]
+        migrate_legacy_network_settings(settings_node)
+        normalize_network_settings(settings_node)
+
+    def prune_obsolete_settings(self, *, create_backup: bool = True) -> tuple[list[str], Path | None]:
+        """Remove obsolete settings keys and return `(removed_paths, backup_path)`."""
+        has_obsolete = any(self._has_dotted_path(dotted) for dotted in OBSOLETE_SETTING_KEYS)
+        backup_path: Path | None = self.create_backup() if (create_backup and has_obsolete) else None
+
+        removed: list[str] = []
+        for dotted in OBSOLETE_SETTING_KEYS:
+            if self._delete_dotted_path(dotted):
+                removed.append(dotted)
+        return removed, backup_path
 
     def set_downloads_dir(self, value: str) -> None:
         """Set the downloads directory path."""
@@ -407,6 +445,40 @@ class ConfigManager:
                 node[part] = child
             node = child
         node[parts[-1]] = value
+
+    def _delete_dotted_path(self, dotted_path: str) -> bool:
+        """Delete a dotted path from config dict when present."""
+        if not dotted_path:
+            return False
+        parts = [p for p in dotted_path.split(".") if p]
+        if not parts:
+            return False
+        node: Any = self._data
+        for part in parts[:-1]:
+            if not isinstance(node, dict) or part not in node:
+                return False
+            node = node.get(part)
+        if not isinstance(node, dict):
+            return False
+        last = parts[-1]
+        if last not in node:
+            return False
+        del node[last]
+        return True
+
+    def _has_dotted_path(self, dotted_path: str) -> bool:
+        """Check whether a dotted path exists in config data."""
+        if not dotted_path:
+            return False
+        parts = [p for p in dotted_path.split(".") if p]
+        if not parts:
+            return False
+        node: Any = self._data
+        for part in parts:
+            if not isinstance(node, dict) or part not in node:
+                return False
+            node = node[part]
+        return True
 
     def _ensure_dir(self, path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)

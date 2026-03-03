@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "universal-iiif"
-version = "0.7.0"
+version = "0.16.0"
 description = "Universal IIIF Downloader & Studio for working with IIIF manuscripts."
 readme = "README.md"
 requires-python = ">=3.10"

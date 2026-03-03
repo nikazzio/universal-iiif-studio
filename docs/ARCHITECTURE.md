@@ -52,7 +52,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 
 ### 2. Download Manager + Golden Flow
 
-Downloads are queued in a DB-backed manager with bounded concurrency (`settings.system.max_concurrent_downloads`).
+Downloads are queued in a DB-backed manager with bounded concurrency (`settings.network.global.max_concurrent_download_jobs`).
 Queued jobs are promoted FIFO (with optional prioritization) and each running worker follows this flow:
 
 1. **Check Native PDF**: Does the manifest provide a download link?

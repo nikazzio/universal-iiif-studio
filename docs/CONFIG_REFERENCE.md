@@ -20,6 +20,13 @@ Validation only logs diagnostics; it does **not** rewrite `config.json`.
 Sensitive values (for example API keys/tokens) are never emitted in clear text by validation logs.
 
 Deprecated keys currently flagged:
+- `settings.system.max_concurrent_downloads`
+- `settings.system.download_workers`
+- `settings.system.request_timeout`
+- `settings.system.ocr_concurrency`
+- `settings.defaults.auto_generate_pdf`
+- `settings.images.ocr_quality`
+- `settings.pdf.ocr_dpi`
 - `settings.thumbnails.columns`
 - `settings.thumbnails.paginate_enabled`
 - `settings.thumbnails.default_select_all`
@@ -30,6 +37,13 @@ Deprecated keys currently flagged:
 - `settings.thumbnails.hover_preview_delay_ms`
 - `settings.thumbnails.inline_base64_max_tiles`
 - `settings.thumbnails.hover_preview_max_tiles`
+- `settings.network.tuning_steps`
+- `settings.network.libraries.<library>.size_strategy_mode`
+- `settings.network.libraries.<library>.size_strategy_custom`
+- `settings.network.libraries.<library>.allow_max_size`
+- `settings.network.libraries.<library>.iiif_quality`
+- `settings.network.libraries.<library>.connect_timeout_s`
+- `settings.network.libraries.<library>.read_timeout_s`
 
 ## Top-Level Schema
 
@@ -67,9 +81,50 @@ Notes:
 - `api_keys.google_vision` (`string`)
 - `api_keys.huggingface` (`string`)
 
-## `settings.system`
+## `settings.network.global`
 
-- `settings.system.max_concurrent_downloads` (`int`, default: `2`)
+- `settings.network.global.max_concurrent_download_jobs` (`int`, default: `2`)
+- `settings.network.global.connect_timeout_s` (`int`, default: `10`)
+- `settings.network.global.read_timeout_s` (`int`, default: `30`)
+- `settings.network.global.transport_retries` (`int`, default: `3`)
+
+## `settings.network.download`
+
+- `settings.network.download.default_workers_per_job` (`int`, default: `2`)
+- `settings.network.download.default_min_delay_s` (`number`, default: `0.6`)
+- `settings.network.download.default_max_delay_s` (`number`, default: `1.6`)
+- `settings.network.download.default_retry_max_attempts` (`int`, default: `5`)
+- `settings.network.download.default_backoff_base_s` (`number`, default: `15.0`)
+- `settings.network.download.default_backoff_cap_s` (`number`, default: `300.0`)
+- `settings.network.download.respect_retry_after` (`bool`, default: `true`)
+
+## `settings.network.libraries.<library>`
+
+Libraries supported: `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `unknown`.
+
+Global-only fields (never overridden by library):
+- `settings.network.global.max_concurrent_download_jobs`
+- `settings.network.global.connect_timeout_s`
+- `settings.network.global.read_timeout_s`
+- `settings.network.global.transport_retries`
+
+Library override fields (used only when `use_custom_policy=true`):
+- `enabled` (`bool`, default: `true`)
+- `use_custom_policy` (`bool`, default: `true` for `gallica`, otherwise `false`)
+- `workers_per_job` (`int`, `1..8`)
+- `min_delay_s` / `max_delay_s` (`number`)
+- `retry_max_attempts` (`int`)
+- `backoff_base_s` / `backoff_cap_s` (`number`)
+- `cooldown_on_403_s` / `cooldown_on_429_s` (`int`)
+- `burst_window_s` / `burst_max_requests` (`int`)
+- `respect_retry_after` (`bool`)
+- `prewarm_viewer` (`bool`)
+- `send_referer_header` (`bool`)
+- `send_origin_header` (`bool`)
+
+Behavior notes:
+- if `use_custom_policy=false`, library override values are ignored and runtime uses `settings.network.download.*`.
+- `connect_timeout_s` / `read_timeout_s` are global-only and must be set under `settings.network.global`.
 
 ## `settings.defaults`
 
@@ -162,7 +217,7 @@ UI/runtime notes:
 - Profile creation/edit/delete is handled from **Settings > PDF Export**.
 - In Settings, the profile catalog uses one selector with `Nuovo profilo...` for creation and a dedicated delete action.
 - Studio item Export only selects one profile for the current job.
-- Studio item Export keeps profile selection as the primary control; per-job overrides are optional and collapsed by default.
+- Studio item Export keeps profile selection as the primary control; job-specific overrides are optional and collapsed by default.
 - `max_parallel_page_fetch` is actively used for parallel remote high-res page staging.
 
 Backward compatibility:

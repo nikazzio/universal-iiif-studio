@@ -6,8 +6,10 @@ from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 
 class _Cfg:
+    data = {"settings": {"network": {"global": {"max_concurrent_download_jobs": 1}}}}
+
     def get_setting(self, key, default=None):
-        if key == "system.max_concurrent_downloads":
+        if key == "network.global.max_concurrent_download_jobs":
             return 1
         return default
 

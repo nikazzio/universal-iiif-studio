@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -7,28 +8,71 @@ from contextlib import suppress
 from pathlib import Path
 from secrets import SystemRandom
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from PIL import Image
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from ..config_manager import get_config_manager
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
 from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
+from ..network_policy import resolve_library_network_policy
 from ..pdf_utils import convert_pdf_to_images  # noqa: F401 - preserved for monkeypatch compatibility in tests
 from ..services.storage.vault_manager import VaultManager
 from ..utils import DEFAULT_HEADERS, ensure_dir, get_json, save_json
 from .download_helpers import derive_identifier
 
-# Constants
-MAX_DOWNLOAD_RETRIES = 5
-THROTTLE_BASE_WAIT = 15
-VATICAN_MIN_DELAY = 1.5
-VATICAN_MAX_DELAY = 4.0
-NORMAL_MIN_DELAY = 0.4
-NORMAL_MAX_DELAY = 1.2
-
 SECURE_RANDOM = SystemRandom()
+_HOST_LIMITER_LOCK = threading.Lock()
+_HOST_LIMITERS: dict[str, HostRateLimiter] = {}
+
+
+class HostRateLimiter:
+    """Simple host-wide limiter shared across downloader instances."""
+
+    def __init__(self) -> None:
+        self._timestamps: deque[float] = deque()
+        self._cooldown_until = 0.0
+        self._lock = threading.Lock()
+
+    def wait_turn(self, *, window_s: int, max_requests: int) -> None:
+        while True:
+            wait_s = 0.0
+            now = time.time()
+            with self._lock:
+                if now < self._cooldown_until:
+                    wait_s = max(wait_s, self._cooldown_until - now)
+                cutoff = now - float(window_s)
+                while self._timestamps and self._timestamps[0] <= cutoff:
+                    self._timestamps.popleft()
+                if len(self._timestamps) < max_requests and wait_s <= 0:
+                    self._timestamps.append(now)
+                    return
+                if self._timestamps:
+                    wait_s = max(wait_s, self._timestamps[0] + float(window_s) - now)
+                else:
+                    wait_s = max(wait_s, 0.05)
+            time.sleep(max(wait_s, 0.05))
+
+    def set_cooldown(self, cooldown_s: int) -> None:
+        if cooldown_s <= 0:
+            return
+        until = time.time() + float(cooldown_s)
+        with self._lock:
+            if until > self._cooldown_until:
+                self._cooldown_until = until
+
+
+def _get_host_limiter(host_key: str) -> HostRateLimiter:
+    with _HOST_LIMITER_LOCK:
+        limiter = _HOST_LIMITERS.get(host_key)
+        if limiter is None:
+            limiter = HostRateLimiter()
+            _HOST_LIMITERS[host_key] = limiter
+        return limiter
 
 
 class CanvasServiceLocator:
@@ -112,7 +156,7 @@ class PageDownloader:
         if resumed := self.resume_cached():
             return resumed
 
-        iiif_q = self.cm.get_setting("images.iiif_quality", "default")
+        iiif_q = str(self.cm.get_setting("images.iiif_quality", "default") or "default")
         strategy = self._get_strategy()
         urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
 
@@ -184,7 +228,7 @@ class PageDownloader:
         if cleaned.endswith(","):
             cleaned = cleaned[:-1]
         if cleaned.isdigit():
-            return f"{cleaned},0"
+            return f"{cleaned},"
         return cleaned
 
     def _resume_existing_scan(self, base_url: str) -> tuple[str, dict[str, Any]] | None:
@@ -236,7 +280,7 @@ class IIIFDownloader:
         manifest_url: str,
         output_dir: str | Path | None = None,
         output_name: str | None = None,
-        workers: int = 4,
+        workers: int | None = None,
         clean_cache: bool = False,
         prefer_images: bool = False,
         ocr_model: str | None = None,
@@ -252,7 +296,6 @@ class IIIFDownloader:
         """Initialize the IIIFDownloader."""
         # basic configuration
         self.manifest_url = manifest_url
-        self.workers = workers
         self.clean_cache = clean_cache
         self.prefer_images = prefer_images
         self.ocr_model: str | None = ocr_model
@@ -273,6 +316,20 @@ class IIIFDownloader:
         # Resolve where downloads live
         cm = get_config_manager()
         self.cm = cm
+        self.network_policy = resolve_library_network_policy(cm.data.get("settings", {}), library)
+        if not bool(self.network_policy.get("enabled", True)):
+            raise ValueError(f"Downloads disabled by policy for library '{library}'")
+        configured_workers = int(self.network_policy.get("workers_per_job") or 1)
+        if workers is None:
+            self.workers = configured_workers
+        else:
+            self.workers = max(1, min(int(workers), 8))
+        self._host_key = str(urlparse(self.manifest_url).netloc or "unknown")
+        self._host_limiter = _get_host_limiter(self._host_key)
+        self._request_timeout = (
+            int(self.network_policy.get("connect_timeout_s") or 10),
+            int(self.network_policy.get("read_timeout_s") or 30),
+        )
         out_base = self._resolve_out_base(output_dir, cm)
 
         # UNIFIED IDENTIFIER: same value for folder name, DB id, and internal reference
@@ -371,37 +428,62 @@ class IIIFDownloader:
                 self.logger.warning(f"Failed to register manuscript in DB: {e}")
 
     def _init_session(self):
-        import threading
-
         self._lock = threading.Lock()
         self._tile_stitch_sem = threading.Semaphore(1)
         self._backoff_until = 0
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        transport_retries = int(self.network_policy.get("transport_retries") or 0)
+        retry_strategy = Retry(
+            total=max(0, transport_retries),
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"],
+            backoff_factor=0,
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
-        # Pre-warm certain viewers (Vatican specific)
-        if "vatlib.it" in self.manifest_url.lower():
-            viewer_url = self.manifest_url.replace("/iiif/", "/view/").replace("/manifest.json", "")
-            try:
-                self.session.get(viewer_url, timeout=20)
-                self.session.headers.update(
-                    {"Referer": viewer_url, "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"}
+        if bool(self.network_policy.get("prewarm_viewer")):
+            viewer_url: str | None = None
+            if "vatlib.it" in self.manifest_url.lower():
+                viewer_url = self.manifest_url.replace("/iiif/", "/view/").replace("/manifest.json", "")
+            elif "gallica.bnf.fr" in self.manifest_url.lower():
+                viewer_url = self.manifest_url.replace("/iiif/ark:/12148/", "/ark:/12148/").replace(
+                    "/manifest.json", ""
                 )
-            except (requests.RequestException, requests.Timeout):
-                self.logger.debug("Unable to pre-warm Vatican viewer session", exc_info=True)
-        elif "gallica.bnf.fr" in self.manifest_url.lower():
-            viewer_url = self.manifest_url.replace("/iiif/ark:/12148/", "/ark:/12148/").replace("/manifest.json", "")
-            try:
-                self.session.get(viewer_url, timeout=20)
-                self.session.headers.update(
-                    {
-                        "Referer": viewer_url,
-                        "Origin": "https://gallica.bnf.fr",
-                        "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                    }
-                )
-            except (requests.RequestException, requests.Timeout):
-                self.logger.debug("Unable to pre-warm Gallica viewer session", exc_info=True)
+            if viewer_url:
+                try:
+                    self.session.get(viewer_url, timeout=self._request_timeout)
+                    if bool(self.network_policy.get("send_referer_header", True)):
+                        self.session.headers.update({"Referer": viewer_url})
+                    if bool(self.network_policy.get("send_origin_header", False)):
+                        self.session.headers.update(
+                            {"Origin": f"{urlparse(viewer_url).scheme}://{urlparse(viewer_url).netloc}"}
+                        )
+                    self.session.headers.update({"Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
+                except (requests.RequestException, requests.Timeout):
+                    self.logger.debug("Unable to pre-warm viewer session for %s", self.library, exc_info=True)
+
+    def _compute_backoff_wait(self, *, attempt: int, status_code: int, retry_after_header: str | None) -> float:
+        base_wait = float(self.network_policy.get("backoff_base_s") or 15.0) * (2**attempt)
+        capped_wait = min(base_wait, float(self.network_policy.get("backoff_cap_s") or 300.0))
+        retry_after_wait = 0.0
+        if bool(self.network_policy.get("respect_retry_after")) and retry_after_header:
+            with suppress(ValueError, TypeError):
+                retry_after_wait = max(float(retry_after_header), 0.0)
+        wait = max(capped_wait, retry_after_wait)
+        if status_code == 403:
+            self._host_limiter.set_cooldown(int(self.network_policy.get("cooldown_on_403_s") or 0))
+        elif status_code == 429:
+            self._host_limiter.set_cooldown(int(self.network_policy.get("cooldown_on_429_s") or 0))
+        return wait
+
+    def _wait_rate_gate(self) -> None:
+        window_s = int(self.network_policy.get("burst_window_s") or 60)
+        max_requests = int(self.network_policy.get("burst_max_requests") or 100)
+        self._host_limiter.wait_turn(window_s=window_s, max_requests=max_requests)
 
     def extract_metadata(self):
         """Extract and save basic metadata from the manifest."""
@@ -469,21 +551,22 @@ class IIIFDownloader:
         index: int,
         base_url: str,
     ):
-        for attempt in range(MAX_DOWNLOAD_RETRIES):
+        retries = max(1, int(self.network_policy.get("retry_max_attempts") or 1))
+        for attempt in range(retries):
             now = time.time()
             if now < self._backoff_until:
                 jitter = SECURE_RANDOM.uniform(0.1, 0.5)
                 time.sleep(self._backoff_until - now + jitter)
-            delay = (
-                SECURE_RANDOM.uniform(VATICAN_MIN_DELAY, VATICAN_MAX_DELAY)
-                if "vatlib.it" in self.manifest_url.lower()
-                else SECURE_RANDOM.uniform(NORMAL_MIN_DELAY, NORMAL_MAX_DELAY)
+            self._wait_rate_gate()
+            delay = SECURE_RANDOM.uniform(
+                float(self.network_policy.get("min_delay_s") or 0.1),
+                float(self.network_policy.get("max_delay_s") or 0.2),
             )
             time.sleep(delay)
 
             for url in urls_to_try:
                 try:
-                    r = self.session.get(url, timeout=30)
+                    r = self.session.get(url, timeout=self._request_timeout)
                     if r.status_code == 200 and r.content:
                         with filename.open("wb") as f:
                             f.write(r.content)
@@ -509,17 +592,19 @@ class IIIFDownloader:
                             r.text[:200],
                         )
                     if r.status_code in {403, 429}:
+                        wait = self._compute_backoff_wait(
+                            attempt=attempt,
+                            status_code=int(r.status_code),
+                            retry_after_header=r.headers.get("Retry-After"),
+                        )
                         with self._lock:
-                            wait = (2**attempt) * THROTTLE_BASE_WAIT
                             self._backoff_until = time.time() + wait
                         break
                 except Exception as exc:
                     self.logger.debug("Download attempt failed for %s: %s", url, exc, exc_info=True)
                     continue
-        if attempt == MAX_DOWNLOAD_RETRIES - 1:
-            message = (
-                f"Failed to download canvas {index} after {MAX_DOWNLOAD_RETRIES} attempts; URLs tried: {urls_to_try}"
-            )
+        if attempt == retries - 1:
+            message = f"Failed to download canvas {index} after {retries} attempts; URLs tried: {urls_to_try}"
             self.logger.warning(message)
             self._mark_job_error(index, message)
         return None
@@ -576,7 +661,7 @@ class IIIFDownloader:
                 jpeg_quality=90,
                 # Keep RAM usage under the configured cap.
                 max_ram_bytes=max_ram_bytes,
-                timeout_s=30,
+                timeout_s=int(self.network_policy.get("read_timeout_s") or 30),
             )
             if dims:
                 width, height = dims

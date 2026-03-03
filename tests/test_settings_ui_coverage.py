@@ -6,7 +6,12 @@ def test_settings_page_exposes_critical_runtime_config_keys():
     rendered = repr(settings_content())
     expected_keys = [
         "paths.exports_dir",
-        "settings.system.max_concurrent_downloads",
+        "settings.network.global.max_concurrent_download_jobs",
+        "settings.network.global.connect_timeout_s",
+        "settings.network.download.default_workers_per_job",
+        "settings.network.download.default_retry_max_attempts",
+        "settings.network.libraries.gallica.use_custom_policy",
+        "settings.network.libraries.gallica.workers_per_job",
         "settings.pdf.export.default_format",
         "settings.pdf.export.default_compression",
         "settings.pdf.profiles.default",
@@ -47,4 +52,14 @@ def test_settings_page_exposes_critical_runtime_config_keys():
     for key in expected_keys:
         assert f'name="{key}"' in rendered
 
-    assert 'data-tab="thumbnails"' in rendered
+    assert "Imaging Pipeline" in rendered
+    assert 'data-images-tab-btn="images"' in rendered
+    assert 'data-images-tab-btn="thumbnails"' in rendered
+    assert 'data-images-tab-btn="ocr"' in rendered
+    assert 'data-network-tab-btn="gallica"' in rendered
+    assert 'data-network-tab-btn="vaticana"' in rendered
+    assert 'data-network-tab-btn="bodleian"' in rendered
+    assert 'data-network-tab-btn="institut_de_france"' in rendered
+    assert "Gallica Safe" not in rendered
+    assert "Other Libraries" not in rendered
+    assert 'data-tab="network"' in rendered

@@ -9,10 +9,10 @@ from .controls import raw_file_script, raw_init
 from .panes import (
     _build_general_pane,
     _build_images_pane,
+    _build_network_pane,
     _build_pdf_pane,
     _build_processing_pane,
     _build_system_pane,
-    _build_thumbnails_pane,
     _build_viewer_pane,
 )
 
@@ -168,7 +168,7 @@ def settings_content() -> Div:
     processing_pane = _build_processing_pane(cm, s)
     pdf_pane = _build_pdf_pane(cm, s)
     images_pane = _build_images_pane(cm, s)
-    thumbnails_pane = _build_thumbnails_pane(cm, s)
+    network_pane = _build_network_pane(cm, s)
     viewer_pane = _build_viewer_pane(cm, s)
     system_pane = _build_system_pane(cm, s)
 
@@ -177,14 +177,14 @@ def settings_content() -> Div:
         Button("General", type="button", data_tab="general", cls="settings-tab settings-tab-active"),
         Button("Processing", type="button", data_tab="performance", cls="settings-tab"),
         Button("PDF Export", type="button", data_tab="pdf", cls="settings-tab"),
-        Button("Images / OCR", type="button", data_tab="images", cls="settings-tab"),
-        Button("Thumbnails", type="button", data_tab="thumbnails", cls="settings-tab"),
+        Button("Imaging Pipeline", type="button", data_tab="images", cls="settings-tab"),
+        Button("Network & Libraries", type="button", data_tab="network", cls="settings-tab"),
         Button("Viewer", type="button", data_tab="viewer", cls="settings-tab"),
         Button("Paths & System", type="button", data_tab="system", cls="settings-tab"),
         cls="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2 mb-4",
     )
 
-    panes = Div(general_pane, processing_pane, pdf_pane, images_pane, thumbnails_pane, viewer_pane, system_pane)
+    panes = Div(general_pane, processing_pane, pdf_pane, images_pane, network_pane, viewer_pane, system_pane)
 
     form = Form(
         tab_buttons,

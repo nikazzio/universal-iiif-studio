@@ -8,6 +8,7 @@ from typing import Any
 from .config_manager import get_config_manager
 from .exceptions import DatabaseError
 from .logger import get_logger
+from .network_policy import resolve_global_max_concurrent_jobs
 from .services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
@@ -142,7 +143,13 @@ class JobManager:
     def _max_concurrent_downloads(self) -> int:
         try:
             cm = get_config_manager()
-            configured = int(cm.get_setting("system.max_concurrent_downloads", 2) or 2)
+            try:
+                data = cm.data
+            except AttributeError:
+                data = None
+            if isinstance(data, dict):
+                return resolve_global_max_concurrent_jobs(data.get("settings", {}))
+            configured = int(cm.get_setting("network.global.max_concurrent_download_jobs", 2) or 2)
             return max(1, min(configured, 8))
         except Exception:
             return 2

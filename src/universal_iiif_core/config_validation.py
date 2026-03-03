@@ -24,6 +24,13 @@ class ConfigValidationIssue:
 
 
 DEPRECATED_KEYS: tuple[str, ...] = (
+    "settings.system.max_concurrent_downloads",
+    "settings.system.download_workers",
+    "settings.system.request_timeout",
+    "settings.system.ocr_concurrency",
+    "settings.defaults.auto_generate_pdf",
+    "settings.images.ocr_quality",
+    "settings.pdf.ocr_dpi",
     "settings.thumbnails.columns",
     "settings.thumbnails.paginate_enabled",
     "settings.thumbnails.default_select_all",
@@ -34,6 +41,27 @@ DEPRECATED_KEYS: tuple[str, ...] = (
     "settings.thumbnails.hover_preview_delay_ms",
     "settings.thumbnails.inline_base64_max_tiles",
     "settings.thumbnails.hover_preview_max_tiles",
+    "settings.network.tuning_steps",
+    "settings.network.libraries.gallica.size_strategy_mode",
+    "settings.network.libraries.gallica.size_strategy_custom",
+    "settings.network.libraries.gallica.allow_max_size",
+    "settings.network.libraries.gallica.iiif_quality",
+    "settings.network.libraries.vaticana.size_strategy_mode",
+    "settings.network.libraries.vaticana.size_strategy_custom",
+    "settings.network.libraries.vaticana.allow_max_size",
+    "settings.network.libraries.vaticana.iiif_quality",
+    "settings.network.libraries.bodleian.size_strategy_mode",
+    "settings.network.libraries.bodleian.size_strategy_custom",
+    "settings.network.libraries.bodleian.allow_max_size",
+    "settings.network.libraries.bodleian.iiif_quality",
+    "settings.network.libraries.institut_de_france.size_strategy_mode",
+    "settings.network.libraries.institut_de_france.size_strategy_custom",
+    "settings.network.libraries.institut_de_france.allow_max_size",
+    "settings.network.libraries.institut_de_france.iiif_quality",
+    "settings.network.libraries.unknown.size_strategy_mode",
+    "settings.network.libraries.unknown.size_strategy_custom",
+    "settings.network.libraries.unknown.allow_max_size",
+    "settings.network.libraries.unknown.iiif_quality",
 )
 
 
@@ -53,6 +81,10 @@ PROFILE_PAYLOAD_SCHEMA: dict[str, Any] = {
 _CRITICAL_PREFIXES = ("paths", "security", "api_keys")
 _FLOAT_COMPATIBLE_PATHS = {
     "settings.images.tile_stitch_max_ram_gb",
+    "settings.network.download.default_min_delay_s",
+    "settings.network.download.default_max_delay_s",
+    "settings.network.download.default_backoff_base_s",
+    "settings.network.download.default_backoff_cap_s",
     "settings.viewer.mirador.openSeadragonOptions.maxZoomPixelRatio",
     "settings.viewer.mirador.openSeadragonOptions.maxZoomLevel",
     "settings.viewer.mirador.openSeadragonOptions.minZoomLevel",
@@ -234,7 +266,16 @@ def _validate_deprecated_keys(data: dict[str, Any], issues: list[ConfigValidatio
 
 def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue]) -> None:
     _validate_allowed_origins(data, issues)
-    _validate_int_range(data, issues, "settings.system.max_concurrent_downloads", 1, 16)
+    _validate_int_range(data, issues, "settings.network.global.max_concurrent_download_jobs", 1, 8)
+    _validate_int_range(data, issues, "settings.network.global.connect_timeout_s", 2, 120)
+    _validate_int_range(data, issues, "settings.network.global.read_timeout_s", 5, 300)
+    _validate_int_range(data, issues, "settings.network.global.transport_retries", 0, 10)
+    _validate_int_range(data, issues, "settings.network.download.default_workers_per_job", 1, 8)
+    _validate_float_range(data, issues, "settings.network.download.default_min_delay_s", 0.05, 120.0)
+    _validate_float_range(data, issues, "settings.network.download.default_max_delay_s", 0.1, 180.0)
+    _validate_int_range(data, issues, "settings.network.download.default_retry_max_attempts", 1, 10)
+    _validate_float_range(data, issues, "settings.network.download.default_backoff_base_s", 1.0, 600.0)
+    _validate_float_range(data, issues, "settings.network.download.default_backoff_cap_s", 5.0, 3600.0)
     _validate_int_range(data, issues, "settings.ui.items_per_page", 1, 200)
     _validate_int_range(data, issues, "settings.ui.toast_duration", 500, 15000)
     _validate_int_range(data, issues, "settings.images.viewer_quality", 10, 100)
@@ -289,8 +330,44 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
         {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"},
         normalize_case=True,
     )
+    _validate_network_library_profiles(data, issues)
     _validate_profile_default_exists(data, issues)
     _validate_thumbnail_options(data, issues)
+
+
+def _validate_network_library_profiles(data: dict[str, Any], issues: list[ConfigValidationIssue]) -> None:
+    exists, libraries = _get_path(data, "settings.network.libraries")
+    if not exists:
+        return
+    if not isinstance(libraries, dict):
+        _add_warning(
+            issues,
+            path="settings.network.libraries",
+            code="invalid_type",
+            message=f"Expected object, got {_type_name(libraries)}.",
+        )
+        return
+
+    for library_key, node in libraries.items():
+        base = f"settings.network.libraries.{library_key}"
+        if not isinstance(node, dict):
+            _add_warning(
+                issues,
+                path=base,
+                code="invalid_type",
+                message=f"Expected object, got {_type_name(node)}.",
+            )
+            continue
+        _validate_int_range(data, issues, f"{base}.workers_per_job", 1, 8)
+        _validate_float_range(data, issues, f"{base}.min_delay_s", 0.05, 120.0)
+        _validate_float_range(data, issues, f"{base}.max_delay_s", 0.1, 180.0)
+        _validate_int_range(data, issues, f"{base}.retry_max_attempts", 1, 10)
+        _validate_float_range(data, issues, f"{base}.backoff_base_s", 1.0, 600.0)
+        _validate_float_range(data, issues, f"{base}.backoff_cap_s", 5.0, 3600.0)
+        _validate_int_range(data, issues, f"{base}.cooldown_on_403_s", 0, 7200)
+        _validate_int_range(data, issues, f"{base}.cooldown_on_429_s", 0, 7200)
+        _validate_int_range(data, issues, f"{base}.burst_window_s", 1, 600)
+        _validate_int_range(data, issues, f"{base}.burst_max_requests", 1, 2000)
 
 
 def _validate_allowed_origins(data: dict[str, Any], issues: list[ConfigValidationIssue]) -> None:

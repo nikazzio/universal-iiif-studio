@@ -5,12 +5,11 @@
         "temp_dir": "data/local/temp_images",
         "models_dir": "data/local/models",
         "logs_dir": "data/local/logs",
-        "snippets_dir": "data/local/snippets",
+        "snippets_dir": "data/local/snippets"
     },
     "security": {"allowed_origins": ["http://localhost:8000", "http://127.0.0.1:8000"]},
     "api_keys": {"openai": "", "anthropic": "", "google_vision": "", "huggingface": ""},
     "settings": {
-        "system": {"max_concurrent_downloads": 2},
         "defaults": {"default_library": "Vaticana", "preferred_ocr_engine": "openai"},
         "library": {"default_mode": "operativa"},
         "ui": {
@@ -19,7 +18,7 @@
             "theme_accent_color": "#E8A6B6",
             "theme_color": "#E8A6B6",
             "items_per_page": 25,
-            "toast_duration": 3000,
+            "toast_duration": 3000
         },
         "images": {
             "download_strategy_mode": "balanced",
@@ -28,7 +27,41 @@
             "iiif_quality": "default",
             "viewer_quality": 95,
             "probe_remote_max_resolution": true,
-            "tile_stitch_max_ram_gb": 2,
+            "tile_stitch_max_ram_gb": 2
+        },
+        "network": {
+            "global": {
+                "max_concurrent_download_jobs": 2,
+                "connect_timeout_s": 10,
+                "read_timeout_s": 30,
+                "transport_retries": 3
+            },
+            "download": {
+                "default_workers_per_job": 2,
+                "default_min_delay_s": 0.6,
+                "default_max_delay_s": 1.6,
+                "default_retry_max_attempts": 5,
+                "default_backoff_base_s": 15.0,
+                "default_backoff_cap_s": 300.0,
+                "respect_retry_after": true
+            },
+            "libraries": {
+                "gallica": {
+                    "enabled": true,
+                    "use_custom_policy": true,
+                    "workers_per_job": 1,
+                    "min_delay_s": 2.5,
+                    "max_delay_s": 6.0,
+                    "retry_max_attempts": 3,
+                    "backoff_base_s": 20.0,
+                    "backoff_cap_s": 300.0,
+                    "respect_retry_after": true
+                },
+                "vaticana": {"enabled": true, "use_custom_policy": false},
+                "bodleian": {"enabled": true, "use_custom_policy": false},
+                "institut_de_france": {"enabled": true, "use_custom_policy": false},
+                "unknown": {"enabled": true, "use_custom_policy": false}
+            }
         },
         "ocr": {"ocr_engine": "openai", "kraken_enabled": false},
         "pdf": {
@@ -40,7 +73,7 @@
                 "default_compression": "Standard",
                 "include_cover": true,
                 "include_colophon": true,
-                "description_rows": 3,
+                "description_rows": 3
             },
             "cover": {"logo_path": "", "curator": "", "description": ""},
             "profiles": {
@@ -56,7 +89,7 @@
                         "jpeg_quality": 82,
                         "force_remote_refetch": false,
                         "cleanup_temp_after_export": true,
-                        "max_parallel_page_fetch": 2,
+                        "max_parallel_page_fetch": 2
                     },
                     "high_quality": {
                         "label": "High Quality",
@@ -68,7 +101,7 @@
                         "jpeg_quality": 92,
                         "force_remote_refetch": false,
                         "cleanup_temp_after_export": true,
-                        "max_parallel_page_fetch": 2,
+                        "max_parallel_page_fetch": 2
                     },
                     "archival_highres": {
                         "label": "Archival High-Res",
@@ -80,7 +113,7 @@
                         "jpeg_quality": 95,
                         "force_remote_refetch": true,
                         "cleanup_temp_after_export": true,
-                        "max_parallel_page_fetch": 1,
+                        "max_parallel_page_fetch": 1
                     },
                     "lightweight": {
                         "label": "Lightweight",
@@ -92,17 +125,17 @@
                         "jpeg_quality": 65,
                         "force_remote_refetch": false,
                         "cleanup_temp_after_export": true,
-                        "max_parallel_page_fetch": 3,
-                    },
+                        "max_parallel_page_fetch": 3
+                    }
                 },
-                "document_overrides": {},
-            },
+                "document_overrides": {}
+            }
         },
         "thumbnails": {
             "max_long_edge_px": 320,
             "jpeg_quality": 70,
             "page_size": 48,
-            "page_size_options": [24, 48, 72, 96],
+            "page_size_options": [24, 48, 72, 96]
         },
         "housekeeping": {"temp_cleanup_days": 7},
         "storage": {
@@ -110,7 +143,7 @@
             "thumbnails_retention_days": 14,
             "highres_temp_retention_hours": 6,
             "auto_prune_on_startup": false,
-            "max_exports_per_item": 5,
+            "max_exports_per_item": 5
         },
         "logging": {"level": "INFO"},
         "testing": {"run_live_tests": false},
@@ -123,7 +156,7 @@
                     "saturation": 1.0,
                     "hue": 0,
                     "invert": false,
-                    "grayscale": false,
+                    "grayscale": false
                 },
                 "presets": {
                     "default": {
@@ -132,7 +165,7 @@
                         "saturation": 1.0,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false,
+                        "grayscale": false
                     },
                     "night": {
                         "brightness": 0.9,
@@ -140,7 +173,7 @@
                         "saturation": 0.9,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false,
+                        "grayscale": false
                     },
                     "contrast": {
                         "brightness": 1.05,
@@ -148,10 +181,10 @@
                         "saturation": 1.2,
                         "hue": 0,
                         "invert": false,
-                        "grayscale": false,
-                    },
-                },
-            },
-        },
-    },
+                        "grayscale": false
+                    }
+                }
+            }
+        }
+    }
 }

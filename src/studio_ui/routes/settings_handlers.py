@@ -11,6 +11,7 @@ from studio_ui.components.settings import settings_content
 from studio_ui.theme import normalize_ui_theme_in_place
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger, setup_logging
+from universal_iiif_core.network_policy import migrate_legacy_network_settings, normalize_network_settings
 
 # Initialize logging
 setup_logging()
@@ -243,6 +244,11 @@ def _postprocess_images_settings(settings_node: dict[str, Any]) -> None:
         images["probe_remote_max_resolution"] = True
 
 
+def _postprocess_network_settings(settings_node: dict[str, Any]) -> None:
+    migrate_legacy_network_settings(settings_node)
+    normalize_network_settings(settings_node)
+
+
 def _sanitize_profile_key(raw: Any) -> str:
     text = str(raw or "").strip().lower()
     text = re.sub(r"[^a-z0-9_-]+", "_", text)
@@ -411,12 +417,19 @@ async def save_settings(request):
         _merge_payload_into_config(cm.data, payload)
         settings_node = cm.data.setdefault("settings", {})
         _postprocess_images_settings(settings_node)
+        _postprocess_network_settings(settings_node)
         profile_changes = _postprocess_pdf_profiles(settings_node)
         ui_settings = settings_node.get("ui")
         if not isinstance(ui_settings, dict):
             settings_node["ui"] = {}
             ui_settings = settings_node["ui"]
         normalize_ui_theme_in_place(ui_settings)
+        removed_obsolete: list[str] = []
+        backup_path = None
+        if hasattr(cm, "normalize_runtime_settings"):
+            cm.normalize_runtime_settings()
+        if hasattr(cm, "prune_obsolete_settings"):
+            removed_obsolete, backup_path = cm.prune_obsolete_settings(create_backup=True)
         cm.save()
         _reconfigure_logging_after_save()
         if profile_changes.get("reload"):
@@ -428,6 +441,10 @@ async def save_settings(request):
                     hx_swap_oob="true",
                 ),
             ]
+        if removed_obsolete:
+            backup_note = f" Backup: {backup_path.name}." if backup_path else ""
+            message = f"Impostazioni salvate. Rimossi {len(removed_obsolete)} parametri obsoleti.{backup_note}"
+            return build_toast(message, "success")
         return build_toast("Impostazioni salvate con successo!", "success")
     except Exception as exc:
         return build_toast(f"Errore nel salvataggio: {exc}", "danger")

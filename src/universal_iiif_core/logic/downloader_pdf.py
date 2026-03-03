@@ -88,7 +88,7 @@ def _load_logo_bytes(self, logo_path):
 def download_native_pdf(self, pdf_url: str) -> bool:
     """Download a PDF advertised in the IIIF manifest rendering section."""
     try:
-        with self.session.get(pdf_url, stream=True, timeout=60) as r:
+        with self.session.get(pdf_url, stream=True, timeout=getattr(self, "_request_timeout", (10, 60))) as r:
             r.raise_for_status()
             with self.output_path.open("wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):

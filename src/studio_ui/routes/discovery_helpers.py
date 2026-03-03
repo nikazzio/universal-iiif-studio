@@ -15,6 +15,7 @@ from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.library_catalog import parse_manifest_catalog
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.logic.downloader import IIIFDownloader
+from universal_iiif_core.network_policy import resolve_library_network_policy
 from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.utils import generate_job_id, get_json
@@ -185,11 +186,13 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
         # Explicitly use configured downloads dir
         cm = get_config_manager()
         downloads_dir = cm.get_downloads_dir()
+        policy = resolve_library_network_policy(cm.data.get("settings", {}), library)
 
         downloader = IIIFDownloader(
             manifest_url,
             output_dir=downloads_dir,
             library=library,
+            workers=int(policy.get("workers_per_job") or 1),
             output_folder_name=folder_name,
             progress_callback=db_progress_hook,
             job_id=db_job_id,

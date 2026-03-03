@@ -5,6 +5,7 @@ Runtime settings live in `config.json` and are managed through `universal_iiif_c
 ## Essential Sections
 
 - `paths`: runtime directories (`downloads`, `exports`, `temp`, `logs`, `models`, `snippets`).
+- `settings.network`: global transport defaults and per-library download policies.
 - `settings.images`: IIIF fetch strategy and quality.
 - `settings.pdf`: native PDF behavior, export defaults, and profile catalog.
 
@@ -19,6 +20,8 @@ Runtime settings live in `config.json` and are managed through `universal_iiif_c
 
 ## Notes
 
+- `settings.network.global.*` is always shared across libraries (no per-library timeout/concurrency override).
+- `settings.network.libraries.<library>.*` applies only when `use_custom_policy=true`.
 - Keep local scans balanced by default for speed and storage.
 - Use export profiles for job-level quality decisions instead of changing global defaults frequently.
 
