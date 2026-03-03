@@ -31,25 +31,57 @@ def test_pdf_capability_badge_uses_quick_probe(monkeypatch):
     assert "PDF nativo disponibile" in repr(frag)
 
 
+def test_add_and_download_skips_already_complete_item(monkeypatch):
+    """Discovery should not queue a new download when item is already complete."""
+    vm = VaultManager()
+    vm.upsert_manuscript(
+        "DOC_ALREADY_COMPLETE",
+        library="Gallica",
+        manifest_url="https://example.org/manifest.json",
+        status="complete",
+        asset_state="complete",
+        total_canvases=10,
+        downloaded_canvases=10,
+    )
+
+    called = {"count": 0}
+
+    def _fake_start(*_a, **_k):
+        called["count"] += 1
+        return "jid"
+
+    monkeypatch.setattr(discovery_handlers, "start_downloader_thread", _fake_start)
+
+    result = discovery_handlers.add_and_download(
+        "https://example.org/manifest.json",
+        "DOC_ALREADY_COMPLETE",
+        "Gallica",
+    )
+    assert "Documento già completo in libreria" in repr(result)
+    assert called["count"] == 0
+
+
 def test_retry_download_requeues_existing_job(monkeypatch):
-    """Retry endpoint must enqueue a new download using stored job metadata."""
+    """Retry endpoint must reuse the same job id using stored job metadata."""
     vm = VaultManager()
     vm.create_download_job("retry_job_1", "DOC_R", "Gallica", "https://example.org/manifest.json")
     vm.update_download_job("retry_job_1", current=1, total=5, status="error", error="boom")
 
     called = {}
 
-    def _fake_start(manifest_url, doc_id, library, target_pages=None):
+    def _fake_start(manifest_url, doc_id, library, target_pages=None, existing_job_id=None):
         called["manifest_url"] = manifest_url
         called["doc_id"] = doc_id
         called["library"] = library
-        return "new_job"
+        called["existing_job_id"] = existing_job_id
+        return existing_job_id or "new_job"
 
     monkeypatch.setattr(discovery_handlers, "start_downloader_thread", _fake_start)
 
     result = discovery_handlers.retry_download("retry_job_1")
     assert "Retry accodato" in repr(result)
     assert called["doc_id"] == "DOC_R"
+    assert called["existing_job_id"] == "retry_job_1"
 
 
 def test_download_manager_polls_only_with_active_jobs():
@@ -207,17 +239,28 @@ def test_cancel_download_marks_cancelling_without_error(monkeypatch):
     assert row.get("error") is None
 
 
-def test_resume_download_requeues_paused_job(monkeypatch):
-    """Resume endpoint should enqueue a new job and remove paused one."""
+def test_resume_download_reuses_same_job(monkeypatch):
+    """Resume endpoint should reuse the same download id from manager row."""
     vm = VaultManager()
     vm.upsert_manuscript("DOC_RESUME_API", title="Doc Resume API", library="Gallica", status="saved")
     vm.create_download_job("job_resume_api", "DOC_RESUME_API", "Gallica", "https://example.org/manifest.json")
     vm.update_download_job("job_resume_api", current=2, total=10, status="paused", error="Paused by user")
 
-    monkeypatch.setattr(discovery_handlers, "start_downloader_thread", lambda *_a, **_k: "new_resume_job")
+    called = {}
+
+    def _fake_start(manifest_url, doc_id, library, target_pages=None, existing_job_id=None):
+        called["manifest_url"] = manifest_url
+        called["doc_id"] = doc_id
+        called["library"] = library
+        called["existing_job_id"] = existing_job_id
+        return existing_job_id or "new_resume_job"
+
+    monkeypatch.setattr(discovery_handlers, "start_downloader_thread", _fake_start)
     result = discovery_handlers.resume_download("job_resume_api")
     assert "Resume avviato" in repr(result)
-    assert vm.get_download_job("job_resume_api") is None
+    assert (vm.get_download_job("job_resume_api") or {}).get("status") == "paused"
+    assert called["doc_id"] == "DOC_RESUME_API"
+    assert called["existing_job_id"] == "job_resume_api"
 
 
 def test_start_downloader_thread_reuses_existing_active_job(monkeypatch):
@@ -240,3 +283,27 @@ def test_start_downloader_thread_reuses_existing_active_job(monkeypatch):
     )
     assert jid == "active_job_1"
     assert called["submit"] == 0
+
+
+def test_start_downloader_thread_uses_requested_existing_job_id(monkeypatch):
+    """Download manager resume/retry should keep the same persisted job id."""
+    captured = {}
+
+    def _fake_submit(task_func, kwargs=None, job_type="generic"):
+        captured["task_func"] = task_func
+        captured["kwargs"] = dict(kwargs or {})
+        captured["job_type"] = job_type
+        return "internal_job"
+
+    monkeypatch.setattr(discovery_helpers.job_manager, "submit_job", _fake_submit)
+
+    jid = discovery_helpers.start_downloader_thread(
+        "https://example.org/manifest.json",
+        "DOC_KEEP_ID",
+        "Gallica",
+        existing_job_id="job_keep_1",
+    )
+
+    assert jid == "job_keep_1"
+    assert captured["job_type"] == "download"
+    assert captured["kwargs"]["db_job_id"] == "job_keep_1"

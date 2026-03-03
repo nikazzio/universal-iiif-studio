@@ -63,6 +63,37 @@ def _downloads_doc_path(library: str, doc_id: str) -> Path:
     return cm.get_downloads_dir() / library / doc_id
 
 
+def _find_manuscript_by_id_and_library(doc_id: str, library: str) -> dict | None:
+    target_id = str(doc_id or "").strip()
+    target_library = str(library or "").strip()
+    if not target_id or not target_library:
+        return None
+
+    vm = VaultManager()
+    for row in vm.get_all_manuscripts():
+        if str(row.get("id") or "").strip() == target_id and str(row.get("library") or "").strip() == target_library:
+            return row
+
+    fallback = vm.get_manuscript(target_id) or {}
+    if str(fallback.get("library") or "").strip() == target_library:
+        return fallback
+    return None
+
+
+def _is_manuscript_complete(row: dict | None) -> bool:
+    if not row:
+        return False
+    status = str(row.get("status") or "").strip().lower()
+    asset_state = str(row.get("asset_state") or "").strip().lower()
+    downloaded = int(row.get("downloaded_canvases") or 0)
+    total = int(row.get("total_canvases") or 0)
+    if status in {"complete", "completed"}:
+        return True
+    if asset_state == "complete":
+        return True
+    return total > 0 and downloaded >= total
+
+
 def _upsert_saved_entry(
     manifest_url: str,
     doc_id: str,
@@ -404,6 +435,14 @@ def add_and_download(manifest_url: str, doc_id: str, library: str):
         if not manifest_url or not doc_id or not library:
             return _with_feedback_toast("Dati mancanti", "Manifest, ID e biblioteca sono obbligatori.", tone="danger")
 
+        existing = _find_manuscript_by_id_and_library(doc_id, library)
+        if _is_manuscript_complete(existing):
+            return _with_toast(
+                _download_manager_fragment(),
+                f"Documento già completo in libreria ({library} / {doc_id}).",
+                tone="info",
+            )
+
         info, _err = _analyze_manifest_safe(manifest_url)
         info = info or {}
         _upsert_saved_entry(
@@ -579,9 +618,12 @@ def resume_download(download_id: str):
         return _with_feedback_toast("Resume non disponibile", "Dati job insufficienti.", tone="danger")
 
     try:
-        new_download_id = start_downloader_thread(manifest_url, doc_id, library)
-        if new_download_id and new_download_id != download_id:
-            vault.delete_download_job(download_id)
+        start_downloader_thread(
+            manifest_url,
+            doc_id,
+            library,
+            existing_job_id=download_id,
+        )
         return _with_toast(_download_manager_fragment(), f"Resume avviato per {doc_id}.", tone="success")
     except Exception:
         logger.exception("Resume failed for paused job %s", download_id)
@@ -598,7 +640,12 @@ def retry_download(download_id: str):
     if not manifest_url or not doc_id or not library:
         return _with_feedback_toast("Retry non disponibile", "Dati job insufficienti.", tone="danger")
     try:
-        start_downloader_thread(manifest_url, doc_id, library)
+        start_downloader_thread(
+            manifest_url,
+            doc_id,
+            library,
+            existing_job_id=download_id,
+        )
         return _with_toast(_download_manager_fragment(), f"Retry accodato per {doc_id}.", tone="info")
     except Exception:
         logger.exception("Retry enqueue failed for job %s", download_id)

@@ -91,6 +91,7 @@ def start_downloader_thread(
     doc_id: str,
     library: str,
     target_pages: set[int] | None = None,
+    existing_job_id: str | None = None,
     *,
     force_max_resolution: bool = False,
     force_redownload: bool = False,
@@ -105,21 +106,27 @@ def start_downloader_thread(
     doc_id = unquote(doc_id)
     library = unquote(library)
 
+    requested_job_id = str(existing_job_id or "").strip()
+
     # Prevent duplicate concurrent jobs for the same manuscript/library pair.
     try:
         for active in VaultManager().get_active_downloads():
             if str(active.get("doc_id") or "") == doc_id and str(active.get("library") or "") == library:
-                existing_job_id = str(active.get("job_id") or "").strip()
-                if existing_job_id:
-                    logger.info("Download already active for %s (%s): reusing job %s", doc_id, library, existing_job_id)
-                    return existing_job_id
+                active_job_id = str(active.get("job_id") or "").strip()
+                if active_job_id:
+                    logger.info("Download already active for %s (%s): reusing job %s", doc_id, library, active_job_id)
+                    return active_job_id
     except Exception:
         logger.debug("Failed to check active downloads before enqueue", exc_info=True)
 
-    # 1. GENERA ID ROBUSTO + univoco per consentire retry multipli in parallelo.
-    #    Manteniamo il prefisso hash per traceability e aggiungiamo un suffisso corto random.
-    base_job_id = generate_job_id(library, manifest_url)
-    job_id = f"{base_job_id}_{uuid.uuid4().hex[:8]}"
+    # Reuse a persisted download id when resuming/retrying from Download Manager.
+    if requested_job_id:
+        job_id = requested_job_id
+    else:
+        # Default behavior for fresh starts from discovery/library actions.
+        # Keep a short random suffix so explicit re-runs can coexist when needed.
+        base_job_id = generate_job_id(library, manifest_url)
+        job_id = f"{base_job_id}_{uuid.uuid4().hex[:8]}"
 
     # 2. Usa doc_id direttamente come nome cartella (senza abbellimenti)
     # Il doc_id dovrebbe già essere l'ID tecnico pulito dal resolver
