@@ -1,3 +1,4 @@
+import argparse
 import threading
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -187,17 +188,30 @@ def health():
 
 def main():
     """Punto di ingresso per il comando iiif-studio."""
+    parser = argparse.ArgumentParser(description="Universal IIIF Studio web app")
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload watcher for development",
+    )
+    args = parser.parse_args()
+    reload_enabled = bool(args.reload)
+
     logger.info("🚀 Starting Universal IIIF Studio App (FastHTML + Mirador)")
     logger.info(f"📍 Downloads directory: {config.get_downloads_dir()}")
+    logger.info(
+        "Startup mode: %s",
+        "reload (watcher + worker)" if reload_enabled else "single-process",
+    )
 
     # Nota: passiamo "studio_app:app" come stringa a serve() per
     # permettere il corretto funzionamento del reload automatico.
     serve(
         # app="studio_app:app",
         port=8000,
-        reload=True,
-        reload_includes=["*.py", "*.html"],
-        reload_excludes=["downloads/*", "data/*", "logs/*"],
+        reload=reload_enabled,
+        reload_includes=["*.py", "*.html"] if reload_enabled else None,
+        reload_excludes=["downloads/*", "data/*", "logs/*"] if reload_enabled else None,
     )
 
 
