@@ -58,13 +58,12 @@ class HostRateLimiter:
                     self._timestamps.popleft()
                 if len(self._timestamps) < max_requests and wait_s <= 0:
                     self._timestamps.append(now)
-                    return
+                    return True
                 if self._timestamps:
                     wait_s = max(wait_s, self._timestamps[0] + float(window_s) - now)
                 else:
                     wait_s = max(wait_s, 0.05)
             time.sleep(max(wait_s, 0.05))
-        return True
 
     def set_cooldown(self, cooldown_s: int) -> None:
         if cooldown_s <= 0:

@@ -3,6 +3,7 @@ import time
 import uuid
 from collections import deque
 from collections.abc import Callable
+from contextlib import suppress
 from typing import Any
 
 from .config_manager import get_config_manager
@@ -64,6 +65,7 @@ class JobManager:
         db_job_id: str | None,
     ) -> None:
         with self._lock:
+            self._purge_terminal_duplicates_locked(db_job_id)
             self._jobs[job_id] = {
                 "id": job_id,
                 "type": job_type,
@@ -81,6 +83,21 @@ class JobManager:
                 "kwargs": kwargs,
                 "thread": None,
             }
+
+    def _purge_terminal_duplicates_locked(self, db_job_id: str | None) -> None:
+        if not db_job_id:
+            return
+        terminal_statuses = {"completed", "failed", "cancelled", "paused"}
+        for jid, info in list(self._jobs.items()):
+            if info.get("db_job_id") != db_job_id:
+                continue
+            status = str(info.get("status") or "").lower()
+            if status not in terminal_statuses:
+                continue
+            self._jobs.pop(jid, None)
+            if jid in self._download_queue:
+                with suppress(ValueError):
+                    self._download_queue.remove(jid)
 
     def _start_job_thread(self, job_id: str, *, locked: bool = False) -> bool:
         if locked:
@@ -383,6 +400,13 @@ class JobManager:
                 existing_total = int(existing.get("total", existing_current) or existing_current)
                 c = existing_current if current is None else int(current)
                 t = existing_total if total is None else int(total)
+                if is_transitional:
+                    latest = vm.get_download_job(db_job_id) or {}
+                    latest_status = str(latest.get("status") or "").lower()
+                    if latest_status in terminal_statuses:
+                        target_status = latest_status
+                        c = int(latest.get("current", c) or c)
+                        t = int(latest.get("total", t) or t)
                 next_error = error
                 if target_status in {"queued", "running", "cancelling", "pausing", "paused", "cancelled", "completed"}:
                     next_error = None
@@ -451,10 +475,29 @@ class JobManager:
     def _target_job_ids_locked(self, id_or_db_id: str) -> list[str]:
         if id_or_db_id in self._jobs:
             return [id_or_db_id]
-        for jid, info in self._jobs.items():
-            if info.get("db_job_id") == id_or_db_id:
-                return [jid]
-        return []
+        matches = [jid for jid, info in self._jobs.items() if info.get("db_job_id") == id_or_db_id]
+        if not matches:
+            return []
+
+        def _sort_key(jid: str) -> tuple[int, int, float]:
+            info = self._jobs.get(jid) or {}
+            status = str(info.get("status") or "").lower()
+            is_alive = bool(getattr(info.get("thread"), "is_alive", lambda: False)())
+            status_priority = {
+                "running": 0,
+                "pausing": 1,
+                "cancelling": 2,
+                "queued": 3,
+                "pending": 4,
+                "paused": 5,
+                "cancelled": 6,
+                "completed": 7,
+                "failed": 8,
+            }.get(status, 9)
+            return (0 if is_alive else 1, status_priority, -float(info.get("created_at") or 0.0))
+
+        matches.sort(key=_sort_key)
+        return matches
 
     def _pause_queued_job_locked(self, jid: str, info: dict[str, Any], db_id: str, to_mark_paused: list[str]) -> None:
         self._download_queue.remove(jid)
@@ -571,7 +614,8 @@ class JobManager:
         """List all tracked jobs, optionally filtering to active work."""
         with self._lock:
             if active_only:
-                return {k: v for k, v in self._jobs.items() if v["status"] in ["pending", "queued", "running"]}
+                active_statuses = {"pending", "queued", "running", "pausing", "cancelling"}
+                return {k: v for k, v in self._jobs.items() if str(v.get("status") or "").lower() in active_statuses}
             return self._jobs.copy()
 
 

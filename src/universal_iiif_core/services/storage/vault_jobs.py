@@ -11,6 +11,44 @@ from ...logger import get_logger
 logger = get_logger(__name__)
 
 
+def _status_and_error_updates(status: str, error: str | None) -> tuple[list[str], list[Any], set[str]]:
+    transitional_statuses = {"queued", "running", "cancelling", "pausing"}
+    terminal_statuses = {"paused", "cancelled", "completed", "error"}
+    if status in transitional_statuses:
+        updates = [
+            "status = CASE "
+            "WHEN status IN ('paused', 'cancelled', 'completed', 'error') THEN status "
+            "ELSE ? END",
+            "error_message = CASE "
+            "WHEN status IN ('paused', 'cancelled', 'completed', 'error') THEN error_message "
+            "ELSE ? END",
+        ]
+        return updates, [status, error], terminal_statuses
+    return ["status = ?", "error_message = ?"], [status, error], terminal_statuses
+
+
+def _append_optional_queue_fields(
+    updates: list[str],
+    params: list[Any],
+    queue_position: int | None,
+    priority: int | None,
+) -> None:
+    if queue_position is not None:
+        updates.append("queue_position = ?")
+        params.append(int(queue_position))
+    if priority is not None:
+        updates.append("priority = ?")
+        params.append(int(priority))
+
+
+def _append_lifecycle_updates(updates: list[str], status: str, terminal_statuses: set[str]) -> None:
+    if status == "running":
+        updates.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
+        updates.append("finished_at = NULL")
+    if status in terminal_statuses:
+        updates.append("finished_at = CURRENT_TIMESTAMP")
+
+
 def create_download_job(self, job_id: str, doc_id: str, library: str, manifest_url: str):
     """Crea traccia del download nel DB."""
     conn = self._get_conn()
@@ -58,22 +96,14 @@ def update_download_job(
         updates = [
             "current_page = ?",
             "total_pages = ?",
-            "status = ?",
-            "error_message = ?",
             "updated_at = CURRENT_TIMESTAMP",
         ]
-        params: list[Any] = [current, total, status, error]
-        if queue_position is not None:
-            updates.append("queue_position = ?")
-            params.append(int(queue_position))
-        if priority is not None:
-            updates.append("priority = ?")
-            params.append(int(priority))
-        if status == "running":
-            updates.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
-            updates.append("finished_at = NULL")
-        if status in {"completed", "error", "cancelled", "paused"}:
-            updates.append("finished_at = CURRENT_TIMESTAMP")
+        params: list[Any] = [current, total]
+        status_updates, status_params, terminal_statuses = _status_and_error_updates(status, error)
+        updates.extend(status_updates)
+        params.extend(status_params)
+        _append_optional_queue_fields(updates, params, queue_position, priority)
+        _append_lifecycle_updates(updates, status, terminal_statuses)
         sql = f"UPDATE download_jobs SET {', '.join(updates)} WHERE job_id = ?"  # noqa: S608
         params.append(job_id)
         cursor.execute(sql, tuple(params))

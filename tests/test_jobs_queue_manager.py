@@ -106,3 +106,48 @@ def test_request_cancel_clears_pause_flag(monkeypatch):
     snapshot = job_manager.get_job("job_cancel") or {}
     assert snapshot.get("cancel_requested") is True
     assert snapshot.get("pause_requested") is False
+
+
+def test_request_pause_targets_active_attempt_with_same_db_id(monkeypatch):
+    """Pause by db_job_id should hit the live running attempt, not stale history."""
+    job_manager._jobs.clear()
+    job_manager._download_queue.clear()
+    job_manager._active_downloads.clear()
+
+    job_manager._jobs["old_attempt"] = {
+        "id": "old_attempt",
+        "db_job_id": "db_same",
+        "status": "paused",
+        "message": "Paused by user",
+        "pause_requested": False,
+        "cancel_requested": False,
+        "created_at": 1.0,
+        "thread": None,
+    }
+    job_manager._jobs["new_attempt"] = {
+        "id": "new_attempt",
+        "db_job_id": "db_same",
+        "status": "running",
+        "message": "Running",
+        "pause_requested": False,
+        "cancel_requested": False,
+        "created_at": 2.0,
+        "thread": None,
+    }
+    monkeypatch.setattr(job_manager, "_update_db_safe", lambda *args, **kwargs: None)
+
+    assert job_manager.request_pause("db_same") is True
+    assert str((job_manager.get_job("new_attempt") or {}).get("status") or "").lower() == "pausing"
+
+
+def test_list_jobs_active_includes_stop_transitional_states():
+    """Active view should include pausing/cancelling states."""
+    job_manager._jobs.clear()
+    job_manager._jobs["job_pausing"] = {"status": "pausing"}
+    job_manager._jobs["job_cancelling"] = {"status": "cancelling"}
+    job_manager._jobs["job_done"] = {"status": "completed"}
+
+    active = job_manager.list_jobs(active_only=True)
+    assert "job_pausing" in active
+    assert "job_cancelling" in active
+    assert "job_done" not in active

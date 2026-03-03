@@ -159,9 +159,13 @@ def _download_manager_fragment(limit: int = 50):
 
 
 def _runtime_db_job_ids() -> set[str]:
-    active = job_manager.list_jobs(active_only=True)
+    active = job_manager.list_jobs(active_only=False)
+    active_statuses = {"pending", "queued", "running", "pausing", "cancelling"}
     ids: set[str] = set()
     for jid, info in active.items():
+        status = str(info.get("status") or "").strip().lower()
+        if status not in active_statuses:
+            continue
         db_id = str(info.get("db_job_id") or jid or "").strip()
         if db_id:
             ids.add(db_id)
