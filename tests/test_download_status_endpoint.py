@@ -16,3 +16,35 @@ def test_download_status_endpoint_shows_progress():
     fragment = discovery_handlers.get_download_status(job_id, doc_id=doc_id, library=library)
     text = repr(fragment)
     assert "40%" in text or "2/5" in text
+
+
+def test_download_status_endpoint_paused_is_terminal_no_polling():
+    """Paused status card must be terminal and stop polling."""
+    vault = VaultManager()
+    job_id = "TestLib_TestDoc_paused"
+    doc_id = "TestDocPaused"
+    library = "TestLib"
+
+    vault.create_download_job(job_id, doc_id, library, "https://example.org/manifest.json")
+    vault.update_download_job(job_id, current=2, total=5, status="paused", error=None)
+
+    fragment = discovery_handlers.get_download_status(job_id, doc_id=doc_id, library=library)
+    text = repr(fragment)
+    assert "Download in pausa" in text
+    assert "every 1s" not in text
+
+
+def test_download_status_endpoint_cancelled_is_terminal_no_polling():
+    """Cancelled status card must be terminal and stop polling."""
+    vault = VaultManager()
+    job_id = "TestLib_TestDoc_cancelled"
+    doc_id = "TestDocCancelled"
+    library = "TestLib"
+
+    vault.create_download_job(job_id, doc_id, library, "https://example.org/manifest.json")
+    vault.update_download_job(job_id, current=2, total=5, status="cancelled", error=None)
+
+    fragment = discovery_handlers.get_download_status(job_id, doc_id=doc_id, library=library)
+    text = repr(fragment)
+    assert "Download annullato" in text
+    assert "every 1s" not in text

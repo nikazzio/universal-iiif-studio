@@ -557,6 +557,26 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
     if status in {"error", "failed"}:
         return render_error_message("Errore durante il download", str(error or status))
 
+    # 1.c Terminal stop states (must not keep polling)
+    if status in {"paused", "cancelled"}:
+        icon = "⏸️" if status == "paused" else "🛑"
+        title_text = "Download in pausa" if status == "paused" else "Download annullato"
+        detail_text = (
+            f"Il download di '{doc_id}' è in pausa. Puoi riprenderlo dal Download Manager."
+            if status == "paused"
+            else f"Il download di '{doc_id}' è stato annullato."
+        )
+        return Div(
+            Div(
+                Span(icon, cls="text-4xl mb-4 block"),
+                H3(title_text, cls="text-xl font-bold text-slate-100 mb-2"),
+                P(detail_text, cls="text-slate-400 mb-2"),
+                P(f"Stato finale: {status.upper()}", cls="text-xs text-slate-500"),
+                cls="text-center",
+            ),
+            cls="bg-slate-900/40 border border-slate-700 p-8 rounded-lg shadow-sm",
+        )
+
     # 2. Caso Completato
     if percent >= 100 or status == "completed":
         from urllib.parse import quote
