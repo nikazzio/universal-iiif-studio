@@ -112,6 +112,24 @@ def test_finalize_downloads_promotes_previous_valid_temp_pages_when_now_complete
     assert not dummy.temp_dir.exists()
 
 
+def test_finalize_downloads_excludes_stale_scans_outside_manifest_scope(tmp_path):
+    """Finalized files should be restricted to current manifest page scope."""
+    dummy = _DummyDownloader(tmp_path, expected_total=2)
+    stale = dummy.scans_dir / "pag_9999.jpg"
+    _write_valid_jpg(stale)
+
+    p0 = dummy.temp_dir / "pag_0000.jpg"
+    p1 = dummy.temp_dir / "pag_0001.jpg"
+    _write_valid_jpg(p0)
+    _write_valid_jpg(p1)
+
+    out = downloader_runtime._finalize_downloads(dummy, [str(p0), str(p1)])
+    assert len(out) == 2
+    assert str(stale) not in out
+    assert str(dummy.scans_dir / "pag_0000.jpg") in out
+    assert str(dummy.scans_dir / "pag_0001.jpg") in out
+
+
 class _RunDummy:
     def __init__(self):
         self.progress_callback = None

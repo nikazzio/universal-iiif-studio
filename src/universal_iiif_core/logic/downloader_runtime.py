@@ -257,7 +257,7 @@ def _finalize_downloads(self, valid):
         with suppress(Exception):
             self.logger.debug("Failed to clean temp dir %s", self.temp_dir, exc_info=True)
 
-    return [str(path) for path in sorted(self.scans_dir.glob("pag_*.jpg"))]
+    return _collect_finalized_scan_files(self, expected_pages=expected_pages, validated_pages=validated_pages)
 
 
 def _collect_validated_staged_files(self, valid: list[str]) -> tuple[list[Path], set[int]]:
@@ -284,6 +284,23 @@ def _collect_validated_staged_files(self, valid: list[str]) -> tuple[list[Path],
             staged_by_name.setdefault(staged_file.name, staged_file)
 
     return list(staged_by_name.values()), validated_pages
+
+
+def _collect_finalized_scan_files(self, *, expected_pages: set[int], validated_pages: set[int]) -> list[str]:
+    """Return only finalized files in scope for this manifest run.
+
+    Scope priority:
+    - expected manifest pages when known (`expected_pages`)
+    - otherwise pages validated during this run (`validated_pages`)
+    - finally fallback to all scan pages (legacy/defensive path)
+    """
+    scoped_pages = expected_pages or validated_pages or _page_numbers_in_dir(self.scans_dir)
+    files: list[str] = []
+    for page_num in sorted(scoped_pages):
+        scan_path = self.scans_dir / f"pag_{page_num - 1:04d}.jpg"
+        if scan_path.exists():
+            files.append(str(scan_path))
+    return files
 
 
 def _is_valid_image_file(image_path: Path) -> bool:
