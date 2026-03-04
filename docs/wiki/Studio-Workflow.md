@@ -9,7 +9,7 @@ Direct `/studio` without `doc_id` and `library` redirects to `Library`.
 
 - Download cards show queue/running/pausing/paused/cancelling/cancelled states with page counters.
 - Local staging uses `temp_images/<doc_id>` before files are consolidated in `downloads/<library>/<doc_id>/scans/`.
-- With `settings.storage.partial_promotion_mode=on_pause`, pausing a running download promotes validated staged pages into `scans/`.
+- With `settings.storage.partial_promotion_mode=on_pause`, pausing a running download promotes validated staged pages into `scans/`; existing scans are overwritten only in explicit refresh/redownload flows.
 - Resume evaluates both `scans/` and staged temp files, then continues only from truly missing pages.
 
 ## Export Tab Model

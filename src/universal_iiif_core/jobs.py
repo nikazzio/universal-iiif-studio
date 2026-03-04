@@ -392,6 +392,14 @@ class JobManager:
             library = str(row.get("library") or "").strip()
         return doc_id, library
 
+    def _resolve_pause_promotion_overwrite(self, *, job_id: str) -> bool:
+        with self._lock:
+            snapshot = dict(self._jobs.get(job_id) or {})
+        kwargs = dict(snapshot.get("kwargs") or {})
+        if "overwrite_existing_scans" in kwargs:
+            return bool(kwargs.get("overwrite_existing_scans"))
+        return bool(kwargs.get("force_redownload", False))
+
     def _resolve_pause_promotion_paths(self, *, doc_id: str, library: str) -> tuple[Path, Path] | None:
         cm = get_config_manager()
         temp_root = Path(cm.get_temp_dir()).resolve()
@@ -417,7 +425,13 @@ class JobManager:
         scans_dir.mkdir(parents=True, exist_ok=True)
         return temp_dir, scans_dir
 
-    def _promote_validated_staged_pages(self, *, temp_dir: Path, scans_dir: Path) -> tuple[int, int]:
+    def _promote_validated_staged_pages(
+        self,
+        *,
+        temp_dir: Path,
+        scans_dir: Path,
+        overwrite_existing_scans: bool,
+    ) -> tuple[int, int]:
         promoted = 0
         skipped = 0
         for staged_file in sorted(temp_dir.glob("pag_*.jpg")):
@@ -425,6 +439,16 @@ class JobManager:
                 continue
             dest = scans_dir / staged_file.name
             if dest.exists():
+                if overwrite_existing_scans:
+                    try:
+                        shutil.copy2(str(staged_file), str(dest))
+                        promoted += 1
+                    except OSError:
+                        logger.debug("Failed to overwrite staged page %s", staged_file, exc_info=True)
+                    finally:
+                        with suppress(OSError):
+                            staged_file.unlink()
+                    continue
                 skipped += 1
                 with suppress(OSError):
                     staged_file.unlink()
@@ -453,14 +477,20 @@ class JobManager:
             return
         temp_dir, scans_dir = paths
 
-        promoted, skipped = self._promote_validated_staged_pages(temp_dir=temp_dir, scans_dir=scans_dir)
+        overwrite_existing_scans = self._resolve_pause_promotion_overwrite(job_id=job_id)
+        promoted, skipped = self._promote_validated_staged_pages(
+            temp_dir=temp_dir,
+            scans_dir=scans_dir,
+            overwrite_existing_scans=overwrite_existing_scans,
+        )
 
         if promoted > 0 or skipped > 0:
             logger.info(
-                "Partial promotion on pause for %s: promoted=%s skipped=%s",
+                "Partial promotion on pause for %s: promoted=%s skipped=%s overwrite=%s",
                 doc_id,
                 promoted,
                 skipped,
+                overwrite_existing_scans,
             )
 
     def _maybe_create_db_record(self, job_id: str, db_job_id: str | None, kwargs: dict | Any) -> None:

@@ -260,3 +260,59 @@ def test_pause_promotes_validated_temp_pages_when_mode_on_pause(tmp_path, monkey
         pytest.fail("Validated staged page was not promoted to scans on pause")
 
     assert not staged.exists()
+
+
+def test_pause_promotion_overwrites_existing_scan_when_flag_enabled(tmp_path, monkeypatch):
+    """Pause promotion must keep overwrite semantics for redownload flows."""
+    db_path = str(tmp_path / "vault.db")
+    downloads_root = tmp_path / "downloads"
+    temp_root = tmp_path / "temp_images"
+    doc_id = "doc_overwrite"
+    library = "Lib"
+    temp_dir = temp_root / doc_id
+    scans_dir = downloads_root / library / doc_id / "scans"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    scans_dir.mkdir(parents=True, exist_ok=True)
+
+    destination = scans_dir / "pag_0000.jpg"
+    Image.new("RGB", (20, 20), color="black").save(destination, format="JPEG")
+    before_bytes = destination.read_bytes()
+
+    staged = temp_dir / "pag_0000.jpg"
+    Image.new("RGB", (20, 20), color="white").save(staged, format="JPEG")
+
+    import universal_iiif_core.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "VaultManager", lambda: VaultManager(db_path))
+    monkeypatch.setattr(
+        jobs_mod,
+        "get_config_manager",
+        lambda: _PromotionCfg(temp_root=Path(temp_root), downloads_root=Path(downloads_root)),
+    )
+    job_manager._jobs.clear()
+    job_manager._download_queue.clear()
+    job_manager._active_downloads.clear()
+
+    job_manager.submit_job(
+        _cooperative_pause_task,
+        kwargs={
+            "db_job_id": "pauseoverwrite",
+            "doc_id": doc_id,
+            "library": library,
+            "overwrite_existing_scans": True,
+        },
+        job_type="download",
+    )
+
+    time.sleep(0.05)
+    assert job_manager.request_pause("pauseoverwrite") is True
+
+    vm = VaultManager(db_path)
+
+    if not _wait_until(lambda: bool((vm.get_download_job("pauseoverwrite") or {}).get("status") == "paused")):
+        pytest.fail("Paused job did not transition to paused state in DB")
+    if not _wait_until(lambda: destination.exists() and not staged.exists()):
+        pytest.fail("Pause promotion did not consume staged overwrite file")
+
+    after_bytes = destination.read_bytes()
+    assert before_bytes != after_bytes

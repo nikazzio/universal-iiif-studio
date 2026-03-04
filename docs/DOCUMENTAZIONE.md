@@ -164,7 +164,7 @@ Comportamento runtime attuale:
 * i retry segmentati (`Retry missing` / `Retry range`) conteggiano anche le pagine gia validate in temp, quindi il sistema converge correttamente alla promozione finale;
 * la policy `settings.storage.partial_promotion_mode` controlla una promozione anticipata:
   - `never` (default): promozione solo quando il gate di completezza e soddisfatto;
-  - `on_pause`: quando metti in pausa un job running, le pagine validate vengono promosse in `scans` (senza sovrascrivere scans esistenti).
+  - `on_pause`: quando metti in pausa un job running, le pagine validate vengono promosse in `scans`; le scansioni esistenti vengono sovrascritte solo nei flussi espliciti di refresh/ridownload.
 
 Resume:
 * il resume considera sia `scans/` sia `temp_images/{doc_id}` per capire cosa manca davvero;

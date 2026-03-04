@@ -254,7 +254,7 @@ Runtime notes:
 - `thumbnails_retention_days`: pruning applied when Studio Export thumbnails are generated.
 - `highres_temp_retention_hours`: pruning of temporary remote high-res staging folders.
 - `auto_prune_on_startup`: enables startup pruning for exports + high-res temp.
-- `partial_promotion_mode`: promotes validated staged pages from temp to scans only when a running download is paused (`on_pause`).
+- `partial_promotion_mode`: promotes validated staged pages from temp to scans only when a running download is paused (`on_pause`); existing scans are overwritten only for explicit refresh/redownload jobs.
 - staged completeness checks count validated pages already in `temp_images/<doc_id>` plus current-run pages (segmented retry/range runs converge correctly).
 
 ## `settings.logging`

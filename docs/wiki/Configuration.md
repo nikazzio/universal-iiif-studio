@@ -33,6 +33,7 @@ Runtime settings live in `config.json` and are managed through `universal_iiif_c
 - Use export profiles for job-level quality decisions instead of changing global defaults frequently.
 - Staged downloads can live in `temp_images/<doc_id>` before promotion to `scans/`.
 - Segmented retries/range downloads count previously staged validated pages before final promotion.
+- With `partial_promotion_mode=on_pause`, promotion on pause keeps existing scans by default and overwrites only for explicit refresh/redownload flows.
 
 ## Canonical References
 

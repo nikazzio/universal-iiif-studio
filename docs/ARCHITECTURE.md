@@ -85,7 +85,7 @@ Queued jobs are promoted FIFO (with optional prioritization) and each running wo
 
 ## Key Design Decisions
 
-1. **Scans as Operational Source + Temp Staging**: `scans/` is the operational source for Viewer/OCR/Cropper, but runtime can stage validated pages in `temp_images/<doc_id>` before promotion. Promotion policy can stay strict (`never`) or happen on pause (`settings.storage.partial_promotion_mode=on_pause`).
+1. **Scans as Operational Source + Temp Staging**: `scans/` is the operational source for Viewer/OCR/Cropper, but runtime can stage validated pages in `temp_images/<doc_id>` before promotion. Promotion policy can stay strict (`never`) or happen on pause (`settings.storage.partial_promotion_mode=on_pause`), with overwrite of existing scans enabled only for explicit refresh/redownload flows.
 2. **Zero Legacy**: Deprecated APIs are removed or stubbed. No "dead code" is allowed in the codebase.
 3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic and header mimicking.
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.

@@ -59,7 +59,7 @@ More details: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studi
 
 **Behavior**:
 - with `partial_promotion_mode=never`, validated pages can remain in staging until completeness gate is satisfied;
-- with `partial_promotion_mode=on_pause`, pausing promotes validated staged pages to `scans/`.
+- with `partial_promotion_mode=on_pause`, pausing promotes validated staged pages to `scans/`; existing scans are overwritten only in explicit refresh/redownload flows.
 
 Segmented retries (`retry_missing` / `retry_range`) still converge correctly because completeness checks count previously staged validated pages.
 

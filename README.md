@@ -120,6 +120,7 @@ Download staging behavior:
 - runtime validates pages in `temp_images/<DocumentId>` and promotes to `scans/` when completeness gates are satisfied.
 - segmented/retry runs are supported: previously staged validated pages are counted together with current-run pages.
 - optional pause-time promotion is controlled by `settings.storage.partial_promotion_mode`.
+- with `on_pause`, staged pages are promoted when a running job is paused; existing scans are overwritten only for explicit refresh/redownload flows.
 
 ## Dev Commands
 
