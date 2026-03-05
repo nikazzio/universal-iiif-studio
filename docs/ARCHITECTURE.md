@@ -89,6 +89,7 @@ Queued jobs are promoted FIFO (with optional prioritization) and each running wo
 2. **Zero Legacy**: Deprecated APIs are removed or stubbed. No "dead code" is allowed in the codebase.
 3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic and header mimicking.
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
+5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.
 
 ## Local Data & Cleanup
 
