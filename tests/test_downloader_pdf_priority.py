@@ -258,3 +258,25 @@ def test_extract_pages_from_pdf_uses_viewer_dpi(monkeypatch, tmp_path: Path):
     assert captured["output_dir"] == downloader.scans_dir
     assert captured["dpi"] == 222
     assert captured["jpeg_quality"] == 88
+
+
+def test_should_prefer_native_pdf_respects_prefer_images_flag(monkeypatch, tmp_path: Path):
+    """CLI prefer-images must disable native PDF preference."""
+    monkeypatch.setattr(downloader_module, "get_json", lambda _url: _manifest_with_native_pdf())
+    monkeypatch.setattr(downloader_module, "get_download_logger", lambda _ms: _DummyLogger())
+    monkeypatch.setattr(downloader_module, "VaultManager", _DummyVault)
+
+    downloader = IIIFDownloader(
+        "https://example.org/manifest.json",
+        output_dir=tmp_path,
+        library="Library",
+        output_folder_name="DocPreferImages",
+        prefer_images=True,
+    )
+
+    monkeypatch.setattr(
+        downloader.cm,
+        "get_setting",
+        lambda key, default=None: True if key == "pdf.prefer_native_pdf" else default,
+    )
+    assert downloader._should_prefer_native_pdf() is False

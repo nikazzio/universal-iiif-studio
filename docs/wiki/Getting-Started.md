@@ -24,9 +24,11 @@ iiif-cli "<manifest-url>"
 ## Main Navigation (Web Studio)
 
 - `Discovery`: resolve and queue downloads.
+  - `Aggiungi item` performs light prefetch (`metadata.json` + `manifest.json`) without full scans.
 - `Library`: local assets entrypoint.
 - `Studio`: document workspace.
 - `Export`: batch/single export hub.
+  - Inside Studio, the per-item tab is named `Output`.
 
 If a download is paused/incomplete, pages may temporarily stay in `data/local/temp_images/<doc_id>` before promotion to `downloads/<library>/<doc_id>/scans/`, depending on `settings.storage.partial_promotion_mode`.
 

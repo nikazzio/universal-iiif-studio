@@ -36,7 +36,7 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
-- Studio Export with PDF profiles, optional per-job overrides, and job monitoring tab
+- Studio Output tab with PDF profiles, source-mode selection (`Locale` / `Remoto temporaneo`) and job monitor
 - Thumbnail-level resolution transparency (`Locale` vs `Online max`) with on-demand `High-Res` fetch
 - `src/` package layout with separated `core`, `ui`, and `cli` modules
 
@@ -56,9 +56,11 @@ python3 src/studio_app.py
 
 Navigation model:
 - `Discovery` supports free text/shelfmark/ID/URL search and optional Gallica type filters.
+- `Aggiungi item` in Discovery performs a light prefetch (`metadata.json` + `manifest.json`) without full scans.
 - `Library` is the canonical entrypoint for local documents.
 - `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
 - `Export` is a dedicated hub for batch/single exports (`/export`).
+- In Studio, the right tab is now `Output` (renamed from `Export`).
 - `/studio` without context redirects to `/library`.
 
 ### CLI
@@ -100,11 +102,15 @@ Meaning:
 - `images.download_strategy_mode`: preset ordering for IIIF size fallback (`balanced|quality_first|fast|archival|custom`)
 - `images.download_strategy_custom`: size list used when `mode=custom`
 - `images.iiif_quality`: IIIF quality segment in image URLs (recommended `default`)
+- `images.local_optimize.max_long_edge_px`: in-place optimization max edge for local scans
+- `images.local_optimize.jpeg_quality`: in-place optimization JPEG quality for local scans
 - `pdf.profiles.default`: default export profile (`balanced`, `high_quality`, `archival_highres`, `lightweight`)
 - `pdf.profiles.catalog.<profile>.max_parallel_page_fetch`: parallel fetch cap for remote high-res temp exports
 - `storage.partial_promotion_mode`: controls if validated staged pages are promoted from temp to scans (`never|on_pause`)
+- `storage.remote_cache.max_bytes|retention_hours|max_items`: persistent remote-resolution cache limits (Studio Output)
 - `viewer.mirador.require_complete_local_images`: when `true`, Studio viewer is gated until local page availability is complete
-- PDF profiles are created/edited in `Settings > PDF Export`; item Export tab only selects a profile per job
+- `viewer.source_policy.saved_mode`: policy for `saved` items in Studio (`remote_first|local_first`)
+- PDF profiles are created/edited in `Settings > PDF Export`; item Output tab selects a profile per job
 
 ## Output Layout
 
@@ -113,6 +119,10 @@ For each manuscript:
 - `downloads/<Library>/<DocumentId>/pdf/`: native and/or compiled PDF outputs
 - `downloads/<Library>/<DocumentId>/data/`: metadata and processing JSON artifacts
 - `data/local/temp_images/<DocumentId>/`: staging area for validated pages before final promotion to `scans/`
+
+Prefetch-light behavior:
+- `Aggiungi item` creates/updates `downloads/<Library>/<DocumentId>/data/metadata.json` and `manifest.json`.
+- Full page images are not downloaded until explicit `download_full`/`start_download`.
 
 All runtime paths are resolved via `ConfigManager`.
 

@@ -415,6 +415,7 @@ class IIIFDownloader:
     def _register_vault(self):
         native_pdf_url = self.get_pdf_url()
         catalog = parse_manifest_catalog(self.manifest, self.manifest_url, self.ms_id, enrich_external_reference=False)
+        local_scans_available = 1 if any(self.scans_dir.glob("pag_*.jpg")) else 0
         try:
             self.vault.upsert_manuscript(
                 self.ms_id,
@@ -428,6 +429,9 @@ class IIIFDownloader:
                 asset_state="queued",
                 has_native_pdf=1 if native_pdf_url else 0,
                 pdf_local_available=1 if self.output_path.exists() else 0,
+                manifest_local_available=1 if self.manifest_path.exists() else 0,
+                local_scans_available=local_scans_available,
+                read_source_mode="local" if local_scans_available else "remote",
                 shelfmark=str(catalog.get("shelfmark") or ""),
                 date_label=str(catalog.get("date_label") or ""),
                 language_label=str(catalog.get("language_label") or ""),
@@ -539,6 +543,7 @@ class IIIFDownloader:
             item_type_confidence=float(catalog.get("item_type_confidence") or 0.0),
             item_type_reason=str(catalog.get("item_type_reason") or ""),
             metadata_json=str(catalog.get("metadata_json") or "{}"),
+            manifest_local_available=1,
         )
 
     def get_canvases(self):

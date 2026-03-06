@@ -5,6 +5,7 @@ very small and satisfy ruff's complexity check.
 """
 
 import time
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -29,8 +30,9 @@ from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.discovery import resolve_shelfmark, search_institut, smart_search
+from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import get_json
+from universal_iiif_core.utils import get_json, get_request_session, save_json
 
 logger = get_logger(__name__)
 
@@ -60,7 +62,13 @@ def _with_toast(fragment, message: str, tone: str = "info"):
 
 def _downloads_doc_path(library: str, doc_id: str) -> Path:
     cm = get_config_manager()
-    return cm.get_downloads_dir() / library / doc_id
+    root = cm.get_downloads_dir().resolve()
+    target = (root / str(library or "").strip() / str(doc_id or "").strip()).resolve()
+    try:
+        target.relative_to(root)
+    except Exception as exc:
+        raise ValueError("Identificatore documento non valido.") from exc
+    return target
 
 
 def _find_manuscript_by_id_and_library(doc_id: str, library: str) -> dict | None:
@@ -116,10 +124,26 @@ def _upsert_saved_entry(
     item_type_confidence: float = 0.0,
     item_type_reason: str = "",
     metadata_json: str = "{}",
+    manifest_local_available: bool = False,
+    thumbnail_url: str = "",
 ) -> None:
     entry_label = (label or doc_id or "Senza Titolo").strip()
     total = int(pages or 0)
     v = VaultManager()
+    existing = _find_manuscript_by_id_and_library(doc_id, library) or {}
+    existing_status = str(existing.get("status") or "").strip().lower()
+    existing_asset_state = str(existing.get("asset_state") or "").strip().lower()
+    known_states = {"saved", "partial", "complete", "downloading", "running", "queued", "error"}
+    status_to_store = existing_status if existing_status in known_states else "saved"
+    asset_state_to_store = existing_asset_state if existing_asset_state in known_states else "saved"
+    existing_total = int(existing.get("total_canvases") or 0)
+    existing_downloaded = int(existing.get("downloaded_canvases") or 0)
+    manifest_flag = 1 if manifest_local_available else int(existing.get("manifest_local_available") or 0)
+    local_scans_flag = int(existing.get("local_scans_available") or 0)
+    pdf_local_flag = int(existing.get("pdf_local_available") or 0)
+    existing_thumbnail = str(existing.get("thumbnail_url") or "").strip()
+    source_mode = str(existing.get("read_source_mode") or "remote").strip().lower() or "remote"
+    thumbnail_to_store = str(thumbnail_url or existing_thumbnail or "").strip()
     v.upsert_manuscript(
         doc_id,
         display_title=entry_label,
@@ -128,12 +152,15 @@ def _upsert_saved_entry(
         library=library,
         manifest_url=manifest_url,
         local_path=str(_downloads_doc_path(library, doc_id)),
-        status="saved",
-        asset_state="saved",
-        total_canvases=total,
-        downloaded_canvases=0,
+        status=status_to_store,
+        asset_state=asset_state_to_store,
+        total_canvases=max(total, existing_total),
+        downloaded_canvases=max(existing_downloaded, 0),
         has_native_pdf=1 if has_native_pdf else 0 if has_native_pdf is False else None,
-        pdf_local_available=0,
+        pdf_local_available=pdf_local_flag,
+        manifest_local_available=manifest_flag,
+        local_scans_available=local_scans_flag,
+        read_source_mode=source_mode if source_mode in {"local", "remote"} else "remote",
         item_type=item_type or "non classificato",
         item_type_source="auto",
         item_type_confidence=float(item_type_confidence or 0.0),
@@ -148,8 +175,89 @@ def _upsert_saved_entry(
         language_label=language_label or "",
         source_detail_url=source_detail_url or "",
         reference_text=reference_text or "",
+        thumbnail_url=thumbnail_to_store,
         metadata_json=metadata_json or "{}",
     )
+
+
+def _thumbnail_url_from_manifest(manifest_payload: dict, *, manifest_url: str = "", doc_id: str = "") -> str:
+    if not isinstance(manifest_payload, dict):
+        return ""
+    thumb = IIIFManifestParser._extract_thumbnail(manifest_payload, manifest_url=manifest_url, doc_id=doc_id or None)
+    return str(thumb or "").strip()
+
+
+def _download_prefetch_preview(data_dir: Path, thumbnail_url: str) -> str:
+    clean_url = str(thumbnail_url or "").strip()
+    if not clean_url:
+        return ""
+    if not clean_url.lower().startswith(("http://", "https://")):
+        return ""
+    preview_path = data_dir / "preview.jpg"
+    try:
+        response = get_request_session().get(clean_url, timeout=15)
+        response.raise_for_status()
+        if not response.content:
+            return ""
+        from PIL import Image
+
+        with Image.open(BytesIO(response.content)) as img:
+            rgb = img.convert("RGB")
+            width, height = rgb.size
+            long_edge = max(width, height)
+            if long_edge > 640:
+                scale = 640 / float(long_edge)
+                target_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                rgb = rgb.resize(target_size, Image.Resampling.LANCZOS)
+            rgb.save(preview_path, format="JPEG", quality=82, optimize=True, progressive=True)
+        return str(preview_path)
+    except Exception:
+        logger.debug("Unable to persist prefetch preview from %s", clean_url, exc_info=True)
+        return ""
+
+
+def _persist_prefetch_light(
+    manifest_url: str,
+    doc_id: str,
+    library: str,
+    *,
+    title: str,
+    description: str,
+    pages: int,
+    thumbnail_url: str = "",
+) -> tuple[bool, str]:
+    """Save lightweight local files for `saved` entries (manifest + metadata)."""
+    doc_root = _downloads_doc_path(library, doc_id)
+    data_dir = doc_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata_payload = {
+        "id": doc_id,
+        "title": title or doc_id,
+        "label": title or doc_id,
+        "description": description or "",
+        "manifest_url": manifest_url,
+        "manifest": manifest_url,
+        "pages": int(pages or 0),
+        "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    save_json(data_dir / "metadata.json", metadata_payload)
+
+    manifest_payload = get_json(str(manifest_url or "").strip(), retries=2)
+    derived_thumb = str(thumbnail_url or "").strip()
+    manifest_cached = False
+    if isinstance(manifest_payload, dict) and manifest_payload:
+        save_json(data_dir / "manifest.json", manifest_payload)
+        manifest_cached = True
+        if not derived_thumb:
+            derived_thumb = _thumbnail_url_from_manifest(
+                manifest_payload,
+                manifest_url=manifest_url,
+                doc_id=doc_id,
+            )
+
+    local_preview_path = _download_prefetch_preview(data_dir, derived_thumb)
+    return manifest_cached, local_preview_path or derived_thumb
 
 
 def _download_manager_fragment(limit: int = 50):
@@ -438,6 +546,15 @@ def add_to_library(manifest_url: str, doc_id: str, library: str):
 
         info, _err = _analyze_manifest_safe(manifest_url)
         info = info or {}
+        manifest_cached, prefetch_thumb = _persist_prefetch_light(
+            manifest_url,
+            doc_id,
+            library,
+            title=str(info.get("catalog_title") or info.get("label") or doc_id),
+            description=str(info.get("description") or ""),
+            pages=int(info.get("pages", 0) or 0),
+            thumbnail_url=str(info.get("thumbnail") or ""),
+        )
         _upsert_saved_entry(
             manifest_url,
             doc_id,
@@ -459,12 +576,17 @@ def add_to_library(manifest_url: str, doc_id: str, library: str):
             item_type_confidence=float(info.get("item_type_confidence", 0.0) or 0.0),
             item_type_reason=info.get("item_type_reason", ""),
             metadata_json=info.get("metadata_json", "{}"),
+            manifest_local_available=manifest_cached,
+            thumbnail_url=prefetch_thumb,
         )
         return _with_toast(
             _download_manager_fragment(),
             f"Aggiunto in Libreria: {doc_id}",
             tone="success",
         )
+    except ValueError as e:
+        logger.warning("Add to library validation error: %s", e)
+        return _with_feedback_toast("Errore Input", str(e), tone="danger")
     except Exception:
         logger.exception("Add to library failed")
         return _with_feedback_toast("Errore Libreria", "Impossibile salvare l'entry in Libreria.", tone="danger")
@@ -489,6 +611,15 @@ def add_and_download(manifest_url: str, doc_id: str, library: str):
 
         info, _err = _analyze_manifest_safe(manifest_url)
         info = info or {}
+        manifest_cached, prefetch_thumb = _persist_prefetch_light(
+            manifest_url,
+            doc_id,
+            library,
+            title=str(info.get("catalog_title") or info.get("label") or doc_id),
+            description=str(info.get("description") or ""),
+            pages=int(info.get("pages", 0) or 0),
+            thumbnail_url=str(info.get("thumbnail") or ""),
+        )
         _upsert_saved_entry(
             manifest_url,
             doc_id,
@@ -510,6 +641,8 @@ def add_and_download(manifest_url: str, doc_id: str, library: str):
             item_type_confidence=float(info.get("item_type_confidence", 0.0) or 0.0),
             item_type_reason=info.get("item_type_reason", ""),
             metadata_json=info.get("metadata_json", "{}"),
+            manifest_local_available=manifest_cached,
+            thumbnail_url=prefetch_thumb,
         )
 
         download_id = start_downloader_thread(manifest_url, doc_id, library)

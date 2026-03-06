@@ -24,8 +24,8 @@ def _base_doc(**overrides):
     return doc
 
 
-def test_library_card_shows_pdf_presence_badges():
-    """Cards should expose native/local PDF availability clearly."""
+def test_library_card_hides_pdf_badges_from_card_technical_rows():
+    """Library cards should avoid PDF-source badges to reduce state ambiguity."""
     rendered = repr(
         render_library_card(
             _base_doc(
@@ -36,28 +36,21 @@ def test_library_card_shows_pdf_presence_badges():
             )
         )
     )
-    assert "Sorgente PDF:" in rendered
-    assert "nativa" in rendered
-    assert "PDF locali:" in rendered
-    assert "3" in rendered
+    assert "Sorgente PDF:" not in rendered
+    assert "PDF locali:" not in rendered
 
 
-def test_library_card_shows_pdf_absence_badges():
-    """Cards should expose missing PDF availability clearly."""
+def test_library_card_includes_temp_page_technical_row():
+    """Card technical rows should still expose local/temp page inventory."""
     rendered = repr(
         render_library_card(
             _base_doc(
-                pdf_source="images",
-                has_native_pdf=False,
-                pdf_local_available=False,
-                pdf_local_count=0,
+                temp_pages_count=2,
             )
         )
     )
-    assert "Sorgente PDF:" in rendered
-    assert "da immagini" in rendered
-    assert "PDF locali:" in rendered
-    assert "0" in rendered
+    assert "Pagine temporanee:" in rendered
+    assert "2" in rendered
 
 
 def test_library_card_shows_temporary_pages_count():

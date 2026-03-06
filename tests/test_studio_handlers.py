@@ -192,6 +192,58 @@ def test_studio_allows_mirador_override_with_query_flag():
         cm.set_setting("viewer.mirador.require_complete_local_images", old_gate)
 
 
+def test_studio_saved_remote_first_bypasses_local_gate():
+    """Saved items should open in remote mode when saved-mode policy is remote_first."""
+    doc_id = "MSS_SAVED_REMOTE_FIRST"
+    library = "Vaticana"
+    cm = get_config_manager()
+    old_gate = cm.get_setting("viewer.mirador.require_complete_local_images", True)
+    old_policy = cm.get_setting("viewer.source_policy.saved_mode", "remote_first")
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    (data_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"id": "https://example.org/canvas/1"},
+                    {"id": "https://example.org/canvas/2"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(json.dumps({"label": "Saved Remote First"}), encoding="utf-8")
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        manifest_url="https://example.org/remote-manifest.json",
+        status="saved",
+        asset_state="saved",
+        total_canvases=2,
+        downloaded_canvases=0,
+        manifest_local_available=1,
+    )
+
+    try:
+        cm.set_setting("viewer.mirador.require_complete_local_images", True)
+        cm.set_setting("viewer.source_policy.saved_mode", "remote_first")
+        response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
+        rendered = str(response)
+        assert 'data-mirador-gated="1"' not in rendered
+        assert "const containerId = 'mirador-viewer';" in rendered
+        assert "read_source:" in rendered
+        assert "remote" in rendered
+    finally:
+        cm.set_setting("viewer.mirador.require_complete_local_images", old_gate)
+        cm.set_setting("viewer.source_policy.saved_mode", old_policy)
+
+
 def test_studio_uses_library_title_and_shows_full_title_in_info():
     """Studio header should use truncated library title while Info keeps full value."""
     doc_id = "MSS_Urb.lat.1888"
@@ -265,7 +317,7 @@ def test_studio_initial_render_keeps_export_lazy():
 
     response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
     rendered = str(response)
-    assert "Apri il tab Export per caricare miniature" in rendered
+    assert "Apri il tab Output per caricare miniature" in rendered
     assert "studio-export-form" not in rendered
 
 

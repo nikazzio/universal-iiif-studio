@@ -76,6 +76,11 @@ class VaultManager:
                 asset_state TEXT DEFAULT 'saved',
                 has_native_pdf INTEGER,
                 pdf_local_available INTEGER DEFAULT 0,
+                manifest_local_available INTEGER DEFAULT 0,
+                local_scans_available INTEGER DEFAULT 0,
+                read_source_mode TEXT DEFAULT 'remote',
+                local_optimized INTEGER DEFAULT 0,
+                local_optimization_meta_json TEXT,
                 item_type TEXT DEFAULT 'non classificato',
                 item_type_source TEXT DEFAULT 'auto',
                 item_type_confidence REAL,
@@ -190,6 +195,11 @@ class VaultManager:
         self._ensure_column(cursor, "manuscripts", "asset_state", "TEXT DEFAULT 'saved'")
         self._ensure_column(cursor, "manuscripts", "has_native_pdf", "INTEGER")
         self._ensure_column(cursor, "manuscripts", "pdf_local_available", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "manuscripts", "manifest_local_available", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "manuscripts", "local_scans_available", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "manuscripts", "read_source_mode", "TEXT DEFAULT 'remote'")
+        self._ensure_column(cursor, "manuscripts", "local_optimized", "INTEGER DEFAULT 0")
+        self._ensure_column(cursor, "manuscripts", "local_optimization_meta_json", "TEXT")
         self._ensure_column(cursor, "manuscripts", "item_type", "TEXT DEFAULT 'non classificato'")
         self._ensure_column(cursor, "manuscripts", "item_type_source", "TEXT DEFAULT 'auto'")
         self._ensure_column(cursor, "manuscripts", "item_type_confidence", "REAL")
@@ -313,6 +323,11 @@ class VaultManager:
             "asset_state",
             "has_native_pdf",
             "pdf_local_available",
+            "manifest_local_available",
+            "local_scans_available",
+            "read_source_mode",
+            "local_optimized",
+            "local_optimization_meta_json",
             "item_type",
             "item_type_source",
             "item_type_confidence",
@@ -358,49 +373,10 @@ class VaultManager:
             existing = cursor.fetchone()
             if existing is None:
                 values = [manuscript_id] + [updates.get(k) for k in valid_keys]
-                cursor.execute(
-                    """
-                    INSERT INTO manuscripts (
-                        id,
-                        display_title,
-                        title,
-                        catalog_title,
-                        library,
-                        manifest_url,
-                        local_path,
-                        status,
-                        total_canvases,
-                        downloaded_canvases,
-                        asset_state,
-                        has_native_pdf,
-                        pdf_local_available,
-                        item_type,
-                        item_type_source,
-                        item_type_confidence,
-                        item_type_reason,
-                        missing_pages_json,
-                        author,
-                        description,
-                        publisher,
-                        attribution,
-                        thumbnail_url,
-                        shelfmark,
-                        date_label,
-                        language_label,
-                        source_detail_url,
-                        reference_text,
-                        user_notes,
-                        metadata_json,
-                        last_sync_at,
-                        error_log
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                    )
-                    """,
-                    values,
-                )
+                columns = ("id", *valid_keys)
+                placeholders = ", ".join(["?"] * len(columns))
+                insert_sql = f"INSERT INTO manuscripts ({', '.join(columns)}) VALUES ({placeholders})"  # noqa: S608
+                cursor.execute(insert_sql, values)
             else:
                 existing_columns = tuple(existing.keys())
                 existing_map = {column: existing[column] for column in existing_columns}
@@ -415,45 +391,9 @@ class VaultManager:
                     updates.pop("item_type_source", None)
 
                 values = [updates.get(k, existing_map.get(k)) for k in valid_keys]
-                cursor.execute(
-                    """
-                    UPDATE manuscripts
-                    SET display_title = ?,
-                        title = ?,
-                        catalog_title = ?,
-                        library = ?,
-                        manifest_url = ?,
-                        local_path = ?,
-                        status = ?,
-                        total_canvases = ?,
-                        downloaded_canvases = ?,
-                        asset_state = ?,
-                        has_native_pdf = ?,
-                        pdf_local_available = ?,
-                        item_type = ?,
-                        item_type_source = ?,
-                        item_type_confidence = ?,
-                        item_type_reason = ?,
-                        missing_pages_json = ?,
-                        author = ?,
-                        description = ?,
-                        publisher = ?,
-                        attribution = ?,
-                        thumbnail_url = ?,
-                        shelfmark = ?,
-                        date_label = ?,
-                        language_label = ?,
-                        source_detail_url = ?,
-                        reference_text = ?,
-                        user_notes = ?,
-                        metadata_json = ?,
-                        last_sync_at = ?,
-                        error_log = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (*values, manuscript_id),
-                )
+                assignments = ", ".join(f"{key} = ?" for key in valid_keys)
+                update_sql = f"UPDATE manuscripts SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"  # noqa: S608
+                cursor.execute(update_sql, (*values, manuscript_id))
             conn.commit()
         except sqlite3.Error as e:
             logger.error(f"DB Error upserting manuscript {manuscript_id}: {e}")
@@ -523,9 +463,10 @@ class VaultManager:
             temp_pages = self._scan_page_numbers((temp_root / manuscript_id) if temp_root and manuscript_id else None)
             known_pages = scans_pages | temp_pages
             scans_count = len(scans_pages)
-            temp_count = len(temp_pages)
+            local_scans_available = 1 if scans_count > 0 else 0
+            read_source_mode = "local" if scans_count > 0 else "remote"
             total = int(row.get("total_canvases") or 0)
-            downloaded = max(int(row.get("downloaded_canvases") or 0), scans_count, temp_count)
+            downloaded = max(int(row.get("downloaded_canvases") or 0), len(known_pages))
             if total <= 0 and downloaded > 0:
                 total = downloaded
             status = str(row.get("status") or "").lower()
@@ -561,6 +502,8 @@ class VaultManager:
                 and downloaded == int(row.get("downloaded_canvases") or 0)
                 and normalized_type == str(row.get("item_type") or "")
                 and missing_pages_json == str(row.get("missing_pages_json") or "[]")
+                and int(row.get("local_scans_available") or 0) == local_scans_available
+                and str(row.get("read_source_mode") or "").strip().lower() == read_source_mode
             ):
                 continue
 
@@ -572,6 +515,8 @@ class VaultManager:
                 downloaded_canvases=downloaded,
                 item_type=normalized_type,
                 missing_pages_json=missing_pages_json,
+                local_scans_available=local_scans_available,
+                read_source_mode=read_source_mode,
             )
             updated += 1
         return updated

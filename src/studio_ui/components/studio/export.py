@@ -580,17 +580,17 @@ def render_studio_export_tab(
                                 Label("Sorgente immagini", for_="studio-export-source-mode", cls=_LABEL_CLASS),
                                 Select(
                                     Option(
-                                        "Locale bilanciata",
+                                        "PDF da Locale (bilanciato)",
                                         value="local_balanced",
                                         selected=default_image_source_mode == "local_balanced",
                                     ),
                                     Option(
-                                        "Locale high-res",
+                                        "PDF da Locale (high-res)",
                                         value="local_highres",
                                         selected=default_image_source_mode == "local_highres",
                                     ),
                                     Option(
-                                        "Remoto high-res temporaneo",
+                                        "PDF da Remoto temporaneo",
                                         value="remote_highres_temp",
                                         selected=default_image_source_mode == "remote_highres_temp",
                                     ),

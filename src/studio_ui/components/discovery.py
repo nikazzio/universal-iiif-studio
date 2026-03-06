@@ -238,7 +238,7 @@ def discovery_form() -> Div:
                 ),
                 Div(
                     Button(
-                        "Analizza Documento",
+                        "Ricerca documento",
                         type="submit",
                         cls="w-full app-btn app-btn-accent font-semibold py-3",
                     ),

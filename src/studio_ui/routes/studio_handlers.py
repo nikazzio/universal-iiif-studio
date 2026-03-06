@@ -46,7 +46,7 @@ from universal_iiif_core.services.ocr.processor import OCRProcessor
 from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.thumbnail_utils import ensure_thumbnail, guess_available_pages
-from universal_iiif_core.utils import load_json, save_json
+from universal_iiif_core.utils import get_json, load_json, save_json
 
 logger = get_logger(__name__)
 
@@ -61,20 +61,25 @@ def _toast_only(message: str, tone: str = "info"):
     return _with_toast(Div("", cls="hidden"), message, tone=tone)
 
 
+def _manifest_canvas_items(manifest_json: dict) -> list[dict]:
+    if "sequences" in manifest_json:
+        return (manifest_json.get("sequences") or [{}])[0].get("canvases", [])
+    return manifest_json.get("items", [])
+
+
+def _resolve_initial_canvas(manifest_json: dict, page: int) -> str | None:
+    items = _manifest_canvas_items(manifest_json)
+    target_idx = int(page) - 1
+    if 0 <= target_idx < len(items):
+        return items[target_idx].get("@id") or items[target_idx].get("id")
+    return None
+
+
 def _load_manifest_payload(manifest_path: Path, page: int) -> tuple[dict, str | None]:
-    """Load manifest JSON and resolve the initial canvas for a target page."""
+    """Load manifest JSON from disk and resolve initial canvas."""
     with manifest_path.open(encoding="utf-8") as f:
         manifest_json = json.load(f)
-        if "sequences" in manifest_json:
-            items = manifest_json["sequences"][0].get("canvases", [])
-        else:
-            items = manifest_json.get("items", [])
-
-        target_idx = int(page) - 1
-        initial_canvas = None
-        if 0 <= target_idx < len(items):
-            initial_canvas = items[target_idx].get("@id") or items[target_idx].get("id")
-    return manifest_json, initial_canvas
+    return manifest_json, _resolve_initial_canvas(manifest_json, page)
 
 
 def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int) -> Script:
@@ -210,6 +215,80 @@ def _prune_stale_thumbnails(thumbnails_dir: Path, retention_days: int) -> None:
                 thumb.unlink()
 
 
+def _remote_cache_limits(cm) -> tuple[int, int, int]:
+    max_bytes = int(cm.get_setting("storage.remote_cache.max_bytes", 104857600) or 104857600)
+    retention_hours = int(cm.get_setting("storage.remote_cache.retention_hours", 72) or 72)
+    max_items = int(cm.get_setting("storage.remote_cache.max_items", 2000) or 2000)
+    return (
+        max(1024 * 1024, min(max_bytes, 20 * 1024**3)),
+        max(1, min(retention_hours, 24 * 365)),
+        max(100, min(max_items, 100000)),
+    )
+
+
+def _cache_payload_size(cache: dict[str, dict]) -> int:
+    return len(json.dumps(cache, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+def _normalize_remote_cache(raw_cache: object) -> dict[str, dict]:
+    if not isinstance(raw_cache, dict):
+        return {}
+    normalized: dict[str, dict] = {}
+    now_ts = int(time.time())
+    for key, value in raw_cache.items():
+        if not isinstance(value, dict):
+            continue
+        page_key = str(key).strip()
+        if not page_key:
+            continue
+        entry = {
+            "width": value.get("width"),
+            "height": value.get("height"),
+            "service_url": value.get("service_url"),
+            "last_access_ts": int(value.get("last_access_ts") or value.get("updated_ts") or now_ts),
+            "updated_ts": int(value.get("updated_ts") or value.get("last_access_ts") or now_ts),
+        }
+        normalized[page_key] = entry
+    return normalized
+
+
+def _prune_remote_cache(
+    cache: dict[str, dict],
+    *,
+    max_bytes: int,
+    retention_hours: int,
+    max_items: int,
+) -> dict[str, dict]:
+    now_ts = int(time.time())
+    min_ts = now_ts - (int(retention_hours) * 3600)
+
+    kept = {
+        key: value
+        for key, value in cache.items()
+        if int(value.get("last_access_ts") or value.get("updated_ts") or 0) >= min_ts
+    }
+    if len(kept) > max_items:
+        ordered = sorted(
+            kept.items(),
+            key=lambda item: int(item[1].get("last_access_ts") or item[1].get("updated_ts") or 0),
+            reverse=True,
+        )
+        kept = dict(ordered[:max_items])
+
+    if _cache_payload_size(kept) <= max_bytes:
+        return kept
+
+    ordered_oldest = sorted(
+        kept.items(),
+        key=lambda item: int(item[1].get("last_access_ts") or item[1].get("updated_ts") or 0),
+    )
+    for page_key, _entry in ordered_oldest:
+        kept.pop(page_key, None)
+        if _cache_payload_size(kept) <= max_bytes:
+            break
+    return kept
+
+
 def _build_export_thumbnail_slice(
     doc_id: str,
     library: str,
@@ -253,9 +332,8 @@ def _build_export_thumbnail_slice(
 
     manifest_json = load_json(paths["manifest"]) or {}
     remote_cache_path = Path(paths["data"]) / "remote_resolution_cache.json"
-    remote_cache = load_json(remote_cache_path) or {}
-    if not isinstance(remote_cache, dict):
-        remote_cache = {}
+    cache_max_bytes, cache_retention_hours, cache_max_items = _remote_cache_limits(cm)
+    remote_cache = _normalize_remote_cache(load_json(remote_cache_path) or {})
 
     remote_probe_enabled = bool(cm.get_setting("images.probe_remote_max_resolution", True))
     items: list[dict] = []
@@ -278,7 +356,8 @@ def _build_export_thumbnail_slice(
                 with Image.open(scan_path) as img:
                     local_w, local_h = img.size
 
-        remote_entry = remote_cache.get(str(page_num)) if isinstance(remote_cache.get(str(page_num)), dict) else {}
+        page_key = str(page_num)
+        remote_entry = remote_cache.get(page_key) or {}
         remote_w = remote_entry.get("width")
         remote_h = remote_entry.get("height")
         remote_service = remote_entry.get("service_url")
@@ -286,7 +365,16 @@ def _build_export_thumbnail_slice(
             pw, ph, service_url = probe_remote_max_dimensions(manifest_json, page_num)
             remote_w, remote_h = pw, ph
             remote_service = service_url or remote_service
-            remote_cache[str(page_num)] = {"width": remote_w, "height": remote_h, "service_url": remote_service}
+            remote_cache[page_key] = {
+                "width": remote_w,
+                "height": remote_h,
+                "service_url": remote_service,
+                "updated_ts": int(time.time()),
+                "last_access_ts": int(time.time()),
+            }
+        elif remote_entry:
+            remote_entry["last_access_ts"] = int(time.time())
+            remote_cache[page_key] = remote_entry
 
         items.append(
             {
@@ -300,6 +388,12 @@ def _build_export_thumbnail_slice(
             }
         )
 
+    remote_cache = _prune_remote_cache(
+        remote_cache,
+        max_bytes=cache_max_bytes,
+        retention_hours=cache_retention_hours,
+        max_items=cache_max_items,
+    )
     with suppress(Exception):
         save_json(remote_cache_path, remote_cache)
 
@@ -390,6 +484,82 @@ def build_studio_tab_content(
     )
 
 
+def _saved_source_policy() -> str:
+    policy = str(get_config_manager().get_setting("viewer.source_policy.saved_mode", "remote_first") or "").strip()
+    return policy if policy in {"remote_first", "local_first"} else "remote_first"
+
+
+def _resolve_studio_read_source_mode(
+    *,
+    ms_row: dict,
+    local_pages_count: int,
+    manifest_pages: int,
+    require_complete_local: bool,
+    allow_remote_preview: bool,
+) -> tuple[str, bool]:
+    if allow_remote_preview:
+        return "remote", False
+
+    policy = _saved_source_policy()
+    status = str(ms_row.get("asset_state") or ms_row.get("status") or "").strip().lower()
+    is_saved_state = status in {"", "saved"}
+    is_local_complete = manifest_pages > 0 and local_pages_count >= manifest_pages
+
+    if is_saved_state and policy == "remote_first":
+        return "remote", False
+    if require_complete_local and manifest_pages > 0 and not is_local_complete:
+        return "local", True
+    if local_pages_count > 0 and (policy == "local_first" or is_local_complete):
+        return "local", False
+    return "remote", False
+
+
+def _load_studio_manifest_context(
+    *,
+    manifest_path: Path,
+    remote_manifest_url: str,
+    page: int,
+) -> tuple[dict, str | None, bool]:
+    manifest_exists_local = manifest_path.exists()
+    if manifest_exists_local:
+        manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
+        return manifest_json, initial_canvas, True
+
+    if remote_manifest_url:
+        remote_manifest = get_json(remote_manifest_url, retries=2) or {}
+        if isinstance(remote_manifest, dict) and remote_manifest:
+            return remote_manifest, _resolve_initial_canvas(remote_manifest, page), False
+
+    return {}, None, False
+
+
+def _select_studio_manifest_url(
+    *,
+    read_source_mode: str,
+    local_manifest_url: str,
+    remote_manifest_url: str,
+) -> str:
+    if read_source_mode == "remote" and remote_manifest_url:
+        return remote_manifest_url
+    return local_manifest_url
+
+
+def _persist_studio_source_state(
+    *,
+    doc_id: str,
+    read_source_mode: str,
+    local_pages_count: int,
+    manifest_exists_local: bool,
+) -> None:
+    with suppress(Exception):
+        VaultManager().upsert_manuscript(
+            doc_id,
+            read_source_mode=read_source_mode,
+            local_scans_available=1 if local_pages_count > 0 else 0,
+            manifest_local_available=1 if manifest_exists_local else 0,
+        )
+
+
 def studio_page(request: Request, doc_id: str = "", library: str = "", page: int = 1):
     """Render Main Studio Layout."""
     doc_id, library = _normalized_studio_context(doc_id, library)
@@ -412,18 +582,23 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
         base_url = f"{request.url.scheme}://{request.url.netloc}"
         lib_q = quote(library, safe="")
         doc_q = quote(doc_id, safe="")
-        manifest_url = f"{base_url}/iiif/manifest/{lib_q}/{doc_q}"
+        local_manifest_url = f"{base_url}/iiif/manifest/{lib_q}/{doc_q}"
+        remote_manifest_url = str(ms_row.get("manifest_url") or "").strip()
 
         manifest_path = Path(paths["manifest"])
+        manifest_json, initial_canvas, manifest_exists_local = _load_studio_manifest_context(
+            manifest_path=manifest_path,
+            remote_manifest_url=remote_manifest_url,
+            page=int(page),
+        )
 
-        if not manifest_path.exists():
+        if not manifest_json:
             message = "Manifesto non trovato."
             panel = Div(message, cls="p-10")
             if is_hx:
                 return _with_toast(panel, message, tone="danger")
             return panel
 
-        manifest_json, initial_canvas = _load_manifest_payload(manifest_path, page)
         manifest_pages = _manifest_total_pages(manifest_json, ms_row)
         meta = {
             **meta,
@@ -441,16 +616,32 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             "yes",
             "on",
         }
-        should_gate_mirador = (
-            require_complete_local
-            and not allow_remote_preview
-            and manifest_pages > 0
-            and int(inventory.local_pages_count) < int(manifest_pages)
+        read_source_mode, should_gate_mirador = _resolve_studio_read_source_mode(
+            ms_row=ms_row,
+            local_pages_count=int(inventory.local_pages_count),
+            manifest_pages=int(manifest_pages),
+            require_complete_local=require_complete_local,
+            allow_remote_preview=allow_remote_preview,
+        )
+        if read_source_mode == "local" and not manifest_exists_local and remote_manifest_url:
+            read_source_mode = "remote"
+            should_gate_mirador = False
+
+        manifest_url = _select_studio_manifest_url(
+            read_source_mode=read_source_mode,
+            local_manifest_url=local_manifest_url,
+            remote_manifest_url=remote_manifest_url,
         )
         mirador_override_url = (
             f"/studio?doc_id={doc_q}&library={lib_q}&page={int(page)}&allow_remote_preview=1"
             if should_gate_mirador
             else ""
+        )
+        _persist_studio_source_state(
+            doc_id=doc_id,
+            read_source_mode=read_source_mode,
+            local_pages_count=int(inventory.local_pages_count),
+            manifest_exists_local=manifest_exists_local,
         )
 
         content = studio_layout(
@@ -470,6 +661,7 @@ def studio_page(request: Request, doc_id: str = "", library: str = "", page: int
             local_pages_count=int(inventory.local_pages_count),
             temp_pages_count=int(inventory.temp_pages_count),
             manifest_total_pages=int(manifest_pages),
+            read_source_mode=read_source_mode,
             mirador_enabled=not should_gate_mirador,
             mirador_override_url=mirador_override_url,
         )

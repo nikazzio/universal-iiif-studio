@@ -282,6 +282,8 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
     _validate_int_range(data, issues, "settings.ui.polling.download_status_interval_seconds", 1, 30)
     _validate_int_range(data, issues, "settings.images.viewer_quality", 10, 100)
     _validate_float_range(data, issues, "settings.images.tile_stitch_max_ram_gb", 0.1, 64.0)
+    _validate_int_range(data, issues, "settings.images.local_optimize.max_long_edge_px", 512, 12000)
+    _validate_int_range(data, issues, "settings.images.local_optimize.jpeg_quality", 10, 100)
     _validate_int_range(data, issues, "settings.thumbnails.page_size", 1, 120)
     _validate_int_range(data, issues, "settings.thumbnails.max_long_edge_px", 64, 2000)
     _validate_int_range(data, issues, "settings.thumbnails.jpeg_quality", 10, 100)
@@ -289,6 +291,9 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
     _validate_int_range(data, issues, "settings.storage.thumbnails_retention_days", 1, 3650)
     _validate_int_range(data, issues, "settings.storage.highres_temp_retention_hours", 1, 24 * 365)
     _validate_int_range(data, issues, "settings.storage.max_exports_per_item", 1, 1000)
+    _validate_int_range(data, issues, "settings.storage.remote_cache.max_bytes", 1024 * 1024, 20 * 1024**3)
+    _validate_int_range(data, issues, "settings.storage.remote_cache.retention_hours", 1, 24 * 365)
+    _validate_int_range(data, issues, "settings.storage.remote_cache.max_items", 100, 100000)
     _validate_enum(
         data,
         issues,
@@ -337,6 +342,12 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
         "settings.logging.level",
         {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"},
         normalize_case=True,
+    )
+    _validate_enum(
+        data,
+        issues,
+        "settings.viewer.source_policy.saved_mode",
+        {"remote_first", "local_first"},
     )
     _validate_network_library_profiles(data, issues)
     _validate_profile_default_exists(data, issues)

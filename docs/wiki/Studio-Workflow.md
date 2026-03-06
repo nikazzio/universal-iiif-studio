@@ -12,12 +12,15 @@ Direct `/studio` without `doc_id` and `library` redirects to `Library`.
 - With `settings.storage.partial_promotion_mode=on_pause`, pausing a running download promotes validated staged pages into `scans/`; existing scans are overwritten only in explicit refresh/redownload flows.
 - Resume evaluates both `scans/` and staged temp files, then continues only from truly missing pages.
 
-## Export Tab Model
+## Output Tab Model
 
 - Top section: existing PDF inventory for the selected document.
 - Sub-tabs:
   - `Crea PDF`: profile selection and optional per-job overrides.
   - `Job`: export queue and progress.
+- Source mode is explicit per job:
+  - `PDF da Locale (bilanciato/high-res)`
+  - `PDF da Remoto temporaneo`
 
 ## Profile-First Behavior
 

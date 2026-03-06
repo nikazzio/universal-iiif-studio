@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from fasthtml.common import Request
@@ -240,6 +241,10 @@ def library_cleanup_partial(
             downloaded_canvases=0,
             missing_pages_json="[]",
             error_log=None,
+            local_scans_available=0,
+            read_source_mode="remote",
+            local_optimized=0,
+            local_optimization_meta_json=None,
         )
         return _refresh_response(
             message=f"Pulizia parziale completata ({removed} pagine rimosse).",
@@ -267,6 +272,137 @@ def library_cleanup_partial(
             action_required=action_required,
             sort_by=sort_by,
         )
+
+
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _optimize_scan_file(scan_path: Path, *, max_long_edge_px: int, jpeg_quality: int) -> tuple[int, int]:
+    from PIL import Image
+
+    before = int(scan_path.stat().st_size)
+    tmp_out = scan_path.with_suffix(".tmp.jpg")
+    with Image.open(scan_path) as img:
+        rgb = img.convert("RGB")
+        width, height = rgb.size
+        long_edge = max(width, height)
+        if long_edge > max_long_edge_px > 0:
+            scale = max_long_edge_px / float(long_edge)
+            target_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+            rgb = rgb.resize(target_size, Image.Resampling.LANCZOS)
+        rgb.save(tmp_out, format="JPEG", quality=jpeg_quality, optimize=True, progressive=True)
+    tmp_out.replace(scan_path)
+    after = int(scan_path.stat().st_size)
+    return before, after
+
+
+def library_optimize_local_scans(
+    doc_id: str,
+    library: str,
+    view: str = "grid",
+    q: str = "",
+    state: str = "",
+    library_filter: str = "",
+    category: str = "",
+    mode: str = "operativa",
+    action_required: str = "0",
+    sort_by: str = "",
+):
+    """Apply lossy in-place optimization on local scans for one manuscript."""
+    doc_id = _decode(doc_id)
+    library = _decode(library)
+    storage = OCRStorage()
+    paths = storage.get_document_paths(doc_id, library)
+    scans_dir = Path(paths["scans"])
+    if not scans_dir.exists():
+        return _refresh_response(
+            message="Nessuna scansione locale disponibile da ottimizzare.",
+            tone="info",
+            view=view,
+            q=q,
+            state=state,
+            library_filter=library_filter,
+            category=category,
+            mode=mode,
+            action_required=action_required,
+            sort_by=sort_by,
+        )
+
+    cm = get_config_manager()
+    max_long_edge_px = max(
+        512,
+        min(_safe_int(cm.get_setting("images.local_optimize.max_long_edge_px", 2600), 2600), 12000),
+    )
+    jpeg_quality = max(10, min(_safe_int(cm.get_setting("images.local_optimize.jpeg_quality", 82), 82), 100))
+
+    optimized_pages = 0
+    errors = 0
+    total_before = 0
+    total_after = 0
+    for scan_path in sorted(scans_dir.glob("pag_*.jpg")):
+        try:
+            before, after = _optimize_scan_file(
+                scan_path,
+                max_long_edge_px=max_long_edge_px,
+                jpeg_quality=jpeg_quality,
+            )
+            optimized_pages += 1
+            total_before += before
+            total_after += after
+        except Exception:
+            errors += 1
+            logger.debug("Failed optimizing scan %s", scan_path, exc_info=True)
+
+    thumb_dir = Path(paths["thumbnails"])
+    if thumb_dir.exists():
+        for thumb in thumb_dir.glob("*.jpg"):
+            thumb.unlink(missing_ok=True)
+
+    meta_payload = {
+        "optimized_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "max_long_edge_px": int(max_long_edge_px),
+        "jpeg_quality": int(jpeg_quality),
+        "optimized_pages": int(optimized_pages),
+        "errors": int(errors),
+        "bytes_before": int(total_before),
+        "bytes_after": int(total_after),
+        "bytes_saved": int(max(total_before - total_after, 0)),
+    }
+    local_scan_files = [scan for scan in scans_dir.glob("pag_*.jpg") if scan.is_file()]
+    has_local_scans = bool(local_scan_files)
+    VaultManager().upsert_manuscript(
+        doc_id,
+        local_optimized=1 if optimized_pages > 0 else 0,
+        local_optimization_meta_json=json.dumps(meta_payload, ensure_ascii=False),
+        local_scans_available=1 if has_local_scans else 0,
+        read_source_mode="local" if has_local_scans else "remote",
+    )
+
+    saved_bytes = max(total_before - total_after, 0)
+    tone = "success" if optimized_pages > 0 and errors == 0 else "warning" if optimized_pages > 0 else "danger"
+    message = (
+        f"Ottimizzazione completata: {optimized_pages} pagine, risparmio {saved_bytes // 1024} KB."
+        if optimized_pages > 0
+        else "Ottimizzazione non completata: nessuna pagina valida aggiornata."
+    )
+    if errors > 0:
+        message += f" Errori su {errors} file."
+    return _refresh_response(
+        message=message,
+        tone=tone,
+        view=view,
+        q=q,
+        state=state,
+        library_filter=library_filter,
+        category=category,
+        mode=mode,
+        action_required=action_required,
+        sort_by=sort_by,
+    )
 
 
 def library_start_download(
@@ -512,6 +648,16 @@ def library_retry_range(
             action_required=action_required,
             sort_by=sort_by,
         )
+
+
+def library_download_full(*args, **kwargs):
+    """Alias endpoint for full local download action."""
+    return library_start_download(*args, **kwargs)
+
+
+def library_download_range(*args, **kwargs):
+    """Alias endpoint for page-range local download action."""
+    return library_retry_range(*args, **kwargs)
 
 
 def library_set_type(

@@ -9,7 +9,7 @@ Runtime settings live in `config.json` and are managed through `universal_iiif_c
 - `settings.images`: IIIF fetch strategy and quality.
 - `settings.pdf`: native PDF behavior, export defaults, and profile catalog.
 - `settings.storage`: retention and staging-to-scans promotion policy.
-- `settings.viewer.mirador`: viewer gating and OpenSeadragon tuning.
+- `settings.viewer`: mirador gating/source policy and OpenSeadragon tuning.
 
 ## Essential PDF Keys
 
@@ -23,7 +23,14 @@ Runtime settings live in `config.json` and are managed through `universal_iiif_c
 ## Essential Storage/Viewer Keys
 
 - `settings.storage.partial_promotion_mode` (`never|on_pause`)
+- `settings.storage.remote_cache.max_bytes|retention_hours|max_items`
 - `settings.viewer.mirador.require_complete_local_images`
+- `settings.viewer.source_policy.saved_mode` (`remote_first|local_first`)
+
+## Essential Local Optimization Keys
+
+- `settings.images.local_optimize.max_long_edge_px`
+- `settings.images.local_optimize.jpeg_quality`
 
 ## Notes
 

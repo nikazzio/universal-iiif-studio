@@ -1,5 +1,6 @@
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import discovery_handlers, discovery_helpers
+from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 
@@ -15,6 +16,11 @@ def test_add_to_library_persists_saved_entry(monkeypatch):
             "has_native_pdf": True,
         },
     )
+    monkeypatch.setattr(
+        discovery_handlers,
+        "get_json",
+        lambda _url, retries=2: {"items": [{"id": "canvas-1"}, {"id": "canvas-2"}]},
+    )
 
     result = discovery_handlers.add_to_library("https://example.org/manifest.json", "DOC_A", "Gallica")
     assert "Aggiunto in Libreria" in repr(result)
@@ -22,6 +28,44 @@ def test_add_to_library_persists_saved_entry(monkeypatch):
     ms = VaultManager().get_manuscript("DOC_A") or {}
     assert ms.get("asset_state") == "saved"
     assert int(ms.get("total_canvases") or 0) == 12
+    assert int(ms.get("manifest_local_available") or 0) == 1
+    doc_data = get_config_manager().get_downloads_dir() / "Gallica" / "DOC_A" / "data"
+    assert (doc_data / "metadata.json").exists()
+    assert (doc_data / "manifest.json").exists()
+
+
+def test_add_to_library_rejects_path_traversal_and_does_not_write(monkeypatch, tmp_path):
+    """Traversal in library/doc_id must be rejected before any filesystem write."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    tmp_downloads = tmp_path / "downloads"
+    cm.set_downloads_dir(str(tmp_downloads))
+    try:
+        monkeypatch.setattr(
+            discovery_handlers,
+            "analyze_manifest",
+            lambda _url: {"label": "Unsafe", "description": "", "pages": 1},
+        )
+        called = {"count": 0}
+
+        def _fake_get_json(_url, retries=2):
+            called["count"] += 1
+            return {"items": [{"id": "canvas-1"}]}
+
+        monkeypatch.setattr(discovery_handlers, "get_json", _fake_get_json)
+
+        result = discovery_handlers.add_to_library(
+            "https://example.org/manifest.json",
+            "DOC_TRAVERSAL",
+            "../outside",
+        )
+        rendered = repr(result)
+        assert "Errore Input" in rendered
+        assert "Identificatore documento non valido." in rendered
+        assert called["count"] == 0
+        assert not (tmp_path / "outside").exists()
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
 
 
 def test_pdf_capability_badge_uses_quick_probe(monkeypatch):

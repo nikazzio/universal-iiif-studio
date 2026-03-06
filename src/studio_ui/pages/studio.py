@@ -27,29 +27,36 @@ def studio_layout(
     local_pages_count: int = 0,
     temp_pages_count: int = 0,
     manifest_total_pages: int = 0,
+    read_source_mode: str = "remote",
     mirador_enabled: bool = True,
     mirador_override_url: str = "",
 ):
     """Render the main Studio split-view layout."""
     status_value = (asset_status or "unknown").strip().lower()
-    status_chip_map = {
-        "complete": "app-chip app-chip-success",
-        "downloading": "app-chip app-chip-primary",
-        "running": "app-chip app-chip-primary",
-        "queued": "app-chip app-chip-accent",
-        "partial": "app-chip app-chip-warning",
-        "error": "app-chip app-chip-danger",
-        "saved": "app-chip app-chip-neutral",
-    }
-    status_chip_cls = status_chip_map.get(status_value, "app-chip app-chip-neutral")
-    pdf_source_cls = "app-chip app-chip-success" if has_native_pdf else "app-chip app-chip-neutral"
-    pdf_local_cls = "app-chip app-chip-primary" if pdf_local_available else "app-chip app-chip-neutral"
-    temp_chip_cls = "app-chip app-chip-warning" if int(temp_pages_count or 0) > 0 else "app-chip app-chip-neutral"
-    local_progress = (
-        f"{int(local_pages_count)}/{int(manifest_total_pages)}"
-        if int(manifest_total_pages or 0) > 0
-        else str(int(local_pages_count or 0))
-    )
+    source_mode = str(read_source_mode or "remote").strip().lower()
+    source_value = source_mode if source_mode in {"local", "remote"} else "remote"
+    status_value = status_value or "unknown"
+    if has_native_pdf is True:
+        pdf_source_value = "native"
+    elif has_native_pdf is False:
+        pdf_source_value = "images"
+    else:
+        pdf_source_value = "unknown"
+    pdf_local_value = "yes" if pdf_local_available else "no"
+    staging_count = int(temp_pages_count or 0)
+    local_count = int(local_pages_count or 0)
+    manifest_count = int(manifest_total_pages or 0)
+    local_progress = f"{local_count}/{manifest_count}" if manifest_count > 0 else str(local_count)
+    technical_rows = [
+        ("id", doc_id),
+        ("library", library),
+        ("state", status_value),
+        ("read_source", source_value),
+        ("scans_local", local_progress),
+        ("staging_pages", str(staging_count)),
+        ("pdf_source", pdf_source_value),
+        ("pdf_local", pdf_local_value),
+    ]
     if mirador_enabled:
         viewer_block = Div(
             *mirador_viewer(manifest_url, "mirador-viewer", canvas_id=initial_canvas),
@@ -64,7 +71,7 @@ def studio_layout(
                     cls="text-sm font-semibold",
                 ),
                 Span(
-                    f"Pagine locali: {local_progress} • Temporanee: {int(temp_pages_count or 0)}",
+                    f"Pagine locali: {local_progress} • Temporanee: {staging_count}",
                     cls="text-xs text-slate-300",
                 ),
                 (
@@ -106,39 +113,33 @@ def studio_layout(
                             Div(
                                 H2(title, cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight"),
                                 Div(
-                                    Span(
-                                        library,
-                                        cls="app-chip app-chip-primary text-[11px] font-bold uppercase tracking-wider",
+                                    *[
+                                        Div(
+                                            Span(
+                                                f"{key}:",
+                                                cls=(
+                                                    "text-[11px] font-bold text-slate-700 "
+                                                    "dark:text-slate-300 tracking-tight"
+                                                ),
+                                            ),
+                                            Span(
+                                                str(value),
+                                                cls=(
+                                                    "font-mono text-[11px] text-slate-700 "
+                                                    "dark:text-slate-300 tracking-tight"
+                                                ),
+                                            ),
+                                            cls=(
+                                                "flex items-baseline justify-between gap-2 sm:justify-start sm:gap-1.5"
+                                            ),
+                                        )
+                                        for key, value in technical_rows
+                                    ],
+                                    cls=(
+                                        "mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 "
+                                        "rounded-md border border-slate-200 dark:border-slate-700 "
+                                        "bg-slate-50 dark:bg-slate-800/35 px-3 py-2"
                                     ),
-                                    Span(
-                                        (asset_status or "unknown").upper(),
-                                        cls=f"{status_chip_cls} text-[10px] font-bold",
-                                    ),
-                                    Span(
-                                        "PDF nativo" if has_native_pdf else "Solo immagini",
-                                        cls=(
-                                            f"{pdf_source_cls} text-[10px] font-bold"
-                                            if has_native_pdf is not None
-                                            else "app-chip app-chip-neutral text-[10px] font-bold"
-                                        ),
-                                    ),
-                                    Span(
-                                        "PDF locale ✓" if pdf_local_available else "PDF locale -",
-                                        cls=f"{pdf_local_cls} text-[10px] font-bold",
-                                    ),
-                                    Span(
-                                        f"Locali {local_progress}",
-                                        cls="app-chip app-chip-neutral text-[10px] font-bold",
-                                    ),
-                                    Span(
-                                        f"Temp {int(temp_pages_count or 0)}",
-                                        cls=f"{temp_chip_cls} text-[10px] font-bold",
-                                    ),
-                                    Span(
-                                        doc_id,
-                                        cls="app-chip app-chip-neutral text-[9px] font-mono",
-                                    ),
-                                    cls="flex gap-2 mt-1",
                                 ),
                                 cls="flex-1 min-w-0",
                             ),

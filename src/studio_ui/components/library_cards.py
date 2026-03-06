@@ -15,7 +15,6 @@ from studio_ui.common.library_constants import (
     CATEGORY_SELECT_TONE,
     LINK_BUTTON_CLS,
     STATE_STYLE,
-    to_optional_bool,
 )
 from studio_ui.common.title_utils import truncate_title
 from universal_iiif_core.library_catalog import ITEM_TYPES
@@ -30,7 +29,7 @@ _CATEGORY_SELECT_TONE = CATEGORY_SELECT_TONE
 def _state_badge(state: str) -> Span:
     label, cls = _STATE_STYLE.get(
         (state or "saved").lower(),
-        ("Da scaricare", "app-chip app-chip-neutral"),
+        ("Remoto", "app-chip app-chip-neutral"),
     )
     return Span(label, cls=cls)
 
@@ -41,9 +40,23 @@ def _action_button(
     tone: str = "neutral",
     confirm: str | None = None,
     hint: str | None = None,
+    *,
+    enabled: bool = True,
 ) -> Button:
+    base_cls = _ACTION_BUTTON_CLS[tone]
+    if not enabled:
+        disabled_cls = f"{base_cls} opacity-45 cursor-not-allowed pointer-events-none"
+        kwargs = {
+            "type": "button",
+            "cls": disabled_cls,
+            "disabled": True,
+        }
+        if hint:
+            kwargs["title"] = hint
+        return Button(label, **kwargs)
+
     kwargs = {
-        "cls": _ACTION_BUTTON_CLS[tone],
+        "cls": base_cls,
         "hx_post": url,
         "hx_target": "#library-page",
         "hx_swap": "outerHTML show:none",
@@ -78,15 +91,15 @@ def _kpi_strip(docs: list[dict]) -> Div:
     counts = _state_counts(docs)
     kpis = [
         ("Totale", len(docs), "text-slate-800 dark:text-slate-100"),
-        ("Completi", counts.get("complete", 0), "text-slate-700 dark:text-slate-200"),
-        ("Parziali", counts.get("partial", 0), "text-slate-700 dark:text-slate-200"),
+        ("Locali completi", counts.get("complete", 0), "text-slate-700 dark:text-slate-200"),
+        ("Locali parziali", counts.get("partial", 0), "text-slate-700 dark:text-slate-200"),
         (
-            "In coda",
+            "In download",
             counts.get("queued", 0) + counts.get("downloading", 0) + counts.get("running", 0),
             "text-slate-700 dark:text-slate-200",
         ),
         ("Errori", counts.get("error", 0), "text-rose-600 dark:text-rose-300"),
-        ("Da scaricare", counts.get("saved", 0), "text-slate-600 dark:text-slate-300"),
+        ("Remoti", counts.get("saved", 0), "text-slate-600 dark:text-slate-300"),
     ]
     cards = [
         Div(
@@ -107,48 +120,21 @@ def _category_select_cls(item_type: str) -> str:
     return f"app-field min-w-[180px] px-2.5 py-1.5 text-sm font-medium {tone}"
 
 
-def _primary_action(doc: dict):
-    doc_id = quote(str(doc.get("id") or ""), safe="")
-    library = quote(str(doc.get("library") or "Unknown"), safe="")
+def _card_action_flags(doc: dict) -> dict[str, bool]:
     state = str(doc.get("asset_state") or "saved").lower()
+    is_running = state in {"downloading", "running", "queued"}
     has_missing = bool(doc.get("has_missing_pages"))
-
-    if state == "partial" and has_missing:
-        return _action_button(
-            "🔁 Riprendi mancanti",
-            f"/api/library/retry_missing?doc_id={doc_id}&library={library}",
-            "accent",
-        )
-
-    if state in {"saved", "partial", "error"}:
-        return _action_button(
-            "⬇️ Scarica" if state == "saved" else "🔁 Riprova download",
-            f"/api/library/start_download?doc_id={doc_id}&library={library}",
-            "primary",
-        )
-
-    return None
+    local_pages_count = int(doc.get("local_pages_count") or 0)
+    return {
+        "download_full": not is_running and state != "complete",
+        "retry_missing": not is_running and has_missing,
+        "cleanup_partial": not is_running and state in {"partial", "error"},
+        "optimize_scans": not is_running and local_pages_count > 0,
+        "delete_doc": not is_running,
+    }
 
 
-def _maintenance_actions(doc: dict) -> list[Button]:
-    doc_id = quote(str(doc.get("id") or ""), safe="")
-    library = quote(str(doc.get("library") or "Unknown"), safe="")
-    state = str(doc.get("asset_state") or "saved").lower()
-
-    actions = []
-
-    if state in {"partial", "error"}:
-        actions.append(
-            _action_button(
-                "🧹 Pulizia parziale",
-                f"/api/library/cleanup_partial?doc_id={doc_id}&library={library}",
-                "warning",
-            )
-        )
-    return actions
-
-
-def _delete_action(doc: dict) -> Button:
+def _delete_action(doc: dict, *, enabled: bool = True) -> Button:
     doc_id = quote(str(doc.get("id") or ""), safe="")
     library = quote(str(doc.get("library") or "Unknown"), safe="")
     return _action_button(
@@ -156,6 +142,8 @@ def _delete_action(doc: dict) -> Button:
         f"/api/library/delete?doc_id={doc_id}&library={library}",
         "danger",
         confirm="Confermi eliminazione completa del manoscritto locale?",
+        enabled=enabled,
+        hint="Disabilitato durante un download attivo." if not enabled else None,
     )
 
 
@@ -177,34 +165,6 @@ def _category_form(doc: dict, item_type: str) -> Form:
         hx_swap="outerHTML show:none",
         hx_include="#library-filters",
     )
-
-
-def _to_optional_bool(value) -> bool | None:
-    return to_optional_bool(value)
-
-
-def _pdf_technical_info(doc: dict) -> tuple[str, str]:
-    source_raw = str(doc.get("pdf_source") or "").strip().lower()
-    if source_raw not in {"native", "images", "unknown"}:
-        native = _to_optional_bool(doc.get("has_native_pdf"))
-        if native is True:
-            source_raw = "native"
-        elif native is False:
-            source_raw = "images"
-        else:
-            source_raw = "unknown"
-
-    local_available = bool(_to_optional_bool(doc.get("pdf_local_available")))
-    local_count = int(doc.get("pdf_local_count") or 0)
-
-    source_map = {
-        "native": "nativa",
-        "images": "da immagini",
-        "unknown": "non nota",
-    }
-    source_label = source_map[source_raw]
-    local_count_label = str(max(local_count, 1) if local_available else 0)
-    return source_label, local_count_label
 
 
 def _compact_label(text: str) -> str:
@@ -434,7 +394,6 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     publisher = str(doc.get("publisher") or "")
     description = str(doc.get("description") or "")
     user_notes = str(doc.get("user_notes") or "")
-    pdf_source_label, pdf_local_count = _pdf_technical_info(doc)
     compact_title = _compact_label(title)
     compact_shelfmark = _compact_label(shelfmark)
     compact_reference = _compact_label(detail_ref)
@@ -462,40 +421,93 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         )
     )
 
-    # Button groups: primary actions, info links, maintenance/danger
-    primary_buttons = []
-    primary_action = _primary_action(doc)
-    if primary_action is not None:
-        primary_buttons.append(primary_action)
-    primary_buttons.append(_link_button("📖 Apri Studio", studio_href, tone="primary"))
+    action_flags = _card_action_flags(doc)
+    open_studio_action = A(
+        "📖 Apri Studio",
+        href=studio_href,
+        cls="app-btn app-btn-primary w-full md:w-auto",
+    )
+    item_action_buttons = [
+        _action_button(
+            "⬇️ Scarica locale",
+            f"/api/library/download_full?doc_id={doc_id}&library={library}",
+            "neutral",
+            enabled=action_flags["download_full"],
+            hint="Disabilitato: item gia completo o download in corso.",
+        ),
+        _action_button(
+            "🔁 Riprendi mancanti",
+            f"/api/library/retry_missing?doc_id={doc_id}&library={library}",
+            "neutral",
+            enabled=action_flags["retry_missing"],
+            hint="Attivo solo quando ci sono pagine mancanti note.",
+        ),
+        _action_button(
+            "🗜️ Ottimizza scans",
+            f"/api/library/optimize_local_scans?doc_id={doc_id}&library={library}",
+            "neutral",
+            enabled=action_flags["optimize_scans"],
+            hint="Attivo quando sono presenti scansioni locali.",
+        ),
+        _action_button(
+            "🧹 Pulizia parziale",
+            f"/api/library/cleanup_partial?doc_id={doc_id}&library={library}",
+            "neutral",
+            enabled=action_flags["cleanup_partial"],
+            hint="Attivo su item parziali o in errore.",
+        ),
+    ]
 
-    info_buttons = [
+    info_inline = Div(
         Button(
             "🧾 Metadati",
             type="button",
-            cls=_ACTION_BUTTON_CLS["info"],
+            cls=(
+                "text-xs font-medium text-slate-600 dark:text-slate-300 "
+                "hover:text-slate-900 dark:hover:text-slate-100 underline underline-offset-2"
+            ),
             data_payload=_metadata_payload(doc),
             onclick="openLibraryMetadata(this.dataset.payload)",
         ),
-        _link_button("🔗 Scheda catalogo ↗", source_detail_url, tone="external", external=True),
-    ]
-
-    danger_buttons = list(_maintenance_actions(doc))
-    danger_buttons.append(_delete_action(doc))
+        (
+            A(
+                "🔗 Scheda catalogo ↗",
+                href=source_detail_url,
+                target="_blank",
+                rel="noreferrer",
+                cls=(
+                    "text-xs font-medium text-slate-600 dark:text-slate-300 "
+                    "hover:text-slate-900 dark:hover:text-slate-100 underline underline-offset-2"
+                ),
+            )
+            if source_detail_url
+            else Span("🔗 Scheda catalogo non disponibile", cls="text-xs text-slate-400 dark:text-slate-500")
+        ),
+        cls="flex flex-wrap items-center gap-3",
+    )
 
     actions_block = Div(
-        # Primary actions — full size, prominent
-        Div(*primary_buttons, cls="flex flex-wrap items-center gap-2"),
-        # Visual separator between primary and secondary
-        Div(cls="border-t border-slate-200 dark:border-slate-700"),
-        # Info links — compact size (via app-btn-sm)
-        Div(*info_buttons, cls="flex flex-wrap items-center gap-1.5"),
-        # Maintenance / danger — compact, visually subdued
         Div(
-            *danger_buttons,
-            cls="flex flex-wrap items-center gap-1.5 opacity-60",
+            Span(
+                "Azione principale",
+                cls="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400",
+            ),
+            Div(open_studio_action, cls="mt-1"),
+            cls="space-y-1",
         ),
-        cls="mt-auto flex flex-col gap-2 pt-2",
+        Div(
+            Span(
+                "Azioni documento",
+                cls="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400",
+            ),
+            Div(*item_action_buttons, cls="flex flex-wrap items-center gap-1.5 mt-1"),
+            cls="space-y-1",
+        ),
+        Div(
+            _delete_action(doc, enabled=action_flags["delete_doc"]),
+            cls="flex justify-end border-t border-slate-200 dark:border-slate-700 pt-2 mt-1",
+        ),
+        cls="mt-auto flex flex-col gap-2.5 pt-2",
     )
 
     media_badges = Div(
@@ -508,8 +520,6 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         _tech_row("Pagine mancanti", str(missing_count)),
         _tech_row("Data", date_label or "-"),
         _tech_row("Lingua", lang or "-"),
-        _tech_row("Sorgente PDF", pdf_source_label),
-        _tech_row("PDF locali", pdf_local_count),
         cls="app-tech-list mt-2",
     )
     media_column = Div(
@@ -524,9 +534,16 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     # Build headline with author and publisher info
     headline_children = [
         H3(
-            card_title,
+            A(
+                card_title,
+                href=studio_href,
+                cls=(
+                    "text-slate-900 dark:text-slate-100 hover:text-slate-700 "
+                    "dark:hover:text-slate-200 hover:underline underline-offset-2"
+                ),
+            ),
             title=title,
-            cls="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight",
+            cls="text-base md:text-lg font-bold leading-tight",
         ),
     ]
     if author:
@@ -553,6 +570,7 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
                 title=publisher,
             )
         )
+    headline_children.append(info_inline)
     headline = Div(*headline_children, cls="space-y-1 min-w-0")
 
     # Optional description preview (max 2 lines)
@@ -616,7 +634,7 @@ def _render_operational_list(docs: list[dict], view: str) -> Div:
         [
             ("critici", {"label": "Critici", "entries": []}),
             ("in_corso", {"label": "In corso", "entries": []}),
-            ("da_scaricare", {"label": "Da scaricare", "entries": []}),
+            ("remoti", {"label": "Remoti / Parziali", "entries": []}),
             ("completati", {"label": "Completati", "entries": []}),
         ]
     )
@@ -628,7 +646,7 @@ def _render_operational_list(docs: list[dict], view: str) -> Div:
         elif state in {"downloading", "running", "queued"}:
             buckets["in_corso"]["entries"].append(doc)
         elif state in {"saved", "partial"}:
-            buckets["da_scaricare"]["entries"].append(doc)
+            buckets["remoti"]["entries"].append(doc)
         else:
             buckets["completati"]["entries"].append(doc)
 

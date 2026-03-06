@@ -101,6 +101,8 @@ def download_native_pdf(self, pdf_url: str) -> bool:
 
 
 def _should_prefer_native_pdf(self) -> bool:
+    if bool(getattr(self, "prefer_images", False)):
+        return False
     try:
         return bool(self.cm.get_setting("pdf.prefer_native_pdf", True))
     except (OSError, ValueError, TypeError):
@@ -189,6 +191,9 @@ def _try_native_pdf_flow(self, native_pdf_url: str, progress_callback: Callable[
         downloaded_canvases=len(final_files),
         total_canvases=len(final_files),
         pdf_local_available=1 if self.output_path.exists() else 0,
+        local_scans_available=1 if final_files else 0,
+        read_source_mode="local" if final_files else "remote",
+        manifest_local_available=1 if self.manifest_path.exists() else 0,
         missing_pages_json="[]",
         last_sync_at=time.strftime("%Y-%m-%d %H:%M:%S"),
     )

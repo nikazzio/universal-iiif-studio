@@ -317,6 +317,7 @@ def _is_valid_image_file(image_path: Path) -> bool:
 def _sync_asset_state(self, total_expected: int) -> None:
     scans_pages = _page_numbers_in_dir(self.scans_dir)
     temp_pages = _page_numbers_in_dir(self.temp_dir)
+    scans_count = len(scans_pages)
     known_pages = scans_pages | temp_pages
     known_count = len(known_pages)
     pdf_available = 1 if any(self.pdf_dir.glob("*.pdf")) else 0
@@ -329,6 +330,15 @@ def _sync_asset_state(self, total_expected: int) -> None:
     missing = []
     if total_expected > 0 and known_count < total_expected:
         missing = [i for i in range(1, total_expected + 1) if i not in known_pages]
+    manifest_path = getattr(self, "manifest_path", None)
+    manifest_local_available = 0
+    if isinstance(manifest_path, Path):
+        manifest_local_available = 1 if manifest_path.exists() else 0
+    elif manifest_path:
+        try:
+            manifest_local_available = 1 if Path(str(manifest_path)).exists() else 0
+        except Exception:
+            manifest_local_available = 0
     self.vault.upsert_manuscript(
         self.ms_id,
         status=state,
@@ -336,6 +346,9 @@ def _sync_asset_state(self, total_expected: int) -> None:
         total_canvases=total_expected,
         downloaded_canvases=known_count,
         pdf_local_available=pdf_available,
+        manifest_local_available=manifest_local_available,
+        local_scans_available=1 if scans_count > 0 else 0,
+        read_source_mode="local" if scans_count > 0 else "remote",
         missing_pages_json=json.dumps(missing),
         last_sync_at=time.strftime("%Y-%m-%d %H:%M:%S"),
     )

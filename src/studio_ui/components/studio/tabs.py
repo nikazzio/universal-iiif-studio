@@ -60,7 +60,7 @@ def render_studio_tabs(
             cls="tab-button studio-tab",
         ),
         Button(
-            "📄 Export",
+            "📄 Output",
             onclick="switchTab('export')",
             id="tab-button-export",
             cls="tab-button studio-tab",
@@ -99,7 +99,7 @@ def render_studio_tabs(
                 export_fragment
                 if export_fragment is not None
                 else Div(
-                    "Apri il tab Export per caricare miniature e strumenti di esportazione.",
+                    "Apri il tab Output per caricare miniature e strumenti di esportazione.",
                     cls="text-sm text-slate-500 dark:text-slate-400 p-2",
                 )
             ),

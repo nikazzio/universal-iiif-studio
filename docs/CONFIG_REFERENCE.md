@@ -167,11 +167,14 @@ Notes:
 - `settings.images.viewer_quality` (`int`, default: `95`)
 - `settings.images.probe_remote_max_resolution` (`bool`, default: `true`)
 - `settings.images.tile_stitch_max_ram_gb` (`number`, default: `2`)
+- `settings.images.local_optimize.max_long_edge_px` (`int`, default: `2600`, allowed range: `512..12000`)
+- `settings.images.local_optimize.jpeg_quality` (`int`, default: `82`, allowed range: `10..100`)
 
 Runtime notes:
 - `download_strategy_mode` defines ordered size attempts before tile stitching.
 - `iiif_quality` applies to normal page downloads and temporary remote high-res export fetches.
 - `probe_remote_max_resolution` enables `info.json` probing for Studio Export thumbnails.
+- local optimize keys are used by `POST /api/library/optimize_local_scans` (in-place lossy rewrite of `scans/`).
 
 ## `settings.ocr`
 
@@ -219,8 +222,8 @@ Runtime notes:
 UI/runtime notes:
 - Profile creation/edit/delete is handled from **Settings > PDF Export**.
 - In Settings, the profile catalog uses one selector with `Nuovo profilo...` for creation and a dedicated delete action.
-- Studio item Export only selects one profile for the current job.
-- Studio item Export keeps profile selection as the primary control; job-specific overrides are optional and collapsed by default.
+- Studio item Output only selects one profile for the current job.
+- Studio item Output keeps profile selection as the primary control; job-specific overrides are optional and collapsed by default.
 - `max_parallel_page_fetch` is actively used for parallel remote high-res page staging.
 
 Backward compatibility:
@@ -251,12 +254,16 @@ Backward compatibility:
 - `settings.storage.max_exports_per_item` (`int`, default: `5`)
 - `settings.storage.partial_promotion_mode` (`string`, default: `never`)
   - allowed: `never` | `on_pause`
+- `settings.storage.remote_cache.max_bytes` (`int`, default: `104857600`, allowed range: `1MB..20GB`)
+- `settings.storage.remote_cache.retention_hours` (`int`, default: `72`, allowed range: `1..8760`)
+- `settings.storage.remote_cache.max_items` (`int`, default: `2000`, allowed range: `100..100000`)
 
 Runtime notes:
 - `exports_retention_days`: global pruning on export execution and optional startup prune.
 - `thumbnails_retention_days`: pruning applied when Studio Export thumbnails are generated.
 - `highres_temp_retention_hours`: pruning of temporary remote high-res staging folders.
 - `auto_prune_on_startup`: enables startup pruning for exports + high-res temp.
+- `remote_cache.*`: pruning policy for persistent per-item remote resolution cache (`data/remote_resolution_cache.json`).
 - `partial_promotion_mode`: promotes validated staged pages from temp to scans only when a running download is paused (`on_pause`); existing scans are overwritten only for explicit refresh/redownload jobs.
 - staged completeness checks count validated pages already in `temp_images/<doc_id>` plus current-run pages (segmented retry/range runs converge correctly).
 
@@ -284,6 +291,12 @@ Runtime notes:
 
 - `settings.viewer.mirador.require_complete_local_images` (`bool`, default: `true`)
   - gates local Studio viewer when local page availability is incomplete.
+
+## `settings.viewer.source_policy`
+
+- `settings.viewer.source_policy.saved_mode` (`string`, default: `remote_first`)
+  - allowed: `remote_first` | `local_first`
+  - controls Studio source mode for `saved` items without full local coverage.
 
 ## `settings.viewer.mirador.openSeadragonOptions`
 

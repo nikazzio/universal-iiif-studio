@@ -32,7 +32,7 @@ def _normalize_mode(mode: str | None, *, default_mode: str = "operativa") -> str
 def _state_badge(state: str) -> Span:
     label, cls = _STATE_STYLE.get(
         (state or "saved").lower(),
-        ("Da scaricare", "app-chip app-chip-neutral"),
+        ("Remoto", "app-chip app-chip-neutral"),
     )
     return Span(label, cls=cls)
 
@@ -88,7 +88,7 @@ def _kpi_strip(docs: list[dict]) -> Div:
             "text-slate-700 dark:text-slate-200",
         ),
         ("Errori", counts.get("error", 0), "text-rose-600 dark:text-rose-300"),
-        ("Da scaricare", counts.get("saved", 0), "text-slate-600 dark:text-slate-300"),
+        ("Remoti", counts.get("saved", 0), "text-slate-600 dark:text-slate-300"),
     ]
     cards = [
         Div(
@@ -292,11 +292,11 @@ def _render_filters(
                 Input(type="hidden", name="mode", value=current_mode),
                 Select(
                     Option("Tutti gli stati", value=""),
-                    Option("Da scaricare", value="saved", selected=current_state == "saved"),
+                    Option("Remoto", value="saved", selected=current_state == "saved"),
                     Option("In coda", value="queued", selected=current_state == "queued"),
                     Option("In download", value="downloading", selected=current_state == "downloading"),
-                    Option("Parziale", value="partial", selected=current_state == "partial"),
-                    Option("Completo", value="complete", selected=current_state == "complete"),
+                    Option("Locale parziale", value="partial", selected=current_state == "partial"),
+                    Option("Locale completo", value="complete", selected=current_state == "complete"),
                     Option("Errore", value="error", selected=current_state == "error"),
                     name="state",
                     cls=(

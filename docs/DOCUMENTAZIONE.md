@@ -26,6 +26,8 @@ Parametri **override per biblioteca** (attivi solo con `settings.network.librari
 * `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi size IIIF.
 * `settings.images.download_strategy_custom`: Strategia custom (lista size, es. `3000,1740,max`) usata solo quando `mode=custom`.
 * `settings.images.iiif_quality`: Segmento quality nelle URL IIIF (`.../quality.jpg`). In generale lasciare `default`; usare `gray/bitonal` solo per casi specifici.
+* `settings.images.local_optimize.max_long_edge_px`: lato lungo massimo usato da `Ottimizza scans locali`.
+* `settings.images.local_optimize.jpeg_quality`: qualità JPEG usata da `Ottimizza scans locali`.
 
 ### 📄 Opzioni PDF (Core + UI Config)
 
@@ -37,9 +39,11 @@ Parametri **override per biblioteca** (attivi solo con `settings.network.librari
 * `settings.pdf.profiles.catalog.<profilo>.max_parallel_page_fetch`: limite di fetch parallelo quando il profilo usa il remoto high-res temporaneo.
 * `settings.storage.highres_temp_retention_hours`: retention dei file high-res temporanei usati per export avanzati.
 * `settings.storage.exports_retention_days`: retention globale degli export PDF salvati.
-* `settings.storage.thumbnails_retention_days`: retention della cache miniature usata nel tab Export.
+* `settings.storage.thumbnails_retention_days`: retention della cache miniature usata nel tab Output.
 * `settings.storage.auto_prune_on_startup`: se attivo, applica pruning retention all'avvio (export + temp high-res).
 * `settings.storage.partial_promotion_mode`: gestione promozione pagine validate da `temp_images` a `scans` (`never` oppure `on_pause`).
+* `settings.storage.remote_cache.max_bytes`, `retention_hours`, `max_items`: limiti cache persistente risoluzioni remote.
+* `settings.viewer.source_policy.saved_mode`: policy sorgente Studio per item `saved` (`remote_first|local_first`).
 
 Nel pannello **Settings > PDF Export** trovi i controlli con help text esplicativi:
 * sub-tab **Predefiniti e copertina**:
@@ -53,7 +57,7 @@ Nel pannello **Settings > PDF Export** trovi i controlli con help text esplicati
   - editor completo del profilo (cover/colophon, compression, source mode, lato lungo max, JPEG quality, parallel fetch);
   - toggle **Imposta come default globale**;
   - pulsante rosso **Elimina Profilo**;
-  - dopo create/delete/update la pagina viene ricaricata per riallineare subito il catalogo disponibile in Export.
+  - dopo create/delete/update la pagina viene ricaricata per riallineare subito il catalogo disponibile in Output.
 
 Nel pannello **Settings > Viewer**:
 * sub-tab **Zoom**, **Defaults**, **Presets** per separare parametri OpenSeadragon e filtri visivi.
@@ -62,7 +66,7 @@ Nel pannello **Settings > Paths & System**:
 * sub-tab **Paths & Logging** per directory runtime e logging base;
 * sub-tab **Storage & Security** per retention, pruning, test live e CORS.
 
-Nel tab **Studio > Export**:
+Nel tab **Studio > Output**:
 * in alto visualizzi sempre l'inventario PDF locale gia presente per il documento;
 * usi i sub-tab `Crea PDF` / `Job` per separare configurazione e monitoraggio coda;
 * nel sub-tab `Crea PDF` il blocco principale e:
@@ -99,6 +103,10 @@ La pagina Discovery è divisa in due aree:
 * **Destra**: **Download Manager** con coda, job in esecuzione, errori e retry.
 
 Questo permette di continuare a cercare nuovi manoscritti mentre uno o più download sono in corso.
+
+Prefetch light:
+* `Aggiungi item` salva entry DB + `metadata.json` + `manifest.json` locali.
+* non avvia il download completo delle scansioni.
 
 ### 🔎 Ricerca libera + filtri opzionali
 
@@ -152,7 +160,7 @@ Indicazioni pratiche:
 
 Per collezioni con pagine molto pesanti, il flusso consigliato e:
 * mantieni nel repository locale una copia **bilanciata** per lavorare veloce in viewer e trascrizione;
-* usa il confronto **Locale vs Online max** nel tab `Studio > Export` per capire subito dove manca dettaglio;
+* usa il confronto **Locale vs Online max** nel tab `Studio > Output` per capire subito dove manca dettaglio;
 * scarica la high-res solo sulle pagine necessarie con il pulsante **High-Res** della miniatura;
 * quando serve un PDF finale ad altissima qualita, usa un profilo con `image_source_mode=remote_highres_temp`;
 * abilita `cleanup_temp_after_export` nel profilo per eliminare in automatico i temporanei high-res a fine export.
@@ -175,12 +183,13 @@ Resume:
 Nuova sezione `Libreria`:
 * vista **Grid/List** degli asset locali;
 * raggruppamento per **biblioteca** e **tipologia** (`manoscritto`, `libro a stampa`, `incunabolo`, `periodico`, `altro`);
-* stato per item: `saved`, `queued/downloading`, `partial`, `complete`, `error`;
-* badge PDF: disponibilità PDF nel manifest e PDF locale.
+* stato per item: `Salvato`, `In download`, `Locale parziale`, `Locale completo`, `Errore`;
+* conteggio pagine locali/temporanee sempre visibile nelle card.
 
 Azioni principali:
 * **Delete** documento locale;
 * **Clean partial** per ripulire download incompleti;
+* **Ottimizza scans locali** (lossy in-place su `scans/`, parametrizzata da Settings);
 * **Retry missing** (riprende solo le pagine mancanti);
 * **Retry range** (intervalli specifici, es. `1-10,15,30-35`).
 
@@ -199,7 +208,7 @@ Accesso consigliato:
 * **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
 * **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
 * **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
-* **Header stato asset**: in Studio vengono mostrati stato download (`saved/partial/complete/...`) e badge PDF (nativo/locale).
+* **Header stato asset**: in Studio vengono mostrati stato download e badge `Sorgente: Remota/Locale`.
 
 ### ℹ️ Tab Info (riordinato)
 

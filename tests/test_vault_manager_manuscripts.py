@@ -124,3 +124,24 @@ def test_delete_manuscript_removes_ui_preferences():
     assert vm.get_manuscript_ui_pref("DOC_PREF_DELETE", "studio_export_thumb_page_size", None) == 24
     assert vm.delete_manuscript("DOC_PREF_DELETE") is True
     assert vm.get_manuscript_ui_pref("DOC_PREF_DELETE", "studio_export_thumb_page_size", None) is None
+
+
+def test_upsert_manuscript_persists_source_and_optimization_fields():
+    """Manuscript upsert should persist source-policy and optimization metadata fields."""
+    vm = VaultManager()
+    vm.upsert_manuscript(
+        "DOC_FIELDS",
+        status="saved",
+        asset_state="saved",
+        manifest_local_available=1,
+        local_scans_available=0,
+        read_source_mode="remote",
+        local_optimized=1,
+        local_optimization_meta_json='{"optimized_pages": 3}',
+    )
+    row = vm.get_manuscript("DOC_FIELDS") or {}
+    assert int(row.get("manifest_local_available") or 0) == 1
+    assert int(row.get("local_scans_available") or 0) == 0
+    assert str(row.get("read_source_mode") or "") == "remote"
+    assert int(row.get("local_optimized") or 0) == 1
+    assert str(row.get("local_optimization_meta_json") or "").strip() == '{"optimized_pages": 3}'

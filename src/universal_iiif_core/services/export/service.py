@@ -11,11 +11,12 @@ from typing import Any
 
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.export_studio import build_professional_pdf, clean_filename
+from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.iiif_resolution import fetch_highres_page_image
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.pdf_profiles import resolve_effective_profile
 from universal_iiif_core.services.ocr.storage import OCRStorage
-from universal_iiif_core.utils import load_json, save_json
+from universal_iiif_core.utils import get_json, load_json, save_json
 
 logger = get_logger(__name__)
 
@@ -197,6 +198,67 @@ def resolve_selected_pages(scans_dir: Path, selection_mode: str, selected_pages_
     requested_pages = parse_page_selection(selected_pages_raw)
     if not requested_pages:
         raise ValueError("Selezione pagine vuota: specifica almeno una pagina o un intervallo.")
+
+    available_set = set(available_pages)
+    missing = [page for page in requested_pages if page not in available_set]
+    if missing:
+        raise ValueError(f"Pagine non disponibili in locale: {missing}")
+    return requested_pages
+
+
+def resolve_selected_pages_for_source(
+    *,
+    scans_dir: Path,
+    selection_mode: str,
+    selected_pages_raw: str,
+    source_mode: str,
+    manifest_payload: dict[str, Any] | None,
+) -> list[int]:
+    """Resolve page selection supporting remote-temp source without local scans."""
+    if str(source_mode or "").strip().lower() != "remote_highres_temp":
+        return resolve_selected_pages(scans_dir, selection_mode, selected_pages_raw)
+
+    mode = (selection_mode or "all").strip().lower()
+    available_pages = _scan_available_pages(scans_dir)
+    manifest_total = int(total_canvases(manifest_payload or {}))
+
+    if mode == "all":
+        if available_pages:
+            return available_pages
+        if manifest_total > 0:
+            return list(range(1, manifest_total + 1))
+        raise FileNotFoundError("Nessuna pagina locale e manifest remoto senza conteggio pagine disponibile.")
+
+    return _resolve_custom_selected_pages_for_source(
+        mode=mode,
+        selection_mode=selection_mode,
+        selected_pages_raw=selected_pages_raw,
+        available_pages=available_pages,
+        manifest_total=manifest_total,
+    )
+
+
+def _resolve_custom_selected_pages_for_source(
+    *,
+    mode: str,
+    selection_mode: str,
+    selected_pages_raw: str,
+    available_pages: list[int],
+    manifest_total: int,
+) -> list[int]:
+    if mode != "custom":
+        raise ValueError(f"Modalita selezione non supportata: {selection_mode!r}")
+
+    requested_pages = parse_page_selection(selected_pages_raw)
+    if not requested_pages:
+        raise ValueError("Selezione pagine vuota: specifica almeno una pagina o un intervallo.")
+    if manifest_total > 0:
+        out_of_range = [page for page in requested_pages if page > manifest_total]
+        if out_of_range:
+            raise ValueError(f"Pagine fuori range manifesto remoto: {out_of_range}")
+        return requested_pages
+    if not available_pages:
+        return requested_pages
 
     available_set = set(available_pages)
     missing = [page for page in requested_pages if page not in available_set]
@@ -466,7 +528,14 @@ def _export_single_item_to_output(
     storage = OCRStorage()
     paths = storage.get_document_paths(doc_id, library)
     scans_dir = Path(paths["scans"])
-    selected_pages = resolve_selected_pages(scans_dir, selection_mode, selected_pages_raw)
+    metadata = load_json(paths["metadata"]) or {}
+    source_url = str(metadata.get("manifest") or metadata.get("manifest_url") or item.get("manifest_url") or "")
+    manifest_payload = load_json(paths["manifest"]) or {}
+    if not manifest_payload and source_url:
+        remote_manifest = get_json(source_url, retries=2) or {}
+        if isinstance(remote_manifest, dict):
+            manifest_payload = remote_manifest
+
     cm = get_config_manager()
     _resolved_profile_name, profile = resolve_effective_profile(
         cm,
@@ -482,12 +551,18 @@ def _export_single_item_to_output(
     effective_cleanup = bool(cleanup_temp_after_export and profile.get("cleanup_temp_after_export", True))
     effective_parallel_fetch = int(max_parallel_page_fetch or profile.get("max_parallel_page_fetch") or 2)
     effective_parallel_fetch = max(1, min(effective_parallel_fetch, 8))
+    selected_pages = resolve_selected_pages_for_source(
+        scans_dir=scans_dir,
+        selection_mode=selection_mode,
+        selected_pages_raw=selected_pages_raw,
+        source_mode=source_mode,
+        manifest_payload=manifest_payload if isinstance(manifest_payload, dict) else {},
+    )
 
     if export_format == "zip_images":
         return _zip_selected_images(scans_dir, selected_pages, output_path)
 
     if export_format in {"pdf_images", "pdf_searchable", "pdf_facing"}:
-        metadata = load_json(paths["metadata"]) or {}
         transcription = load_json(paths["transcription"]) or None
 
         default_curator, default_description = _load_cover_settings()
@@ -496,11 +571,13 @@ def _export_single_item_to_output(
         logo_bytes = _load_logo_bytes(cover_logo_path or "")
 
         cover_title = str(metadata.get("title") or metadata.get("label") or doc_id)
-        source_url = str(metadata.get("manifest") or metadata.get("manifest_url") or "")
         export_scans_dir = scans_dir
         staging_dir: Path | None = None
         try:
             if source_mode == "remote_highres_temp":
+                manifest_path = Path(paths["manifest"])
+                if isinstance(manifest_payload, dict) and manifest_payload and not manifest_path.exists():
+                    save_json(manifest_path, manifest_payload)
                 staging_dir = _prepare_remote_highres_scans(
                     doc_id=doc_id,
                     selected_pages=selected_pages,
@@ -577,11 +654,12 @@ def execute_single_item_export(
     pdf_dir.mkdir(parents=True, exist_ok=True)
     exports_dir.mkdir(parents=True, exist_ok=True)
 
-    selected_pages = resolve_selected_pages(Path(paths["scans"]), selection_mode, selected_pages_raw)
     if export_format == "zip_images":
         output_path = exports_dir / f"{_build_output_prefix(doc_id)}_images_{_timestamp()}.zip"
     else:
-        output_path = _pdf_output_path(doc_id, pdf_dir, selection_mode, selected_pages)
+        mode = str(selection_mode or "").lower()
+        pages_for_name = parse_page_selection(selected_pages_raw) if mode == "custom" else []
+        output_path = _pdf_output_path(doc_id, pdf_dir, selection_mode, pages_for_name)
 
     artifact = _export_single_item_to_output(
         item=item,

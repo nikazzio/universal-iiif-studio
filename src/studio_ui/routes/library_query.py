@@ -13,6 +13,7 @@ from studio_ui.common.title_utils import resolve_preferred_title
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.library_catalog import ITEM_TYPES, normalize_item_type
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
@@ -156,20 +157,79 @@ def _to_downloads_url(path: Path) -> str:
     return f"/downloads/{encoded}"
 
 
+def _thumbnail_from_manifest_payload(payload: dict, *, manifest_url: str = "", doc_id: str = "") -> str:
+    if not isinstance(payload, dict):
+        return ""
+    thumb = IIIFManifestParser._extract_thumbnail(payload, manifest_url=manifest_url, doc_id=doc_id or None)
+    return str(thumb or "").strip()
+
+
+def _manifest_thumbnail_url(row: dict) -> str:
+    candidates: list[Path] = []
+    local_path_raw = str(row.get("local_path") or "").strip()
+    if local_path_raw:
+        candidates.append(Path(local_path_raw) / "data" / "manifest.json")
+
+    library = str(row.get("library") or "Unknown")
+    doc_id = str(row.get("id") or "").strip()
+    if doc_id:
+        candidates.append(get_config_manager().get_downloads_dir() / library / doc_id / "data" / "manifest.json")
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate.resolve()) if candidate.exists() else str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            logger.debug("Unable to parse manifest for thumbnail fallback: %s", candidate, exc_info=True)
+            continue
+        if not isinstance(payload, dict):
+            continue
+        thumb = _thumbnail_from_manifest_payload(
+            payload,
+            manifest_url=str(row.get("manifest_url") or ""),
+            doc_id=str(row.get("id") or ""),
+        )
+        if thumb:
+            return thumb
+    return ""
+
+
 def _thumbnail_url(row: dict) -> str:
+    thumb_field = str(row.get("thumbnail_url") or "").strip()
+    if thumb_field:
+        if thumb_field.startswith(("http://", "https://", "/downloads/")):
+            return thumb_field
+        thumb_path = Path(thumb_field).expanduser()
+        if thumb_path.exists() and thumb_path.is_file():
+            local_url = _to_downloads_url(thumb_path)
+            if local_url:
+                return local_url
+
     candidates: list[Path] = []
     local_path_raw = str(row.get("local_path") or "").strip()
     if local_path_raw:
         candidates.append(Path(local_path_raw) / "scans" / "pag_0000.jpg")
+        candidates.append(Path(local_path_raw) / "data" / "preview.jpg")
 
     library = str(row.get("library") or "Unknown")
     doc_id = str(row.get("id") or "").strip()
     if doc_id:
         candidates.append(get_config_manager().get_downloads_dir() / library / doc_id / "scans" / "pag_0000.jpg")
+        candidates.append(get_config_manager().get_downloads_dir() / library / doc_id / "data" / "preview.jpg")
 
     for candidate in candidates:
         if candidate.exists() and candidate.is_file():
             return _to_downloads_url(candidate)
+
+    manifest_thumb = _manifest_thumbnail_url(row)
+    if manifest_thumb:
+        return manifest_thumb
     return ""
 
 
@@ -380,6 +440,10 @@ def _row_to_view_model(row: dict) -> dict:
         "pdf_source": _pdf_source(row),
         "pdf_local_available": pdf_local_available,
         "pdf_local_count": int(pdf_local_count),
+        "local_optimized": bool(_to_optional_bool(row.get("local_optimized"))),
+        "local_optimization_meta_json": str(row.get("local_optimization_meta_json") or ""),
+        "manifest_local_available": bool(_to_optional_bool(row.get("manifest_local_available"))),
+        "read_source_mode": str(row.get("read_source_mode") or "remote"),
         "local_pages_count": int(page_inventory.local_pages_count),
         "temp_pages_count": int(page_inventory.temp_pages_count),
     }

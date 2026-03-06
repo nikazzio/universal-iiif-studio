@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 STATE_STYLE = {
-    "saved": ("Da scaricare", "app-chip app-chip-neutral"),
+    "saved": ("Remoto", "app-chip app-chip-neutral"),
     "queued": ("In coda", "app-chip app-chip-accent"),
-    "downloading": ("Download", "app-chip app-chip-primary"),
-    "running": ("Download", "app-chip app-chip-primary"),
-    "partial": ("Parziale", "app-chip app-chip-warning"),
-    "complete": ("Completo", "app-chip app-chip-success"),
+    "downloading": ("Download attivo", "app-chip app-chip-primary"),
+    "running": ("Download attivo", "app-chip app-chip-primary"),
+    "partial": ("Locale parziale", "app-chip app-chip-warning"),
+    "complete": ("Locale completo", "app-chip app-chip-success"),
     "error": ("Errore", "app-chip app-chip-danger"),
 }
 

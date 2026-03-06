@@ -78,6 +78,10 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "viewer_quality": 95,
             "probe_remote_max_resolution": True,
             "tile_stitch_max_ram_gb": 2,
+            "local_optimize": {
+                "max_long_edge_px": 2600,
+                "jpeg_quality": 82,
+            },
         },
         "ocr": {
             "ocr_engine": "openai",
@@ -170,6 +174,11 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "auto_prune_on_startup": False,
             "max_exports_per_item": 5,
             "partial_promotion_mode": "never",
+            "remote_cache": {
+                "max_bytes": 104857600,
+                "retention_hours": 72,
+                "max_items": 2000,
+            },
         },
         "logging": {
             "level": "INFO",
@@ -178,6 +187,9 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "run_live_tests": False,
         },
         "viewer": {
+            "source_policy": {
+                "saved_mode": "remote_first",
+            },
             "mirador": {
                 "require_complete_local_images": True,
                 "openSeadragonOptions": {

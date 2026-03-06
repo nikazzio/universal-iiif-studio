@@ -20,6 +20,7 @@ def setup_discovery_routes(app):
     app.post("/api/resolve_manifest")(discovery_handlers.resolve_manifest)
     app.post("/api/discovery/add_to_library")(discovery_handlers.add_to_library)
     app.post("/api/discovery/add_and_download")(discovery_handlers.add_and_download)
+    app.post("/api/library/add_prefetch_light")(discovery_handlers.add_to_library)
     app.get("/api/discovery/pdf_capability")(discovery_handlers.pdf_capability)
     app.post("/api/start_download")(discovery_handlers.start_download)
     app.get("/api/download_status/{download_id}")(discovery_handlers.get_download_status)
