@@ -65,7 +65,7 @@ Queued jobs are promoted FIFO (with optional prioritization) and each running wo
 
 ### 3. Studio & OCR
 
-0. **Entry Point**: Library is the canonical selector; `/studio` without `doc_id/library` redirects to `/library`.
+0. **Entry Point**: Library is the canonical selector; `/studio` without `doc_id/library` renders the Studio recent hub (`Riprendi lavoro`) using server-side persisted contexts.
 1. **Async Request**: Clicking "Run OCR" sends an HTMX POST to `/api/run_ocr_async`.
 2. **Job State**: The server spawns a thread and tracks progress in `ocr_state.py`.
 3. **Polling**: The UI shows an overlay that polls `/api/check_ocr_status` every 2 seconds.

@@ -30,6 +30,7 @@ def studio_layout(
     read_source_mode: str = "remote",
     mirador_enabled: bool = True,
     mirador_override_url: str = "",
+    active_tab: str = "transcription",
 ):
     """Render the main Studio split-view layout."""
     status_value = (asset_status or "unknown").strip().lower()
@@ -159,6 +160,7 @@ def studio_layout(
                             is_ocr_loading=is_ocr_job_running(doc_id, int(page)),
                             export_fragment=export_fragment,
                             export_url=export_url,
+                            active_tab=active_tab,
                         ),
                         id="studio-right-panel",
                         cls="flex-1 overflow-hidden h-full",
@@ -184,18 +186,31 @@ def studio_layout(
                     const newPage = e.detail.page;
                     const library = {json.dumps(library)};
                     const docId = {json.dumps(doc_id)};
-                    const totalPages = {total_pages};
 
                     console.log('📄 Page changed to:', newPage);
 
-                    // 1. Update URL History
-                    const url = new URL(window.location);
+                    const url = new URL(window.location.href);
+                    const activeTab = (url.searchParams.get('tab') || 'transcription').trim() || 'transcription';
                     url.searchParams.set('page', newPage);
+                    url.searchParams.set('tab', activeTab);
                     window.history.pushState({{}}, '', url);
+
+                    const saveBody = new URLSearchParams();
+                    saveBody.set('doc_id', docId);
+                    saveBody.set('library', library);
+                    saveBody.set('page', String(newPage));
+                    saveBody.set('tab', activeTab);
+                    fetch('/api/studio/context/save', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }},
+                        body: saveBody.toString(),
+                        credentials: 'same-origin'
+                    }}).catch(() => null);
 
                     const target = '/studio/partial/tabs?doc_id=' + encodeURIComponent(docId) +
                         '&library=' + encodeURIComponent(library) +
-                        '&page=' + newPage;
+                        '&page=' + newPage +
+                        '&tab=' + encodeURIComponent(activeTab);
                     htmx.ajax('GET', target, {{
                         target: '#studio-right-panel',
                         swap: 'innerHTML'

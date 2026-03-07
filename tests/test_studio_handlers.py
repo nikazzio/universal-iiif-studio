@@ -3,7 +3,6 @@ from pathlib import Path
 
 from PIL import Image
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
 
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import studio_handlers
@@ -33,20 +32,19 @@ def _request(
     )
 
 
-def test_studio_redirects_to_library_without_context():
-    """Studio endpoint without doc context must redirect to Library."""
+def test_studio_without_context_renders_recent_hub():
+    """Studio endpoint without context should render the recent-work hub."""
     response = studio_handlers.studio_page(_request(), doc_id="", library="", page=1)
-    assert isinstance(response, RedirectResponse)
-    assert response.status_code == 303
-    assert response.headers.get("location") == "/library"
+    rendered = str(response)
+    assert "Riprendi lavoro" in rendered
+    assert "Riprendi ultimo" in rendered
 
 
-def test_studio_redirects_to_library_when_context_is_partial():
-    """Studio endpoint with partial context must redirect to Library."""
+def test_studio_partial_context_renders_recent_hub():
+    """Studio endpoint with partial context should render recent-work hub."""
     response = studio_handlers.studio_page(_request(), doc_id="MSS_Urb.lat.1779", library="", page=1)
-    assert isinstance(response, RedirectResponse)
-    assert response.status_code == 303
-    assert response.headers.get("location") == "/library"
+    rendered = str(response)
+    assert "Riprendi lavoro" in rendered
 
 
 def test_studio_renders_workspace_with_doc_context():
@@ -81,10 +79,74 @@ def test_studio_renders_workspace_with_doc_context():
     )
 
     response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
-    assert not isinstance(response, RedirectResponse)
     rendered = str(response)
     assert "Urb lat 1779" in rendered
     assert "mirador-viewer" in rendered
+
+
+def test_save_studio_context_api_rejects_invalid_tab():
+    """Context save API must reject unknown tab values."""
+    response = studio_handlers.save_studio_context_api(
+        doc_id="DOC_INVALID_TAB",
+        library="Gallica",
+        page=1,
+        tab="not-a-tab",
+    )
+    assert int(response.status_code) == 400
+
+
+def test_save_studio_context_api_persists_last_context():
+    """Context save API should persist page and tab in app-ui preferences."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_CONTEXT", library="Gallica", status="saved", asset_state="saved")
+
+    response = studio_handlers.save_studio_context_api(
+        doc_id="DOC_CONTEXT",
+        library="Gallica",
+        page=4,
+        tab="history",
+    )
+    assert int(response.status_code) == 204
+    stored = vm.get_studio_last_context() or {}
+    assert stored.get("doc_id") == "DOC_CONTEXT"
+    assert stored.get("library") == "Gallica"
+    assert int(stored.get("page") or 0) == 4
+    assert stored.get("tab") == "history"
+
+
+def test_studio_respects_active_tab_query_parameter():
+    """Studio should render requested active tab and keep it in tab script state."""
+    doc_id = "MSS_TAB_HISTORY"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    (scans_dir / "pag_0000.jpg").write_bytes(b"stub")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(
+        json.dumps({"label": "Tab History"}),
+        encoding="utf-8",
+    )
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+
+    response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1, tab="history")
+    rendered = str(response)
+    assert 'id="tab-button-history" class="tab-button studio-tab studio-tab-active"' in rendered
+    assert 'id="tab-content-history" class="tab-content h-full"' in rendered
+    assert '"history"' in rendered
 
 
 def test_studio_blocks_mirador_when_local_images_are_incomplete():

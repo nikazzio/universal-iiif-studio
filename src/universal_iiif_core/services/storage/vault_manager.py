@@ -2,6 +2,7 @@ import json
 import shutil
 import sqlite3
 from contextlib import suppress
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,10 @@ from ...library_catalog import normalize_item_type
 from ...logger import get_logger
 
 logger = get_logger(__name__)
+
+_STUDIO_ALLOWED_TABS = {"transcription", "snippets", "history", "visual", "info", "export"}
+_STUDIO_LAST_CONTEXT_KEY = "studio.last_context"
+_STUDIO_RECENTS_KEY = "studio.recent_contexts"
 
 
 class VaultManager:
@@ -175,10 +180,19 @@ class VaultManager:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_ui_preferences (
+                pref_key TEXT PRIMARY KEY,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         self._migrate_manuscripts_table(cursor)
         self._migrate_download_jobs_table(cursor)
         self._migrate_export_jobs_table(cursor)
         self._migrate_manuscript_ui_preferences_table(cursor)
+        self._migrate_app_ui_preferences_table(cursor)
 
         conn.commit()
         conn.close()
@@ -263,6 +277,15 @@ class VaultManager:
                 pref_value_json TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (manuscript_id, pref_key)
+            )
+        """)
+
+    def _migrate_app_ui_preferences_table(self, cursor: sqlite3.Cursor) -> None:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_ui_preferences (
+                pref_key TEXT PRIMARY KEY,
+                pref_value_json TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -567,7 +590,7 @@ class VaultManager:
                 return default
             try:
                 return json.loads(raw)
-            except DatabaseError:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return default
         finally:
             conn.close()
@@ -600,6 +623,175 @@ class VaultManager:
             conn.commit()
         finally:
             conn.close()
+
+    def get_app_ui_pref(self, pref_key: str, default: Any = None) -> Any:
+        """Read one app-scoped UI preference."""
+        if not pref_key:
+            return default
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT pref_value_json
+                FROM app_ui_preferences
+                WHERE pref_key = ?
+                """,
+                (pref_key,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return default
+            raw = str(row[0] or "").strip()
+            if not raw:
+                return default
+            try:
+                return json.loads(raw)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return default
+        finally:
+            conn.close()
+
+    def set_app_ui_pref(self, pref_key: str, pref_value: Any) -> None:
+        """Persist one app-scoped UI preference."""
+        if not pref_key:
+            return
+        payload = json.dumps(pref_value, ensure_ascii=False)
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO app_ui_preferences (pref_key, pref_value_json, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(pref_key) DO UPDATE SET
+                    pref_value_json = excluded.pref_value_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (pref_key, payload),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _studio_context_payload(doc_id: str, library: str, page: int, tab: str, updated_at: str) -> dict[str, Any]:
+        return {
+            "doc_id": doc_id,
+            "library": library,
+            "page": page,
+            "tab": tab,
+            "updated_at": updated_at,
+        }
+
+    @staticmethod
+    def _utc_now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    @staticmethod
+    def _normalize_studio_context(raw: Any) -> dict[str, Any] | None:
+        if not isinstance(raw, dict):
+            return None
+        doc_id = str(raw.get("doc_id") or "").strip()
+        library = str(raw.get("library") or "").strip()
+        if not doc_id or not library:
+            return None
+        try:
+            page = int(raw.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, page)
+        tab_raw = str(raw.get("tab") or "transcription").strip().lower()
+        tab = tab_raw if tab_raw in _STUDIO_ALLOWED_TABS else "transcription"
+        updated_at = str(raw.get("updated_at") or "").strip() or VaultManager._utc_now_iso()
+        return VaultManager._studio_context_payload(doc_id, library, page, tab, updated_at)
+
+    def _manuscript_context_exists(self, doc_id: str, library: str) -> bool:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT library FROM manuscripts WHERE id = ?", (doc_id,))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return False
+        row_library = str(row[0] or "").strip()
+        if not row_library:
+            return True
+        return row_library == library
+
+    def get_studio_last_context(self) -> dict[str, Any] | None:
+        """Return the most recent valid Studio context, or None."""
+        context = self._normalize_studio_context(self.get_app_ui_pref(_STUDIO_LAST_CONTEXT_KEY, None))
+        if not context:
+            return None
+        if not self._manuscript_context_exists(str(context["doc_id"]), str(context["library"])):
+            return None
+        return context
+
+    def list_studio_recent_contexts(self, limit: int = 8) -> list[dict[str, Any]]:
+        """Return Studio recent contexts (valid + deduplicated)."""
+        max_items = max(1, int(limit or 8))
+        raw = self.get_app_ui_pref(_STUDIO_RECENTS_KEY, [])
+        if not isinstance(raw, list):
+            return []
+        contexts: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in raw:
+            normalized = self._normalize_studio_context(item)
+            if not normalized:
+                continue
+            key = (str(normalized["doc_id"]), str(normalized["library"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            if not self._manuscript_context_exists(*key):
+                continue
+            contexts.append(normalized)
+            if len(contexts) >= max_items:
+                break
+        return contexts
+
+    def save_studio_context(
+        self,
+        doc_id: str,
+        library: str,
+        page: int,
+        tab: str,
+        *,
+        max_recent: int = 8,
+    ) -> dict[str, Any]:
+        """Persist Studio context as both last-context and LRU recents list."""
+        now_iso = self._utc_now_iso()
+        normalized = self._normalize_studio_context(
+            self._studio_context_payload(doc_id.strip(), library.strip(), page, tab.strip().lower(), now_iso)
+        )
+        if not normalized:
+            raise ValueError("Invalid studio context")
+
+        recents = self.get_app_ui_pref(_STUDIO_RECENTS_KEY, [])
+        if not isinstance(recents, list):
+            recents = []
+        deduped: list[dict[str, Any]] = []
+        target_key = (str(normalized["doc_id"]), str(normalized["library"]))
+        seen: set[tuple[str, str]] = {target_key}
+        deduped.append(normalized)
+        for item in recents:
+            current = self._normalize_studio_context(item)
+            if not current:
+                continue
+            key = (str(current["doc_id"]), str(current["library"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(current)
+            if len(deduped) >= max(1, int(max_recent or 8)):
+                break
+
+        self.set_app_ui_pref(_STUDIO_LAST_CONTEXT_KEY, normalized)
+        self.set_app_ui_pref(_STUDIO_RECENTS_KEY, deduped)
+        return normalized
 
     def delete_manuscript(self, ms_id: str):
         """Delete manuscript DB record, snippets, and the manuscript folder on disk.

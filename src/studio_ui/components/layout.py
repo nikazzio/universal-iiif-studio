@@ -320,6 +320,7 @@ def _sidebar(active_page: str = "") -> Nav:
     nav_items = [
         ("discovery", "Discovery", "/discovery", "🔍"),
         ("library", "Libreria", "/library", "📚"),
+        ("studio", "Studio", "/studio", "🧭"),
         ("export", "Export", "/export", "📄"),
         ("settings", "Impostazioni", "/settings", "⚙️"),
     ]
@@ -417,10 +418,9 @@ def _sidebar(active_page: str = "") -> Nav:
                 setSidebarCollapse(!root.classList.contains('sidebar-collapsed'));
             }
             function syncActiveNav(pathname) {
-                const normalizedPath = pathname.startsWith('/studio') ? '/library' : pathname;
                 const links = document.querySelectorAll('[data-nav-link]');
                 links.forEach((link) => {
-                    const isActive = link.getAttribute('href') === normalizedPath;
+                    const isActive = link.getAttribute('href') === pathname;
                     if (isActive) {
                         link.setAttribute('aria-current', 'page');
                     } else {

@@ -61,7 +61,7 @@ Navigation model:
 - `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
 - `Export` is a dedicated hub for batch/single exports (`/export`).
 - In Studio, the right tab is now `Output` (renamed from `Export`).
-- `/studio` without context redirects to `/library`.
+- `/studio` without context opens the `Riprendi lavoro` recent hub (server-side persisted contexts).
 
 ### CLI
 
@@ -168,9 +168,9 @@ No results in Discovery for a known Gallica title
 - Keep the `Gallica` filter on `All materials` for broad lookup.
 - Use `Manuscripts` or `Printed books` only when you want to narrow down result type.
 
-`/studio` opens Library instead of the editor
-- Expected behavior: Studio now requires `doc_id` + `library`.
-- Open a document from Library via "Apri Studio".
+`/studio` opens the recent hub instead of the editor
+- Expected behavior: without `doc_id` + `library`, Studio shows `Riprendi lavoro`.
+- Open a document from Library via "Apri Studio", or use "Riprendi ultimo" in `/studio`.
 
 `config.json` changes not applied
 - Validate JSON shape under `settings`.

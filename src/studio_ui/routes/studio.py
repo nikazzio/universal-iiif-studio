@@ -28,6 +28,7 @@ def setup_studio_routes(app):
     app.get("/studio/cropper")(handlers.get_cropper)
     app.post("/api/save_snippet")(handlers.save_snippet_api)
     app.post("/api/save_transcription")(handlers.save_transcription)
+    app.post("/api/studio/context/save")(handlers.save_studio_context_api)
     app.post("/api/studio/export/start")(handlers.start_studio_export)
     app.post("/api/studio/export/page_highres")(handlers.download_highres_export_page)
     app.get("/api/studio/export/jobs")(handlers.get_studio_export_jobs)

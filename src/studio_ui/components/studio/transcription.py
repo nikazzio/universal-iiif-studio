@@ -143,6 +143,7 @@ def transcription_tab_content(doc_id, library, page, error_msg: str = None, is_l
             Input(type="hidden", name="doc_id", value=doc_id),
             Input(type="hidden", name="library", value=library),
             Input(type="hidden", name="page", value=str(page)),
+            Input(type="hidden", name="tab", value="transcription"),
             Button(
                 "💾 Salva Modifiche",
                 type="submit",

@@ -9,3 +9,5 @@ def test_base_layout_bootstraps_library_filter_navigation():
     assert "ui.library.filters.v1" in rendered
     assert "window.location.replace('/library?' + query)" in rendered
     assert 'data-nav-key="library"' in rendered
+    assert 'data-nav-key="studio"' in rendered
+    assert "pathname.startsWith('/studio') ? '/library' : pathname" not in rendered

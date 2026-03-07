@@ -147,6 +147,7 @@ Behavior notes:
 - `settings.ui.theme_color` (`string`, default: `#E8A6B6`)
 - `settings.ui.items_per_page` (`int`, default: `12`)
 - `settings.ui.toast_duration` (`int`, default: `3000`)
+- `settings.ui.studio_recent_max_items` (`int`, default: `8`, allowed range: `1..20`)
 - `settings.ui.polling.download_manager_interval_seconds` (`int`, default: `3`, allowed range: `1..30`)
 - `settings.ui.polling.download_status_interval_seconds` (`int`, default: `3`, allowed range: `1..30`)
 

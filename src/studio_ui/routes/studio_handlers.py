@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
 
-from fasthtml.common import Div, RedirectResponse, Request, Script
+from fasthtml.common import H2, A, Div, P, Request, Script, Span
+from starlette.responses import Response
 
 from studio_ui.common.htmx import history_refresh_script
 from studio_ui.common.page_inventory import resolve_page_inventory
@@ -49,6 +50,7 @@ from universal_iiif_core.thumbnail_utils import ensure_thumbnail, guess_availabl
 from universal_iiif_core.utils import get_json, load_json, save_json
 
 logger = get_logger(__name__)
+_STUDIO_ALLOWED_TABS = ("transcription", "snippets", "history", "visual", "info", "export")
 
 
 def _with_toast(fragment, message: str, tone: str = "info"):
@@ -82,11 +84,12 @@ def _load_manifest_payload(manifest_path: Path, page: int) -> tuple[dict, str | 
     return manifest_json, _resolve_initial_canvas(manifest_json, page)
 
 
-def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int) -> Script:
+def _studio_panel_refresh_script(doc_id: str, library: str, page_idx: int, tab: str = "transcription") -> Script:
     """Trigger a targeted refresh of the right Studio panel."""
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
-    hx_url = f"/studio/partial/tabs?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}"
+    encoded_tab = quote(_normalize_studio_tab(tab), safe="")
+    hx_url = f"/studio/partial/tabs?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}&tab={encoded_tab}"
     return Script(
         "(function(){"
         "setTimeout(function(){"
@@ -102,9 +105,139 @@ def _normalized_studio_context(doc_id: str, library: str) -> tuple[str, str]:
     return unquote(doc_id) if doc_id else "", unquote(library) if library else ""
 
 
-def _library_redirect() -> RedirectResponse:
-    """Redirect to Library when Studio is requested without document context."""
-    return RedirectResponse(url="/library", status_code=303)
+def _normalize_studio_tab(raw_tab: str | None) -> str:
+    value = str(raw_tab or "").strip().lower()
+    return value if value in _STUDIO_ALLOWED_TABS else "transcription"
+
+
+def _safe_positive_int(raw: int | str | None, default: int = 1) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return max(1, int(default))
+    return max(1, value)
+
+
+def _studio_recent_limit() -> int:
+    raw = get_config_manager().get_setting("ui.studio_recent_max_items", 8)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 8
+    return max(1, min(value, 20))
+
+
+def _save_studio_context_best_effort(doc_id: str, library: str, page: int, tab: str) -> None:
+    try:
+        VaultManager().save_studio_context(
+            doc_id=doc_id,
+            library=library,
+            page=int(page),
+            tab=_normalize_studio_tab(tab),
+            max_recent=_studio_recent_limit(),
+        )
+    except Exception:
+        logger.debug("Studio context persistence skipped for %s/%s", library, doc_id, exc_info=True)
+
+
+def _studio_open_url(doc_id: str, library: str, page: int, tab: str) -> str:
+    return (
+        f"/studio?doc_id={quote(doc_id, safe='')}"
+        f"&library={quote(library, safe='')}"
+        f"&page={int(page)}"
+        f"&tab={quote(_normalize_studio_tab(tab), safe='')}"
+    )
+
+
+def _resolve_recent_title(context: dict[str, Any], row: dict[str, Any]) -> str:
+    doc_id = str(context.get("doc_id") or "")
+    fallback = str(row.get("display_title") or row.get("title") or row.get("catalog_title") or doc_id).strip()
+    return resolve_preferred_title(row, fallback_doc_id=doc_id).strip() or fallback or doc_id
+
+
+def _render_studio_recent_hub(*, request: Request, vault: VaultManager):
+    limit = _studio_recent_limit()
+    last_context = vault.get_studio_last_context() or {}
+    contexts = vault.list_studio_recent_contexts(limit=limit)
+    items = []
+    for context in contexts:
+        doc_id = str(context.get("doc_id") or "").strip()
+        library = str(context.get("library") or "").strip()
+        if not doc_id or not library:
+            continue
+        row = vault.get_manuscript(doc_id) or {}
+        if row and str(row.get("library") or "").strip() not in {"", library}:
+            continue
+        title = _resolve_recent_title(context, row)
+        page = _safe_positive_int(context.get("page"), 1)
+        tab = _normalize_studio_tab(str(context.get("tab") or "transcription"))
+        updated_at = str(context.get("updated_at") or "").strip() or "n/d"
+        items.append(
+            Div(
+                Div(
+                    Span(title, cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
+                    Span(f"{library} · pagina {page} · tab {tab}", cls="text-xs text-slate-500 dark:text-slate-400"),
+                    Span(f"Aggiornato: {updated_at}", cls="text-[11px] text-slate-400 dark:text-slate-500"),
+                    cls="flex flex-col gap-1 min-w-0",
+                ),
+                A(
+                    "Apri Studio",
+                    href=_studio_open_url(doc_id, library, page, tab),
+                    cls="app-btn app-btn-primary text-xs whitespace-nowrap",
+                ),
+                cls=(
+                    "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between "
+                    "border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-3"
+                ),
+            )
+        )
+
+    has_last = bool(last_context.get("doc_id")) and bool(last_context.get("library"))
+    last_url = (
+        _studio_open_url(
+            str(last_context.get("doc_id") or ""),
+            str(last_context.get("library") or ""),
+            _safe_positive_int(last_context.get("page"), 1),
+            _normalize_studio_tab(str(last_context.get("tab") or "transcription")),
+        )
+        if has_last
+        else "/library"
+    )
+    content = Div(
+        Div(
+            H2("Riprendi lavoro", cls="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100"),
+            P(
+                "Riapri velocemente gli ultimi documenti Studio con pagina e tab persistiti lato server.",
+                cls="text-sm text-slate-600 dark:text-slate-400",
+            ),
+            cls="flex flex-col gap-2",
+        ),
+        Div(
+            A(
+                "Riprendi ultimo",
+                href=last_url,
+                cls="app-btn app-btn-primary",
+            ),
+            A("Apri Libreria", href="/library", cls="app-btn app-btn-secondary"),
+            cls="flex flex-wrap gap-2",
+        ),
+        (
+            Div(*items, cls="grid grid-cols-1 gap-3")
+            if items
+            else Div(
+                P("Nessun contesto recente disponibile.", cls="text-sm text-slate-500 dark:text-slate-400"),
+                A("Vai in Libreria", href="/library", cls="app-btn app-btn-secondary w-fit"),
+                cls=(
+                    "rounded-lg border border-dashed border-slate-300 dark:border-slate-600 "
+                    "bg-white dark:bg-slate-900/50 p-4 flex flex-col gap-2"
+                ),
+            )
+        ),
+        cls="p-6 flex flex-col gap-4",
+    )
+    if request.headers.get("HX-Request") == "true":
+        return content
+    return base_layout("Studio", content, active_page="studio")
 
 
 def _resolve_studio_title(doc_id: str, meta: dict, ms_row: dict) -> tuple[str, str]:
@@ -444,6 +577,7 @@ def build_studio_tab_content(
     library: str,
     page_idx: int,
     *,
+    active_tab: str = "transcription",
     is_ocr_loading: bool = False,
     ocr_error: str | None = None,
     history_message: str | None = None,
@@ -468,7 +602,11 @@ def build_studio_tab_content(
     }
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
-    export_url = f"/studio/partial/export?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}"
+    safe_tab = _normalize_studio_tab(active_tab)
+    export_url = (
+        f"/studio/partial/export?doc_id={encoded_doc}&library={encoded_lib}"
+        f"&page={page_idx}&tab={quote(safe_tab, safe='')}"
+    )
     return render_studio_tabs(
         doc_id,
         library,
@@ -476,6 +614,7 @@ def build_studio_tab_content(
         meta,
         total_pages,
         manifest_json=manifest_json,
+        active_tab=safe_tab,
         is_ocr_loading=is_ocr_loading,
         ocr_error=ocr_error,
         history_message=history_message,
@@ -583,148 +722,228 @@ def _persist_studio_source_state(
         )
 
 
-def studio_page(request: Request, doc_id: str = "", library: str = "", page: int = 1):
+def _manifest_missing_response(is_hx: bool):
+    message = "Manifesto non trovato."
+    panel = Div(message, cls="p-10")
+    if is_hx:
+        return _with_toast(panel, message, tone="danger")
+    return panel
+
+
+def _build_workspace_base_context(
+    request: Request,
+    doc_id: str,
+    library: str,
+    vault: VaultManager,
+) -> dict[str, Any] | None:
+    storage = OCRStorage()
+    paths = storage.get_document_paths(doc_id, library)
+    meta = storage.load_metadata(doc_id, library) or {}
+    ms_row = vault.get_manuscript(doc_id) or {}
+    if ms_row and str(ms_row.get("library") or "").strip() not in {"", library}:
+        return None
+    full_title, title = _resolve_studio_title(doc_id, meta, ms_row)
+    scans_dir = Path(paths["scans"])
+    inventory = resolve_page_inventory(doc_id=doc_id, scans_dir=scans_dir)
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    lib_q = quote(library, safe="")
+    doc_q = quote(doc_id, safe="")
+    return {
+        "doc_id": doc_id,
+        "library": library,
+        "paths": paths,
+        "meta": meta,
+        "ms_row": ms_row,
+        "full_title": full_title,
+        "title": title,
+        "inventory": inventory,
+        "total_pages": int(inventory.local_pages_count),
+        "local_manifest_url": f"{base_url}/iiif/manifest/{lib_q}/{doc_q}",
+        "remote_manifest_url": str(ms_row.get("manifest_url") or "").strip(),
+        "lib_q": lib_q,
+        "doc_q": doc_q,
+    }
+
+
+def _resolve_workspace_manifest_context(
+    *,
+    request: Request,
+    workspace: dict[str, Any],
+    requested_page: int,
+    active_tab: str,
+) -> dict[str, Any] | None:
+    ms_row = workspace["ms_row"]
+    inventory = workspace["inventory"]
+    manifest_path = Path(workspace["paths"]["manifest"])
+    remote_manifest_url = workspace["remote_manifest_url"]
+    manifest_json, initial_canvas, manifest_exists_local = _load_studio_manifest_context(
+        manifest_path=manifest_path,
+        remote_manifest_url=remote_manifest_url,
+        page=requested_page,
+    )
+    if not manifest_json:
+        return None
+    resolved_manifest_pages = _manifest_total_pages(manifest_json, ms_row)
+    require_complete_local = bool(
+        get_config_manager().get_setting("viewer.mirador.require_complete_local_images", True)
+    )
+    allow_remote_preview = str(request.query_params.get("allow_remote_preview") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    read_source_mode, should_gate_mirador = _resolve_studio_read_source_mode(
+        ms_row=ms_row,
+        local_pages_count=int(inventory.local_pages_count),
+        manifest_pages=int(resolved_manifest_pages),
+        require_complete_local=require_complete_local,
+        allow_remote_preview=allow_remote_preview,
+    )
+    if read_source_mode == "local" and not manifest_exists_local and remote_manifest_url:
+        read_source_mode = "remote"
+        should_gate_mirador = False
+    manifest_url = _select_studio_manifest_url(
+        read_source_mode=read_source_mode,
+        local_manifest_url=workspace["local_manifest_url"],
+        remote_manifest_url=remote_manifest_url,
+    )
+    manifest_json, initial_canvas, manifest_exists_local = _resolve_manifest_for_selected_source(
+        read_source_mode=read_source_mode,
+        page=requested_page,
+        manifest_path=manifest_path,
+        remote_manifest_url=remote_manifest_url,
+        fallback_manifest=manifest_json,
+        fallback_canvas=initial_canvas,
+    )
+    if not manifest_json:
+        return None
+    manifest_pages = _manifest_total_pages(manifest_json, ms_row)
+    safe_page = requested_page if manifest_pages <= 0 else max(1, min(requested_page, manifest_pages))
+    if safe_page != requested_page:
+        initial_canvas = _resolve_initial_canvas(manifest_json, safe_page)
+    meta = {
+        **workspace["meta"],
+        "full_display_title": workspace["full_title"],
+        "local_pages_count": int(inventory.local_pages_count),
+        "temp_pages_count": int(inventory.temp_pages_count),
+        "manifest_total_pages": manifest_pages,
+    }
+    mirador_override_url = (
+        (
+            f"/studio?doc_id={workspace['doc_q']}&library={workspace['lib_q']}&page={int(safe_page)}"
+            f"&tab={quote(active_tab, safe='')}&allow_remote_preview=1"
+        )
+        if should_gate_mirador
+        else ""
+    )
+    _persist_studio_source_state(
+        doc_id=str(workspace["doc_id"]),
+        read_source_mode=read_source_mode,
+        local_pages_count=int(inventory.local_pages_count),
+        manifest_exists_local=manifest_exists_local,
+    )
+    return {
+        "manifest_url": manifest_url,
+        "manifest_json": manifest_json,
+        "initial_canvas": initial_canvas,
+        "manifest_pages": int(manifest_pages),
+        "safe_page": int(safe_page),
+        "read_source_mode": read_source_mode,
+        "should_gate_mirador": should_gate_mirador,
+        "mirador_override_url": mirador_override_url,
+        "meta": meta,
+    }
+
+
+def studio_page(
+    request: Request,
+    doc_id: str = "",
+    library: str = "",
+    page: int = 1,
+    tab: str = "transcription",
+):
     """Render Main Studio Layout."""
     doc_id, library = _normalized_studio_context(doc_id, library)
+    active_tab = _normalize_studio_tab(tab or request.query_params.get("tab"))
     is_hx = request.headers.get("HX-Request") == "true"
 
     if not doc_id or not library:
-        return _library_redirect()
+        return _render_studio_recent_hub(request=request, vault=VaultManager())
 
     try:
-        storage = OCRStorage()
-        paths = storage.get_document_paths(doc_id, library)
-        meta = storage.load_metadata(doc_id, library) or {}
-        ms_row = VaultManager().get_manuscript(doc_id) or {}
-        full_title, title = _resolve_studio_title(doc_id, meta, ms_row)
-        scans_dir = Path(paths["scans"])
-        inventory = resolve_page_inventory(doc_id=doc_id, scans_dir=scans_dir)
-        total_pages = int(inventory.local_pages_count)
-
-        # Base URLs
-        base_url = f"{request.url.scheme}://{request.url.netloc}"
-        lib_q = quote(library, safe="")
-        doc_q = quote(doc_id, safe="")
-        local_manifest_url = f"{base_url}/iiif/manifest/{lib_q}/{doc_q}"
-        remote_manifest_url = str(ms_row.get("manifest_url") or "").strip()
-
-        manifest_path = Path(paths["manifest"])
-        manifest_json, initial_canvas, manifest_exists_local = _load_studio_manifest_context(
-            manifest_path=manifest_path,
-            remote_manifest_url=remote_manifest_url,
-            page=int(page),
+        requested_page = _safe_positive_int(page, 1)
+        vault = VaultManager()
+        workspace = _build_workspace_base_context(request, doc_id, library, vault)
+        if workspace is None:
+            return _render_studio_recent_hub(request=request, vault=vault)
+        resolved = _resolve_workspace_manifest_context(
+            request=request,
+            workspace=workspace,
+            requested_page=requested_page,
+            active_tab=active_tab,
         )
-
-        if not manifest_json:
-            message = "Manifesto non trovato."
-            panel = Div(message, cls="p-10")
-            if is_hx:
-                return _with_toast(panel, message, tone="danger")
-            return panel
-
-        resolved_manifest_pages = _manifest_total_pages(manifest_json, ms_row)
-        require_complete_local = bool(
-            get_config_manager().get_setting("viewer.mirador.require_complete_local_images", True)
-        )
-        allow_remote_preview = str(request.query_params.get("allow_remote_preview") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        read_source_mode, should_gate_mirador = _resolve_studio_read_source_mode(
-            ms_row=ms_row,
-            local_pages_count=int(inventory.local_pages_count),
-            manifest_pages=int(resolved_manifest_pages),
-            require_complete_local=require_complete_local,
-            allow_remote_preview=allow_remote_preview,
-        )
-        if read_source_mode == "local" and not manifest_exists_local and remote_manifest_url:
-            read_source_mode = "remote"
-            should_gate_mirador = False
-
-        manifest_url = _select_studio_manifest_url(
-            read_source_mode=read_source_mode,
-            local_manifest_url=local_manifest_url,
-            remote_manifest_url=remote_manifest_url,
-        )
-        manifest_json, initial_canvas, manifest_exists_local = _resolve_manifest_for_selected_source(
-            read_source_mode=read_source_mode,
-            page=int(page),
-            manifest_path=manifest_path,
-            remote_manifest_url=remote_manifest_url,
-            fallback_manifest=manifest_json,
-            fallback_canvas=initial_canvas,
-        )
-        if not manifest_json:
-            message = "Manifesto non trovato."
-            panel = Div(message, cls="p-10")
-            if is_hx:
-                return _with_toast(panel, message, tone="danger")
-            return panel
-
-        manifest_pages = _manifest_total_pages(manifest_json, ms_row)
-        meta = {
-            **meta,
-            "full_display_title": full_title,
-            "local_pages_count": int(inventory.local_pages_count),
-            "temp_pages_count": int(inventory.temp_pages_count),
-            "manifest_total_pages": manifest_pages,
-        }
-        mirador_override_url = (
-            f"/studio?doc_id={doc_q}&library={lib_q}&page={int(page)}&allow_remote_preview=1"
-            if should_gate_mirador
-            else ""
-        )
-        _persist_studio_source_state(
-            doc_id=doc_id,
-            read_source_mode=read_source_mode,
-            local_pages_count=int(inventory.local_pages_count),
-            manifest_exists_local=manifest_exists_local,
-        )
+        if resolved is None:
+            return _manifest_missing_response(is_hx)
 
         content = studio_layout(
-            title,
+            workspace["title"],
             library,
             doc_id,
-            page,
-            manifest_url,
-            initial_canvas,
-            manifest_json,
-            total_pages,
-            meta,
-            export_url=f"/studio/partial/export?doc_id={doc_q}&library={lib_q}&page={page}",
-            asset_status=str(ms_row.get("asset_state") or ms_row.get("status") or "unknown"),
-            has_native_pdf=bool(ms_row.get("has_native_pdf")) if ms_row.get("has_native_pdf") is not None else None,
-            pdf_local_available=bool(ms_row.get("pdf_local_available")),
-            local_pages_count=int(inventory.local_pages_count),
-            temp_pages_count=int(inventory.temp_pages_count),
-            manifest_total_pages=int(manifest_pages),
-            read_source_mode=read_source_mode,
-            mirador_enabled=not should_gate_mirador,
-            mirador_override_url=mirador_override_url,
+            int(resolved["safe_page"]),
+            str(resolved["manifest_url"]),
+            resolved["initial_canvas"],
+            dict(resolved["manifest_json"]),
+            int(workspace["total_pages"]),
+            dict(resolved["meta"]),
+            export_url=(
+                f"/studio/partial/export?doc_id={workspace['doc_q']}&library={workspace['lib_q']}"
+                f"&page={resolved['safe_page']}&tab={quote(active_tab, safe='')}"
+            ),
+            asset_status=str(workspace["ms_row"].get("asset_state") or workspace["ms_row"].get("status") or "unknown"),
+            has_native_pdf=(
+                bool(workspace["ms_row"].get("has_native_pdf"))
+                if workspace["ms_row"].get("has_native_pdf") is not None
+                else None
+            ),
+            pdf_local_available=bool(workspace["ms_row"].get("pdf_local_available")),
+            local_pages_count=int(workspace["inventory"].local_pages_count),
+            temp_pages_count=int(workspace["inventory"].temp_pages_count),
+            manifest_total_pages=int(resolved["manifest_pages"]),
+            read_source_mode=str(resolved["read_source_mode"]),
+            mirador_enabled=not bool(resolved["should_gate_mirador"]),
+            mirador_override_url=str(resolved["mirador_override_url"]),
+            active_tab=active_tab,
+        )
+        _save_studio_context_best_effort(
+            doc_id=doc_id,
+            library=library,
+            page=int(resolved["safe_page"]),
+            tab=active_tab,
         )
         if is_hx:
             return content
-        return base_layout(f"Studio - {title}", content, active_page="library")
+        return base_layout(f"Studio - {workspace['title']}", content, active_page="studio")
 
     except Exception as e:
         logger.exception("Studio Error")
         message = "Errore caricamento Studio."
         if is_hx:
             return _with_toast(Div(message, cls="p-10"), f"{message} {e}", tone="danger")
-        return base_layout("Errore", Div(f"Errore caricamento: {e}", cls="p-10"))
+        return base_layout("Errore Studio", Div(f"Errore caricamento: {e}", cls="p-10"), active_page="studio")
 
 
-def get_studio_tabs(doc_id: str, library: str, page: int):
+def get_studio_tabs(doc_id: str, library: str, page: int, tab: str = "transcription"):
     """Get Studio Tabs Content."""
     doc_id, library = unquote(doc_id), unquote(library)
-    page_idx = int(page)
+    page_idx = _safe_positive_int(page, 1)
+    active_tab = _normalize_studio_tab(tab)
     is_loading = is_ocr_job_running(doc_id, page_idx)
     return build_studio_tab_content(
         doc_id,
         library,
         page_idx,
+        active_tab=active_tab,
         is_ocr_loading=is_loading,
     )
 
@@ -743,12 +962,14 @@ def get_export_tab(
     doc_id: str,
     library: str,
     page: int,
+    tab: str = "transcription",
     thumb_page: int = 1,
     page_size: int = 0,
     selected_pages: str = "",
 ):
     """Get Studio Export tab content."""
-    _ = int(page)
+    _ = _safe_positive_int(page, 1)
+    _ = _normalize_studio_tab(tab)
     doc_id, library = unquote(doc_id), unquote(library)
     return _build_studio_export_fragment(
         doc_id,
@@ -817,6 +1038,34 @@ def _as_int(raw: int | str | None, default: int = 0) -> int:
         return int(raw or default)
     except (TypeError, ValueError):
         return int(default)
+
+
+def save_studio_context_api(
+    doc_id: str = "",
+    library: str = "",
+    page: int = 1,
+    tab: str = "transcription",
+):
+    """Persist current Studio context (page + active tab)."""
+    doc = str(unquote(doc_id or "")).strip()
+    lib = str(unquote(library or "")).strip()
+    if not doc or not lib:
+        return Response("Missing doc_id/library", status_code=400)
+    safe_page = _safe_positive_int(page, 1)
+    safe_tab = _normalize_studio_tab(tab)
+    if str(tab or "").strip().lower() not in _STUDIO_ALLOWED_TABS:
+        return Response("Invalid tab", status_code=400)
+    try:
+        VaultManager().save_studio_context(
+            doc_id=doc,
+            library=lib,
+            page=safe_page,
+            tab=safe_tab,
+            max_recent=_studio_recent_limit(),
+        )
+    except Exception:
+        logger.warning("Studio context save failed for %s/%s", lib, doc, exc_info=True)
+    return Response(status_code=204)
 
 
 def start_studio_export(
@@ -1161,12 +1410,13 @@ def save_snippet_api(doc_id: str, library: str, page: int, crop_data: str, trans
         return build_toast(f"Errore salvataggio snippet: {e}", tone="danger")
 
 
-def save_transcription(doc_id: str, library: str, page: int, text: str):
+def save_transcription(doc_id: str, library: str, page: int, text: str, tab: str = "transcription"):
     """Save manual transcription edits from the Studio."""
     try:
         doc_id, library = unquote(doc_id), unquote(library)
         storage = OCRStorage()
         page_idx = int(page)
+        active_tab = _normalize_studio_tab(tab)
         existing = storage.load_transcription(doc_id, page_idx, library)
         normalized_existing = (existing.get("full_text") if existing else "") or ""
         normalized_new = text or ""
@@ -1175,7 +1425,7 @@ def save_transcription(doc_id: str, library: str, page: int, text: str):
             return [
                 Div("", cls="hidden"),
                 build_toast("Nessuna modifica rilevata; il testo è identico all'ultima versione.", tone="info"),
-                _studio_panel_refresh_script(doc_id, library, page_idx),
+                _studio_panel_refresh_script(doc_id, library, page_idx, active_tab),
             ]
 
         # Save the transcription
@@ -1189,7 +1439,7 @@ def save_transcription(doc_id: str, library: str, page: int, text: str):
         return [
             Div("", cls="hidden"),
             build_toast("Modifiche salvate con successo nello storico.", tone="success"),
-            _studio_panel_refresh_script(doc_id, library, page_idx),
+            _studio_panel_refresh_script(doc_id, library, page_idx, active_tab),
         ]
     except Exception as e:
         return [

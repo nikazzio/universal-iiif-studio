@@ -24,46 +24,51 @@ def render_studio_tabs(
     history_message: str | None = None,
     export_fragment=None,
     export_url: str | None = None,
+    active_tab: str = "transcription",
 ):
     """Render the studio tabs."""
     page_idx = int(page)
+    allowed_tabs = {"transcription", "snippets", "history", "visual", "info", "export"}
+    safe_active_tab = str(active_tab or "transcription").strip().lower()
+    if safe_active_tab not in allowed_tabs:
+        safe_active_tab = "transcription"
     # Header buttons
     buttons = Div(
         Button(
             "📝 Trascrizione",
             onclick="switchTab('transcription')",
             id="tab-button-transcription",
-            cls="tab-button studio-tab studio-tab-active",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'transcription' else ''}",
         ),
         Button(
             "📂 Snippets",
             onclick="switchTab('snippets')",
             id="tab-button-snippets",
-            cls="tab-button studio-tab",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'snippets' else ''}",
         ),
         Button(
             "📝 History",
             onclick="switchTab('history')",
             id="tab-button-history",
-            cls="tab-button studio-tab",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'history' else ''}",
         ),
         Button(
             "🎨 Visual",
             onclick="switchTab('visual')",
             id="tab-button-visual",
-            cls="tab-button studio-tab",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'visual' else ''}",
         ),
         Button(
             "ℹ️ Info",
             onclick="switchTab('info')",
             id="tab-button-info",
-            cls="tab-button studio-tab",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'info' else ''}",
         ),
         Button(
             "📄 Output",
             onclick="switchTab('export')",
             id="tab-button-export",
-            cls="tab-button studio-tab",
+            cls=f"tab-button studio-tab{' studio-tab-active' if safe_active_tab == 'export' else ''}",
         ),
         cls="studio-tablist",
     )
@@ -76,23 +81,27 @@ def render_studio_tabs(
                 cls="relative h-full",
             ),
             id="tab-content-transcription",
-            cls="tab-content h-full",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'transcription' else ''}",
         ),
         Div(
             *snippets_tab_content(doc_id, page_idx, library),
             id="tab-content-snippets",
-            cls="tab-content hidden h-full",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'snippets' else ''}",
         ),
         Div(
             *history_tab_content(doc_id, page_idx, library, info_message=history_message),
             id="tab-content-history",
-            cls="tab-content hidden h-full",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'history' else ''}",
         ),
-        Div(*visual_tab_content(), id="tab-content-visual", cls="tab-content hidden h-full"),
+        Div(
+            *visual_tab_content(),
+            id="tab-content-visual",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'visual' else ''}",
+        ),
         Div(
             *info_tab_content(meta, total_pages, manifest_json, page_idx, doc_id, library),
             id="tab-content-info",
-            cls="tab-content hidden h-full",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'info' else ''}",
         ),
         Div(
             (
@@ -104,42 +113,95 @@ def render_studio_tabs(
                 )
             ),
             id="tab-content-export",
-            cls="tab-content hidden h-full",
+            cls=f"tab-content h-full{' hidden' if safe_active_tab != 'export' else ''}",
             data_export_loaded="1" if export_fragment is not None else "0",
             data_export_url=export_url or "",
         ),
         cls="studio-tabpanes flex-1 overflow-y-auto p-4",
     )
 
-    switch_script = Script("""
-        function switchTab(t){
-            document.querySelectorAll('.tab-content').forEach(e=>e.classList.add('hidden'));
-            document.querySelectorAll('.tab-button').forEach(b=>{
-                b.classList.remove('studio-tab-active');
-            });
-            const target = document.getElementById('tab-content-'+t);
-            if (!target) return;
-            target.classList.remove('hidden');
-            const btn = document.getElementById('tab-button-'+t);
-            if (btn) {
-                btn.classList.add('studio-tab-active');
-            }
+    doc_js = json.dumps(doc_id)
+    lib_js = json.dumps(library)
+    default_tab_js = json.dumps(safe_active_tab)
+    switch_script = Script(
+        f"""(function() {{
+            const ALLOWED_TABS = new Set(['transcription', 'snippets', 'history', 'visual', 'info', 'export']);
+            const docId = {doc_js};
+            const library = {lib_js};
+            const defaultTab = {default_tab_js};
 
-            if (t === 'export') {
-                const loaded = target.dataset.exportLoaded === '1';
-                const exportUrl = target.dataset.exportUrl || '';
-                if (!loaded && exportUrl) {
-                    target.dataset.exportLoaded = '1';
-                    try {
-                        htmx.ajax('GET', exportUrl, {target:'#tab-content-export', swap:'innerHTML'});
-                    } catch (e) {
-                        console.error('export-load-err', e);
-                        target.dataset.exportLoaded = '0';
-                    }
-                }
-            }
-        }
-    """)
+            function currentPageFromUrl() {{
+                try {{
+                    const pageRaw = new URL(window.location.href).searchParams.get('page');
+                    const page = Number.parseInt(pageRaw || '', 10);
+                    return Number.isFinite(page) && page > 0 ? page : {page_idx};
+                }} catch (_e) {{
+                    return {page_idx};
+                }}
+            }}
+
+            function updateUrlTab(tab) {{
+                try {{
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', tab);
+                    window.history.replaceState({{}}, '', url);
+                }} catch (_e) {{
+                    // no-op
+                }}
+            }}
+
+            function saveContext(tab) {{
+                const page = currentPageFromUrl();
+                const body = new URLSearchParams();
+                body.set('doc_id', docId);
+                body.set('library', library);
+                body.set('page', String(page));
+                body.set('tab', tab);
+                fetch('/api/studio/context/save', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }},
+                    body: body.toString(),
+                    credentials: 'same-origin'
+                }}).catch(() => null);
+            }}
+
+            function switchTab(t, opts) {{
+                const options = opts || {{}};
+                const tab = ALLOWED_TABS.has(String(t || '').trim()) ? String(t).trim() : 'transcription';
+                document.querySelectorAll('.tab-content').forEach((el) => el.classList.add('hidden'));
+                document.querySelectorAll('.tab-button').forEach((btn) => {{
+                    btn.classList.remove('studio-tab-active');
+                }});
+
+                const target = document.getElementById('tab-content-' + tab);
+                if (!target) return;
+                target.classList.remove('hidden');
+
+                const btn = document.getElementById('tab-button-' + tab);
+                if (btn) btn.classList.add('studio-tab-active');
+
+                if (options.updateUrl !== false) updateUrlTab(tab);
+                if (options.persist !== false) saveContext(tab);
+
+                if (tab === 'export') {{
+                    const loaded = target.dataset.exportLoaded === '1';
+                    const exportUrl = target.dataset.exportUrl || '';
+                    if (!loaded && exportUrl) {{
+                        target.dataset.exportLoaded = '1';
+                        try {{
+                            htmx.ajax('GET', exportUrl, {{ target: '#tab-content-export', swap: 'innerHTML' }});
+                        }} catch (e) {{
+                            console.error('export-load-err', e);
+                            target.dataset.exportLoaded = '0';
+                        }}
+                    }}
+                }}
+            }}
+
+            window.switchTab = switchTab;
+            switchTab(defaultTab, {{ persist: false, updateUrl: true }});
+        }})();"""
+    )
 
     main_panel = Div(buttons, tab_contents, switch_script, cls="flex flex-col h-full overflow-hidden")
 

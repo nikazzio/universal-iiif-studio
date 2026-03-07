@@ -145,3 +145,75 @@ def test_upsert_manuscript_persists_source_and_optimization_fields():
     assert str(row.get("read_source_mode") or "") == "remote"
     assert int(row.get("local_optimized") or 0) == 1
     assert str(row.get("local_optimization_meta_json") or "").strip() == '{"optimized_pages": 3}'
+
+
+def test_app_ui_preferences_roundtrip():
+    """App-scoped UI preferences should persist independent from manuscript scope."""
+    vm = VaultManager()
+    vm.set_app_ui_pref("studio.last_context", {"doc_id": "DOC_A", "library": "Gallica", "page": 3, "tab": "history"})
+    stored = vm.get_app_ui_pref("studio.last_context", {})
+    assert stored.get("doc_id") == "DOC_A"
+    assert stored.get("library") == "Gallica"
+    assert int(stored.get("page") or 0) == 3
+    assert stored.get("tab") == "history"
+
+
+def test_save_studio_context_builds_recent_lru():
+    """Saving studio context should deduplicate by doc/library and keep most recent first."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_A", library="Gallica", status="saved", asset_state="saved")
+    vm.upsert_manuscript("DOC_B", library="Vaticana", status="saved", asset_state="saved")
+
+    vm.save_studio_context("DOC_A", "Gallica", 5, "history", max_recent=8)
+    vm.save_studio_context("DOC_B", "Vaticana", 2, "info", max_recent=8)
+    vm.save_studio_context("DOC_A", "Gallica", 6, "export", max_recent=8)
+
+    last = vm.get_studio_last_context() or {}
+    recents = vm.list_studio_recent_contexts(limit=8)
+    assert last.get("doc_id") == "DOC_A"
+    assert last.get("library") == "Gallica"
+    assert int(last.get("page") or 0) == 6
+    assert last.get("tab") == "export"
+    assert len(recents) == 2
+    assert recents[0].get("doc_id") == "DOC_A"
+    assert int(recents[0].get("page") or 0) == 6
+    assert recents[1].get("doc_id") == "DOC_B"
+
+
+def test_studio_recent_contexts_skip_removed_items():
+    """Recent contexts should ignore entries for manuscripts removed from DB."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_KEEP_RECENT", library="Gallica", status="saved", asset_state="saved")
+    vm.save_studio_context("DOC_KEEP_RECENT", "Gallica", 1, "transcription", max_recent=8)
+    vm.set_app_ui_pref(
+        "studio.recent_contexts",
+        [
+            {"doc_id": "DOC_MISSING", "library": "Gallica", "page": 1, "tab": "history", "updated_at": "x"},
+            {"doc_id": "DOC_KEEP_RECENT", "library": "Gallica", "page": 2, "tab": "info", "updated_at": "x"},
+        ],
+    )
+    recents = vm.list_studio_recent_contexts(limit=8)
+    assert len(recents) == 1
+    assert recents[0].get("doc_id") == "DOC_KEEP_RECENT"
+
+
+def test_get_app_ui_pref_returns_default_on_malformed_json():
+    """Malformed app preference JSON should not crash and must return default."""
+    vm = VaultManager()
+    conn = vm._get_conn()  # noqa: SLF001
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO app_ui_preferences (pref_key, pref_value_json, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(pref_key) DO UPDATE SET
+            pref_value_json = excluded.pref_value_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        ("studio.last_context", "{not-json"),
+    )
+    conn.commit()
+    conn.close()
+
+    fallback = {"doc_id": "fallback"}
+    assert vm.get_app_ui_pref("studio.last_context", fallback) == fallback

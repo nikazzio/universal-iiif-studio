@@ -666,6 +666,15 @@ def _build_general_pane(cm, s):
                 help_text="Durata delle notifiche globali (toast) in millisecondi.",
             ),
             setting_number(
+                "Studio Recent Items",
+                "settings.ui.studio_recent_max_items",
+                ui.get("studio_recent_max_items", 8),
+                min_val=1,
+                max_val=20,
+                step_val=1,
+                help_text="Numero massimo di documenti mostrati nel mini-hub /studio (Recenti).",
+            ),
+            setting_number(
                 "Download Manager Polling (s)",
                 "settings.ui.polling.download_manager_interval_seconds",
                 ((ui.get("polling") or {}).get("download_manager_interval_seconds", 3)),

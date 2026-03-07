@@ -201,7 +201,7 @@ Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compre
 
 Accesso consigliato:
 * apri un documento dalla pagina **Libreria** tramite "Apri Studio";
-* `/studio` senza `doc_id` e `library` reindirizza automaticamente a `/library`.
+* `/studio` senza `doc_id` e `library` apre il mini-hub **Riprendi lavoro** con gli ultimi contesti Studio persistiti lato server.
 
 ### 🖼️ Viewer e Layout
 
@@ -266,8 +266,8 @@ Dettagli UX attuali:
 * **Pagine presenti solo in `temp_images`**:
   * Comportamento possibile con `partial_promotion_mode=never`: il sistema sta mantenendo staging coerente.
   * Se ti serve disponibilita immediata in Studio dopo pausa, imposta `settings.storage.partial_promotion_mode=on_pause`.
-* **`/studio` ti porta in Libreria**:
-  * È comportamento previsto: Studio richiede il contesto documento (`doc_id` + `library`).
+* **`/studio` non apre subito il documento**:
+  * È comportamento previsto: senza contesto (`doc_id` + `library`) Studio mostra il mini-hub `Riprendi lavoro`.
 
 ## 7. Developer Notes
 

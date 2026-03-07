@@ -3,7 +3,7 @@
 ## Recommended Entry
 
 Open a local document from `Library` using "Apri Studio".
-Direct `/studio` without `doc_id` and `library` redirects to `Library`.
+Direct `/studio` without `doc_id` and `library` opens the recent hub (`Riprendi lavoro`).
 
 ## Download Manager and Staging
 

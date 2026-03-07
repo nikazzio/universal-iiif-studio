@@ -278,6 +278,7 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
     _validate_float_range(data, issues, "settings.network.download.default_backoff_cap_s", 5.0, 3600.0)
     _validate_int_range(data, issues, "settings.ui.items_per_page", 1, 200)
     _validate_int_range(data, issues, "settings.ui.toast_duration", 500, 15000)
+    _validate_int_range(data, issues, "settings.ui.studio_recent_max_items", 1, 20)
     _validate_int_range(data, issues, "settings.ui.polling.download_manager_interval_seconds", 1, 30)
     _validate_int_range(data, issues, "settings.ui.polling.download_status_interval_seconds", 1, 30)
     _validate_int_range(data, issues, "settings.images.viewer_quality", 10, 100)
