@@ -109,7 +109,6 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
     local_bytes = int(item.get("local_bytes") or 0)
     feedback = item.get("action_feedback") or {}
     feedback_state = str(feedback.get("state") or "idle").strip().lower()
-    feedback_label = str(feedback.get("label") or "")
     progress_percent = int(feedback.get("progress_percent") or (100 if feedback_state == "done" else 0))
     progress_percent = max(0, min(progress_percent, 100))
     is_busy = feedback_state in {"queued", "running"}
@@ -119,11 +118,6 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         "done": "studio-thumb-progress-done",
         "error": "studio-thumb-progress-error",
     }.get(feedback_state, "studio-thumb-progress-idle")
-    status_text = ""
-    if feedback_state == "error":
-        status_text = "Errore"
-    elif feedback_state == "done":
-        status_text = "OK"
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
     image = (
@@ -166,6 +160,10 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         f"/api/studio/export/page_highres?doc_id={encoded_doc}&library={encoded_lib}"
         f"&page={page}&thumb_page={thumb_page}&page_size={page_size}"
     )
+    optimize_url = (
+        f"/api/studio/export/optimize_scans?doc_id={encoded_doc}&library={encoded_lib}"
+        f"&thumb_page={thumb_page}&page_size={page_size}"
+    )
     return Div(
         select_btn,
         Div(
@@ -177,9 +175,10 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
             Div(
                 Button(
                     Div(
-                        Span("Hi-Res", cls="text-[12px] font-semibold"),
+                        Span("⬇ Hi", cls="text-[12px] font-semibold"),
                         Span(
                             "",
+                            id=f"studio-thumb-progress-{page}",
                             cls=f"studio-thumb-progress {progress_cls}",
                             style=f"--progress:{progress_percent}%;",
                             aria_hidden="true",
@@ -189,37 +188,30 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     type="button",
                     hx_post=highres_url,
                     hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#studio-thumb-highres-indicator-{page}",
+                    hx_indicator=f"#studio-thumb-progress-{page}",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-highres-btn",
                     data_page=str(page),
+                    title="Riscarica la pagina in alta risoluzione",
                 ),
-                Span(
-                    "",
-                    id=f"studio-thumb-highres-indicator-{page}",
-                    cls="htmx-indicator studio-thumb-progress studio-thumb-progress-active",
-                    style="--progress:45%;",
-                    aria_hidden="true",
+                Button(
+                    "⚙ Opt",
+                    type="button",
+                    hx_post=optimize_url,
+                    hx_vals=f'{{"optimize_scope":"selected","selected_pages":"{page}"}}',
+                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                    hx_target="#studio-export-panel",
+                    hx_swap="outerHTML",
+                    cls="app-btn app-btn-neutral studio-thumb-opt-btn",
+                    title="Ottimizza solo questa pagina",
                 ),
                 cls="studio-thumb-action",
             ),
-            (
-                Span(
-                    "Errore High-Res" if feedback_state == "error" else "High-Res completata",
-                    cls=(
-                        "text-[11px] text-rose-600 dark:text-rose-300"
-                        if feedback_state == "error"
-                        else "text-[11px] text-emerald-600 dark:text-emerald-300"
-                    ),
-                )
-                if status_text and feedback_label
-                else Div("", cls="hidden")
-            ),
             cls="studio-thumb-meta",
         ),
-        cls="studio-thumb-card",
+        cls="studio-thumb-card studio-thumb-shell",
     )
 
 

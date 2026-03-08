@@ -606,13 +606,14 @@ def _resolve_remote_dims(
     manifest_json: dict,
     remote_cache: dict[str, dict],
     remote_probe_enabled: bool,
+    force_refresh: bool = False,
 ) -> tuple[int | None, int | None, str | None]:
     page_key = str(page_num)
     remote_entry = remote_cache.get(page_key) or {}
     remote_w = remote_entry.get("width")
     remote_h = remote_entry.get("height")
     remote_service = remote_entry.get("service_url")
-    if remote_probe_enabled and (not remote_w or not remote_h):
+    if remote_probe_enabled and (force_refresh or not remote_w or not remote_h):
         pw, ph, service_url = probe_remote_max_dimensions(manifest_json, page_num)
         remote_w, remote_h = pw, ph
         remote_service = service_url or remote_service
@@ -641,6 +642,7 @@ def _build_thumbnail_item(
     remote_probe_enabled: bool,
     page_delta_by_num: dict[int, dict[str, Any]],
     page_feedback_by_num: dict[int, dict[str, str]],
+    force_remote_refresh: bool = False,
 ) -> tuple[dict[str, Any], int]:
     thumb_path = ensure_thumbnail(
         scans_dir=scans_dir,
@@ -657,6 +659,7 @@ def _build_thumbnail_item(
         manifest_json=manifest_json,
         remote_cache=remote_cache,
         remote_probe_enabled=remote_probe_enabled,
+        force_refresh=force_remote_refresh,
     )
     delta_entry = page_delta_by_num.get(page_num) or {}
     delta_saved = 0
@@ -753,6 +756,8 @@ def _build_export_thumbnail_slice(
     bytes_min = 0
     bytes_max = 0
     for page_num in page_slice:
+        feedback_hint = page_feedback_by_num.get(page_num) or {}
+        should_refresh_remote = str(feedback_hint.get("state") or "").strip().lower() in {"queued", "running", "done"}
         item, local_bytes = _build_thumbnail_item(
             page_num=page_num,
             scans_dir=scans_dir,
@@ -764,6 +769,7 @@ def _build_export_thumbnail_slice(
             remote_probe_enabled=remote_probe_enabled,
             page_delta_by_num=page_delta_by_num,
             page_feedback_by_num=page_feedback_by_num,
+            force_remote_refresh=should_refresh_remote,
         )
         if local_bytes > 0:
             total_bytes += local_bytes

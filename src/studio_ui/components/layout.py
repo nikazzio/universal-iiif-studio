@@ -699,9 +699,16 @@ def _style_tag():
         ".dark .studio-export-scope-btn { color: #cbd5e1; }\n",
         ".dark .studio-export-scope-btn:hover { background: rgba(var(--app-primary-rgb), 0.26); color: #f8fafc; }\n",
         ".studio-thumb-card { display: grid; gap: 0.5rem; min-width: 0; }\n",
+        ".studio-thumb-shell { border: 1px solid rgba(148, 163, 184, 0.36); border-radius: 0.85rem; "
+        "padding: 0.5rem; background: rgba(255, 255, 255, 0.82); }\n",
+        ".dark .studio-thumb-shell { border-color: rgba(71, 85, 105, 0.76); background: rgba(15, 23, 42, 0.72); }\n",
+        ".studio-thumb-shell .studio-export-page-inner { border: none !important; background: transparent !important; "
+        "padding: 0 !important; }\n",
         ".studio-thumb-meta { border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 0.65rem; "
         "padding: 0.5rem 0.56rem; background: rgba(255, 255, 255, 0.78); "
         "display: grid; gap: 0.42rem; min-width: 0; }\n",
+        ".studio-thumb-shell .studio-thumb-meta { border: none !important; background: transparent !important; "
+        "padding: 0.1rem 0 0 0 !important; }\n",
         ".dark .studio-thumb-meta { border-color: rgba(71, 85, 105, 0.75); background: rgba(15, 23, 42, 0.68); }\n",
         ".studio-thumb-dims { display: grid; gap: 0.2rem; }\n",
         ".studio-thumb-dims-row { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; "
@@ -716,6 +723,8 @@ def _style_tag():
         ".studio-thumb-action { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }\n",
         ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
         "padding: 0.34rem 0.54rem !important; flex: 1 1 auto; min-width: 0; }\n",
+        ".studio-thumb-opt-btn { white-space: nowrap; font-size: 0.72rem !important; "
+        "padding: 0.34rem 0.54rem !important; flex: 1 1 auto; min-width: 0; }\n",
         ".studio-thumb-progress { --progress: 0%; width: 0.88rem; height: 0.88rem; border-radius: 999px; "
         "flex: 0 0 0.88rem; "
         "background: conic-gradient(var(--app-accent) var(--progress), rgba(148, 163, 184, 0.28) 0); "
@@ -725,6 +734,7 @@ def _style_tag():
         ".dark .studio-thumb-progress::after { background: #0f172a; }\n",
         ".studio-thumb-progress-idle { --progress: 0%; opacity: 0.45; }\n",
         ".studio-thumb-progress-active { opacity: 1; }\n",
+        ".studio-thumb-progress.htmx-request { animation: spin 0.9s linear infinite; }\n",
         ".studio-thumb-progress-done { --progress: 100%; background: conic-gradient(#10b981 100%, #10b981 100%); }\n",
         ".studio-thumb-progress-error { --progress: 100%; background: conic-gradient(#ef4444 100%, #ef4444 100%); }\n",
         ".studio-export-sidepanel { box-shadow: inset 0 0 0 1px rgba(var(--app-primary-rgb), 0.06); }\n",

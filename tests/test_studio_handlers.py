@@ -589,7 +589,7 @@ def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
         cm.set_downloads_dir(str(old_downloads))
     rendered = repr(panel)
     assert "studio-thumb-highres-btn" in rendered
-    assert "studio-thumb-highres-indicator-" in rendered
+    assert "studio-thumb-progress-" in rendered
     assert 'hx-include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size"' in rendered
 
 
@@ -673,7 +673,7 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
 
         result = studio_handlers.download_highres_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
         rendered = repr(result)
-        assert "Hi-Res" in rendered
+        assert "⬇ Hi" in rendered
         assert "studio-thumb-progress-active" in rendered
         assert not isinstance(result, list)
 
@@ -756,7 +756,7 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
         panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=3, page_size=1)
         rendered = repr(panel)
         assert "Pag. 3" in rendered
-        assert "Hi-Res" in rendered
+        assert "⬇ Hi" in rendered
         assert "studio-thumb-progress-active" in rendered
     finally:
         cm.set_downloads_dir(str(old_downloads))
