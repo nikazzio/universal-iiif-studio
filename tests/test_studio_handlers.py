@@ -673,7 +673,8 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
 
         result = studio_handlers.download_highres_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
         rendered = repr(result)
-        assert "High-Res in coda" in rendered
+        assert "Hi-Res" in rendered
+        assert "studio-thumb-progress-active" in rendered
         assert not isinstance(result, list)
 
         pref = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_highres_jobs", {})
@@ -710,8 +711,8 @@ def test_studio_export_live_state_keeps_requested_subtab():
     assert 'id="studio-export-subtab-jobs" class="mt-3"' in rendered
 
 
-def test_export_thumbs_endpoint_preserves_delta_and_highres_feedback(tmp_path):
-    """Thumb pagination endpoint should keep per-page delta and high-res in-flight feedback."""
+def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_path):
+    """Thumb pagination endpoint should keep per-page high-res in-flight feedback."""
     cm = get_config_manager()
     old_downloads = cm.get_downloads_dir()
     try:
@@ -755,8 +756,8 @@ def test_export_thumbs_endpoint_preserves_delta_and_highres_feedback(tmp_path):
         panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=3, page_size=1)
         rendered = repr(panel)
         assert "Pag. 3" in rendered
-        assert "High-Res in corso" in rendered
-        assert "-2.0 KB" in rendered
+        assert "Hi-Res" in rendered
+        assert "studio-thumb-progress-active" in rendered
     finally:
         cm.set_downloads_dir(str(old_downloads))
 

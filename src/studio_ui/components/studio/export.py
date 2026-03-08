@@ -15,13 +15,7 @@ _LABEL_CLASS = "app-label"
 
 def _kind_chip(kind: str):
     value = (kind or "other").strip().lower()
-    palette = {
-        "native": "app-chip app-chip-success",
-        "compiled": "app-chip app-chip-primary",
-        "studio-export": "app-chip app-chip-accent",
-        "other": "app-chip app-chip-neutral",
-    }
-    return Span(value, cls=f"{palette.get(value, palette['other'])} text-[10px] font-semibold")
+    return Span(value, cls="text-[11px] text-slate-500 dark:text-slate-400")
 
 
 def _bytes_label(size_bytes: int) -> str:
@@ -113,33 +107,38 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
     local_dims = _dims_label(item.get("local_width"), item.get("local_height"))
     remote_dims = _dims_label(item.get("remote_width"), item.get("remote_height"))
     local_bytes = int(item.get("local_bytes") or 0)
-    delta_saved = int(item.get("delta_saved_bytes") or 0)
     feedback = item.get("action_feedback") or {}
-    feedback_label = str(feedback.get("label") or "")
-    feedback_tone = str(feedback.get("tone") or "info")
     feedback_state = str(feedback.get("state") or "idle").strip().lower()
+    feedback_label = str(feedback.get("label") or "")
+    progress_percent = int(feedback.get("progress_percent") or (100 if feedback_state == "done" else 0))
+    progress_percent = max(0, min(progress_percent, 100))
     is_busy = feedback_state in {"queued", "running"}
-    feedback_cls = {
-        "success": "app-chip app-chip-success text-[10px]",
-        "danger": "app-chip app-chip-danger text-[10px]",
-        "warning": "app-chip app-chip-warning text-[10px]",
-        "info": "app-chip app-chip-neutral text-[10px]",
-    }.get(feedback_tone, "app-chip app-chip-neutral text-[10px]")
+    progress_cls = {
+        "running": "studio-thumb-progress-active",
+        "queued": "studio-thumb-progress-active",
+        "done": "studio-thumb-progress-done",
+        "error": "studio-thumb-progress-error",
+    }.get(feedback_state, "studio-thumb-progress-idle")
+    status_text = ""
+    if feedback_state == "error":
+        status_text = "Errore"
+    elif feedback_state == "done":
+        status_text = "OK"
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
     image = (
         Img(
             src=thumb_url,
             cls=(
-                "w-full h-28 object-cover rounded border border-slate-200 dark:border-slate-700 "
-                "bg-slate-100 dark:bg-slate-800"
+                "w-full h-44 object-contain rounded-lg border border-slate-200 dark:border-slate-700 "
+                "bg-slate-100 dark:bg-slate-800 p-1"
             ),
         )
         if thumb_url
         else Div(
             "No thumb",
             cls=(
-                "w-full h-28 rounded border border-dashed border-slate-300 dark:border-slate-700 "
+                "w-full h-44 rounded border border-dashed border-slate-300 dark:border-slate-700 "
                 "text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center"
             ),
         )
@@ -149,8 +148,9 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         Div(
             image,
             Div(
-                Span(f"Pag. {page}", cls="text-xs font-medium text-slate-700 dark:text-slate-200"),
-                cls="mt-1 flex items-center justify-between",
+                Span(f"Pag. {page}", cls="text-xs font-semibold text-slate-700 dark:text-slate-200"),
+                Span(_bytes_label(local_bytes), cls="text-[11px] text-slate-500 dark:text-slate-400 font-mono"),
+                cls="mt-1 flex items-center justify-between gap-2",
             ),
             cls=(
                 "studio-export-page-inner p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 "
@@ -170,43 +170,22 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         select_btn,
         Div(
             Div(
-                (
-                    Span(feedback_label, cls=feedback_cls)
-                    if feedback_label
-                    else Span("Pronta", cls="app-chip app-chip-neutral text-[10px]")
-                ),
-                Span(f"#{page:04d}", cls="text-[10px] text-slate-400 dark:text-slate-500 font-mono"),
+                Span(f"Locale {local_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
+                Span(f"Remoto {remote_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
                 cls="flex items-center justify-between gap-2",
             ),
             Div(
-                Div(
-                    Span("Locale", cls="studio-thumb-dims-label"),
-                    Span(local_dims, cls="studio-thumb-dims-value"),
-                    cls="studio-thumb-dims-row",
-                ),
-                Div(
-                    Span("File", cls="studio-thumb-dims-label"),
-                    Span(_bytes_label(local_bytes), cls="studio-thumb-dims-value"),
-                    cls="studio-thumb-dims-row",
-                ),
-                Div(
-                    Span("Remoto max", cls="studio-thumb-dims-label"),
-                    Span(remote_dims, cls="studio-thumb-dims-value"),
-                    cls="studio-thumb-dims-row",
-                ),
-                Div(
-                    Span("Delta", cls="studio-thumb-dims-label"),
-                    Span(
-                        f"-{_bytes_label(delta_saved)}" if delta_saved > 0 else "n/a",
-                        cls="studio-thumb-dims-value",
-                    ),
-                    cls="studio-thumb-dims-row",
-                ),
-                cls="studio-thumb-dims",
-            ),
-            Div(
                 Button(
-                    "High-Res in corso" if is_busy else "Scarica High-Res",
+                    Div(
+                        Span("Hi-Res", cls="text-[12px] font-semibold"),
+                        Span(
+                            "",
+                            cls=f"studio-thumb-progress {progress_cls}",
+                            style=f"--progress:{progress_percent}%;",
+                            aria_hidden="true",
+                        ),
+                        cls="flex items-center justify-between gap-2",
+                    ),
                     type="button",
                     hx_post=highres_url,
                     hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
@@ -218,11 +197,25 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     data_page=str(page),
                 ),
                 Span(
-                    "In corso...",
+                    "",
                     id=f"studio-thumb-highres-indicator-{page}",
-                    cls="htmx-indicator text-[10px] text-slate-500 dark:text-slate-400",
+                    cls="htmx-indicator studio-thumb-progress studio-thumb-progress-active",
+                    style="--progress:45%;",
+                    aria_hidden="true",
                 ),
                 cls="studio-thumb-action",
+            ),
+            (
+                Span(
+                    "Errore High-Res" if feedback_state == "error" else "High-Res completata",
+                    cls=(
+                        "text-[11px] text-rose-600 dark:text-rose-300"
+                        if feedback_state == "error"
+                        else "text-[11px] text-emerald-600 dark:text-emerald-300"
+                    ),
+                )
+                if status_text and feedback_label
+                else Div("", cls="hidden")
             ),
             cls="studio-thumb-meta",
         ),
@@ -330,7 +323,7 @@ def render_export_thumbnails_panel(
             ),
             cls="flex items-center justify-between mb-2",
         ),
-        Div(*cards, cls="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"),
+        Div(*cards, cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3"),
         id="studio-export-thumbs-slot",
         **{
             "data-thumb-page": str(thumb_page),
@@ -385,19 +378,14 @@ def _render_export_pages_subtab(
                 cls="space-y-1",
             ),
             Div(
-                Span(f"Pagine: {thumb_total_pages}", cls="app-chip app-chip-neutral text-[10px]"),
-                Span(f"File: {int(scan_summary.get('files_count') or 0)}", cls="app-chip app-chip-neutral text-[10px]"),
                 Span(
-                    f"Locale: {_bytes_label(int(scan_summary.get('bytes_total') or 0))}",
-                    cls="app-chip app-chip-neutral text-[10px]",
-                ),
-                Span(
-                    f"Media: {_bytes_label(int(scan_summary.get('bytes_avg') or 0))}",
-                    cls="app-chip app-chip-neutral text-[10px]",
-                ),
-                Span(
-                    f"Max: {_bytes_label(int(scan_summary.get('bytes_max') or 0))}",
-                    cls="app-chip app-chip-neutral text-[10px]",
+                    (
+                        f"Pagine {thumb_total_pages} · File {int(scan_summary.get('files_count') or 0)} · "
+                        f"Locale {_bytes_label(int(scan_summary.get('bytes_total') or 0))} · "
+                        f"Media {_bytes_label(int(scan_summary.get('bytes_avg') or 0))} · "
+                        f"Max {_bytes_label(int(scan_summary.get('bytes_max') or 0))}"
+                    ),
+                    cls="text-xs text-slate-600 dark:text-slate-300",
                 ),
                 cls="flex flex-wrap items-center gap-2",
             ),

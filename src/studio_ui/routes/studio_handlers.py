@@ -497,20 +497,25 @@ def _save_highres_pref(doc_id: str, page_jobs: dict[int, dict[str, Any]]) -> Non
 
 def _highres_feedback_row(*, status: str, current: int, total: int) -> dict[str, str]:
     status_key = str(status or "").strip().lower()
-    progress_suffix = ""
+    percent = 0
     if total > 0:
-        progress_suffix = f" ({max(0, int(current))}/{max(0, int(total))})"
+        percent = int(max(0, min(100, (max(0, int(current)) / max(1, int(total))) * 100)))
     if status_key == "queued":
-        return {"state": "queued", "tone": "info", "label": "High-Res in coda"}
+        return {"state": "queued", "tone": "info", "label": "High-Res in coda", "progress_percent": "0"}
     if status_key in {"running", "cancelling", "pausing"}:
-        return {"state": "running", "tone": "warning", "label": f"High-Res in corso{progress_suffix}"}
+        return {
+            "state": "running",
+            "tone": "warning",
+            "label": "High-Res in corso",
+            "progress_percent": str(percent),
+        }
     if status_key == "completed":
-        return {"state": "done", "tone": "success", "label": "High-Res completato"}
+        return {"state": "done", "tone": "success", "label": "High-Res completato", "progress_percent": "100"}
     if status_key in {"error", "failed"}:
-        return {"state": "error", "tone": "danger", "label": "Errore High-Res"}
+        return {"state": "error", "tone": "danger", "label": "Errore High-Res", "progress_percent": "100"}
     if status_key in {"cancelled", "paused"}:
-        return {"state": "error", "tone": "warning", "label": "High-Res interrotto"}
-    return {"state": "idle", "tone": "info", "label": "High-Res"}
+        return {"state": "error", "tone": "warning", "label": "High-Res interrotto", "progress_percent": "100"}
+    return {"state": "idle", "tone": "info", "label": "High-Res", "progress_percent": "0"}
 
 
 def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int, dict[str, str]], bool]:
@@ -690,8 +695,22 @@ def _build_export_thumbnail_slice(
     scans_dir = Path(paths["scans"])
     thumbnails_dir = Path(paths["thumbnails"])
     cm = get_config_manager()
-    max_px = int(cm.get_setting("thumbnails.max_long_edge_px", 320) or 320)
-    quality = int(cm.get_setting("thumbnails.jpeg_quality", 70) or 70)
+    studio_max_px = int(
+        cm.get_setting(
+            "thumbnails.studio_max_long_edge_px",
+            cm.get_setting("thumbnails.max_long_edge_px", 640),
+        )
+        or 640
+    )
+    max_px = max(640, min(studio_max_px, 2400))
+    studio_quality = int(
+        cm.get_setting(
+            "thumbnails.studio_jpeg_quality",
+            cm.get_setting("thumbnails.jpeg_quality", 86),
+        )
+        or 86
+    )
+    quality = max(60, min(studio_quality, 95))
     thumbs_retention = int(cm.get_setting("storage.thumbnails_retention_days", 14) or 14)
     _prune_stale_thumbnails(thumbnails_dir, thumbs_retention)
     safe_page_size = _thumb_page_size(page_size, doc_id=doc_id)
@@ -1533,7 +1552,12 @@ def download_highres_export_page(
                 selected_pages_raw=selected_pages,
                 selected_subtab="pages",
                 page_feedback_by_num={
-                    page_num: {"tone": "danger", "label": "High-Res non disponibile (manifest mancante)"},
+                    page_num: {
+                        "tone": "danger",
+                        "label": "High-Res non disponibile (manifest mancante)",
+                        "state": "error",
+                        "progress_percent": "100",
+                    },
                 },
             ),
             "Manifest URL non disponibile per questo item.",
@@ -1559,7 +1583,14 @@ def download_highres_export_page(
                 page_size=int(page_size or 0),
                 selected_pages_raw=selected_pages,
                 selected_subtab="pages",
-                page_feedback_by_num={page_num: {"tone": "danger", "label": "Errore avvio High-Res"}},
+                page_feedback_by_num={
+                    page_num: {
+                        "tone": "danger",
+                        "label": "Errore avvio High-Res",
+                        "state": "error",
+                        "progress_percent": "100",
+                    }
+                },
             ),
             f"Errore download high-res pagina {page_num}: {exc}",
             tone="danger",
@@ -1583,6 +1614,7 @@ def download_highres_export_page(
                 "label": "High-Res in coda",
                 "state": "queued",
                 "job_id": job_id,
+                "progress_percent": "0",
             },
         },
     )
