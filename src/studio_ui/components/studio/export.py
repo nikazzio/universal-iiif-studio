@@ -101,23 +101,34 @@ def _dims_label(width: int | None, height: int | None, *, fallback: str = "n/a")
     return f"{int(width)}x{int(height)}"
 
 
+def _thumb_progress_state(feedback: dict | None) -> tuple[str, int, bool]:
+    data = feedback or {}
+    state = str(data.get("state") or "idle").strip().lower()
+    percent = int(data.get("progress_percent") or (100 if state == "done" else 0))
+    percent = max(0, min(percent, 100))
+    if state in {"queued", "running"} and percent <= 0:
+        percent = 24
+    is_busy = state in {"queued", "running"}
+    progress_cls = {
+        "running": "studio-thumb-progress-active",
+        "queued": "studio-thumb-progress-active",
+        "done": "studio-thumb-progress-done",
+        "error": "studio-thumb-progress-error",
+    }.get(state, "studio-thumb-progress-idle")
+    return progress_cls, percent, is_busy
+
+
 def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, page_size: int):
     page = int(item.get("page") or 0)
     thumb_url = str(item.get("thumb_url") or "")
     local_dims = _dims_label(item.get("local_width"), item.get("local_height"))
     remote_dims = _dims_label(item.get("remote_width"), item.get("remote_height"))
     local_bytes = int(item.get("local_bytes") or 0)
-    feedback = item.get("action_feedback") or {}
-    feedback_state = str(feedback.get("state") or "idle").strip().lower()
-    progress_percent = int(feedback.get("progress_percent") or (100 if feedback_state == "done" else 0))
-    progress_percent = max(0, min(progress_percent, 100))
-    is_busy = feedback_state in {"queued", "running"}
-    progress_cls = {
-        "running": "studio-thumb-progress-active",
-        "queued": "studio-thumb-progress-active",
-        "done": "studio-thumb-progress-done",
-        "error": "studio-thumb-progress-error",
-    }.get(feedback_state, "studio-thumb-progress-idle")
+    highres_feedback = item.get("highres_feedback") or item.get("action_feedback") or {}
+    optimize_feedback = item.get("optimize_feedback") or {}
+    hi_progress_cls, hi_progress_percent, hi_busy = _thumb_progress_state(highres_feedback)
+    opt_progress_cls, opt_progress_percent, opt_busy = _thumb_progress_state(optimize_feedback)
+    is_busy = hi_busy or opt_busy
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
     image = (
@@ -164,8 +175,6 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         f"/api/studio/export/optimize_scans?doc_id={encoded_doc}&library={encoded_lib}"
         f"&thumb_page={thumb_page}&page_size={page_size}"
     )
-    hi_indicator_id = f"studio-thumb-hi-indicator-{page}"
-    opt_indicator_id = f"studio-thumb-opt-indicator-{page}"
     return Div(
         select_btn,
         Div(
@@ -178,12 +187,11 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                 Button(
                     Div(
                         Span("⬇ Hi", cls="text-[12px] font-semibold"),
-                        Span("", id=hi_indicator_id, cls="spinner htmx-indicator studio-thumb-inline-loader"),
                         Span(
                             "",
-                            id=f"studio-thumb-progress-{page}",
-                            cls=f"studio-thumb-progress {progress_cls}",
-                            style=f"--progress:{progress_percent}%;",
+                            id=f"studio-thumb-progress-hi-{page}",
+                            cls=f"studio-thumb-progress {hi_progress_cls}",
+                            style=f"--progress:{hi_progress_percent}%;",
                             aria_hidden="true",
                         ),
                         cls="flex items-center justify-between gap-2",
@@ -191,7 +199,7 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     type="button",
                     hx_post=highres_url,
                     hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#{hi_indicator_id}",
+                    hx_indicator=f"#studio-thumb-progress-hi-{page}",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     disabled=is_busy,
@@ -202,17 +210,25 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                 Button(
                     Div(
                         Span("⚙ Opt", cls="text-[12px] font-semibold"),
-                        Span("", id=opt_indicator_id, cls="spinner htmx-indicator studio-thumb-inline-loader"),
+                        Span(
+                            "",
+                            id=f"studio-thumb-progress-opt-{page}",
+                            cls=f"studio-thumb-progress {opt_progress_cls}",
+                            style=f"--progress:{opt_progress_percent}%;",
+                            aria_hidden="true",
+                        ),
                         cls="flex items-center justify-between gap-2",
                     ),
                     type="button",
                     hx_post=optimize_url,
                     hx_vals=f'{{"optimize_scope":"selected","selected_pages":"{page}"}}',
                     hx_include="#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#{opt_indicator_id}",
+                    hx_indicator=f"#studio-thumb-progress-opt-{page}",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
+                    disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-opt-btn",
+                    data_page=str(page),
                     title="Ottimizza solo questa pagina",
                 ),
                 cls="studio-thumb-action",
@@ -248,6 +264,7 @@ def render_export_thumbnails_panel(
     total_pages: int,
     page_size: int,
     page_size_options: list[int],
+    has_active_page_actions: bool = False,
 ) -> Div:
     """Render one paginated thumbnails slice for export selection."""
     cards = [
@@ -279,6 +296,21 @@ def render_export_thumbnails_panel(
             "hx_target": "#studio-export-thumbs-slot",
             "hx_swap": "outerHTML",
         }
+    )
+
+    poller = (
+        Div(
+            "",
+            id="studio-export-live-state-poller",
+            hx_get=_thumb_page_url(doc_id=doc_id, library=library, thumb_page=thumb_page, page_size=page_size),
+            hx_trigger="load, every 4s",
+            hx_include="#studio-export-thumb-page,#studio-export-page-size",
+            hx_target="#studio-export-thumbs-slot",
+            hx_swap="outerHTML",
+            cls="hidden",
+        )
+        if has_active_page_actions
+        else Div("", id="studio-export-live-state-poller", cls="hidden")
     )
 
     return Div(
@@ -324,6 +356,7 @@ def render_export_thumbnails_panel(
             cls="flex items-center justify-between mb-2",
         ),
         Div(*cards, cls="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3"),
+        poller,
         id="studio-export-thumbs-slot",
         **{
             "data-thumb-page": str(thumb_page),
@@ -365,7 +398,6 @@ def _render_export_pages_subtab(
         f"/api/studio/export/optimize_scans?doc_id={encoded_doc}&library={encoded_lib}"
         f"&thumb_page={thumb_page}&page_size={thumb_page_size}"
     )
-    live_poll_url = f"/api/studio/export/thumbs?doc_id={encoded_doc}&library={encoded_lib}"
 
     return Div(
         Div(
@@ -548,19 +580,8 @@ def _render_export_pages_subtab(
                 total_pages=thumb_total_pages,
                 page_size=thumb_page_size,
                 page_size_options=thumb_page_size_options,
+                has_active_page_actions=has_active_page_actions,
             ),
-            Div(
-                "",
-                id="studio-export-live-state-poller",
-                hx_get=live_poll_url,
-                hx_trigger="load, every 4s",
-                hx_include="#studio-export-thumb-page,#studio-export-page-size",
-                hx_target="#studio-export-thumbs-slot",
-                hx_swap="outerHTML",
-                cls="hidden" if has_active_page_actions else "hidden",
-            )
-            if has_active_page_actions
-            else Div("", id="studio-export-live-state-poller", cls="hidden"),
         ),
         cls="space-y-3",
     )
@@ -1324,11 +1345,26 @@ def render_studio_export_tab(
                         });
                     }
 
+                    function activateThumbProgress(buttonEl) {
+                        const indicator = buttonEl && typeof buttonEl.querySelector === 'function'
+                            ? buttonEl.querySelector('.studio-thumb-progress')
+                            : null;
+                        if (!indicator) return;
+                        indicator.classList.remove(
+                            'studio-thumb-progress-idle',
+                            'studio-thumb-progress-done',
+                            'studio-thumb-progress-error',
+                        );
+                        indicator.classList.add('studio-thumb-progress-active');
+                        indicator.style.setProperty('--progress', '24%');
+                    }
+
                     const highresButtons = panel.querySelectorAll('.studio-thumb-highres-btn');
                     highresButtons.forEach((btn) => {
                         if (btn.dataset.boundClick === '1') return;
                         btn.dataset.boundClick = '1';
                         btn.addEventListener('click', () => {
+                            activateThumbProgress(btn);
                             lockThumbActions(btn);
                         });
                     });
@@ -1337,6 +1373,7 @@ def render_studio_export_tab(
                         if (btn.dataset.boundClick === '1') return;
                         btn.dataset.boundClick = '1';
                         btn.addEventListener('click', () => {
+                            activateThumbProgress(btn);
                             lockThumbActions(btn);
                         });
                     });

@@ -221,7 +221,7 @@ def get_download_job(self, job_id: str):
     cursor.execute(
         """
         SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages,
-               error_message, queue_position, priority
+               error_message, queue_position, priority, started_at, finished_at, updated_at
         FROM download_jobs
         WHERE job_id = ?
     """,
@@ -242,6 +242,9 @@ def get_download_job(self, job_id: str):
         "error": row[7],
         "queue_position": row[8],
         "priority": row[9],
+        "started_at": row[10],
+        "finished_at": row[11],
+        "updated_at": row[12],
     }
 
 

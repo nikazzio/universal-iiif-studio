@@ -565,6 +565,9 @@ def _style_tag():
         "transition: all 0.15s ease; cursor: pointer; }\n",
         ".app-btn-sm { padding: 0.32rem 0.56rem; font-size: 0.75rem; border-radius: 0.5rem; }\n",
         ".app-btn:hover { transform: translateY(-1px); }\n",
+        ".app-btn:disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; transform: none !important; "
+        "filter: none !important; }\n",
+        ".app-btn:disabled:hover { transform: none !important; filter: none !important; }\n",
         ".app-btn:focus-visible { outline: 2px solid rgba(var(--app-accent-rgb), 0.45); outline-offset: 2px; }\n",
         ".app-btn-primary { background: var(--app-primary); color: var(--app-primary-ink); "
         "border-color: rgba(var(--app-primary-rgb), 0.62); }\n",
@@ -726,19 +729,19 @@ def _style_tag():
         ".studio-thumb-opt-btn { white-space: nowrap; font-size: 0.72rem !important; "
         "padding: 0.34rem 0.54rem !important; flex: 1 1 auto; min-width: 0; }\n",
         ".studio-thumb-progress { --progress: 0%; width: 0.88rem; height: 0.88rem; border-radius: 999px; "
-        "flex: 0 0 0.88rem; "
+        "flex: 0 0 0.88rem; display: inline-block; transform-origin: 50% 50%; will-change: transform; "
         "background: conic-gradient(var(--app-accent) var(--progress), rgba(148, 163, 184, 0.28) 0); "
         "position: relative; }\n",
         ".studio-thumb-progress::after { content: ''; position: absolute; inset: 2px; border-radius: inherit; "
         "background: #fff; }\n",
         ".dark .studio-thumb-progress::after { background: #0f172a; }\n",
         ".studio-thumb-progress-idle { --progress: 0%; opacity: 0.45; }\n",
-        ".studio-thumb-progress-active { opacity: 1; }\n",
-        ".studio-thumb-progress.htmx-request { animation: spin 0.9s linear infinite; }\n",
+        ".studio-thumb-progress-active { --progress: 24%; opacity: 1; animation: spin 0.72s linear infinite; }\n",
+        ".studio-thumb-progress.htmx-request { --progress: 24%; animation: spin 0.72s linear infinite; }\n",
         ".studio-thumb-progress-done { --progress: 100%; background: conic-gradient(#10b981 100%, #10b981 100%); }\n",
         ".studio-thumb-progress-error { --progress: 100%; background: conic-gradient(#ef4444 100%, #ef4444 100%); }\n",
-        ".studio-thumb-inline-loader { width: 0.82rem !important; height: 0.82rem !important; "
-        "border-width: 2px !important; flex: 0 0 0.82rem; }\n",
+        ".studio-thumb-progress.htmx-request { "
+        "background: conic-gradient(var(--app-accent) var(--progress), rgba(148, 163, 184, 0.28) 0); }\n",
         ".studio-export-sidepanel { box-shadow: inset 0 0 0 1px rgba(var(--app-primary-rgb), 0.06); }\n",
         ".dark .studio-export-sidepanel { box-shadow: inset 0 0 0 1px rgba(var(--app-primary-rgb), 0.26); }\n",
         ".studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.66) !important; "

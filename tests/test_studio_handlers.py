@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -638,6 +639,9 @@ def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_pa
         meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
         assert int(meta.get("optimized_pages") or 0) == 1
         assert int(meta.get("skipped_pages") or 0) >= 1
+        source_pref = vm.get_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
+        assert isinstance(source_pref, dict)
+        assert str((source_pref.get("1") or {}).get("source") or "") == "optimized"
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
@@ -680,6 +684,49 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
         pref = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_highres_jobs", {})
         assert isinstance(pref, dict)
         assert str((pref.get("1") or {}).get("job_id") or "") == "job_highres_test"
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_highres_completed_updates_page_source_pref(tmp_path):
+    """Resolving completed high-res job should persist page source as highres."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_HIGHRES_SOURCE_PREF"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm = VaultManager()
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+        vm.create_download_job("job_hi_done_source", doc_id, library, "https://example.org/manifest.json")
+        vm.update_download_job("job_hi_done_source", current=1, total=1, status="completed")
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_hi_done_source", "state": "completed"}},
+        )
+
+        _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        source_pref = vm.get_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
+        assert isinstance(source_pref, dict)
+        assert str((source_pref.get("1") or {}).get("source") or "") == "highres"
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
@@ -741,7 +788,7 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
             status="saved",
             asset_state="saved",
             local_optimization_meta_json=json.dumps(
-                {"page_deltas": [{"page": 3, "bytes_saved": 2048}]},
+                {"page_deltas": [{"page": 3, "bytes_saved": 2048, "status": "ok"}]},
                 ensure_ascii=False,
             ),
         )
@@ -757,7 +804,255 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
         rendered = repr(panel)
         assert "Pag. 3" in rendered
         assert "⬇ Hi" in rendered
+        assert "⚙ Opt" in rendered
         assert "studio-thumb-progress-active" in rendered
+        assert "studio-thumb-progress-done" in rendered
+        assert re.search(
+            r"<button[^>]*(?:studio-thumb-highres-btn[^>]*disabled|disabled[^>]*studio-thumb-highres-btn)",
+            rendered,
+        )
+        assert re.search(
+            r"<button[^>]*(?:studio-thumb-opt-btn[^>]*disabled|disabled[^>]*studio-thumb-opt-btn)",
+            rendered,
+        )
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_thumbs_done_state_does_not_force_remote_probe_every_refresh(tmp_path, monkeypatch):
+    """Completed high-res state should reuse remote cache and avoid repeated probes."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_NO_REPEAT_PROBE"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_done_no_probe_repeat", "state": "completed", "source_ts": "2026-03-08 12:00:00"}},
+        )
+
+        calls = {"count": 0}
+
+        def _fake_probe(_manifest_json, _page_num):
+            calls["count"] += 1
+            return 3200, 2400, "https://example.org/iiif/page-1"
+
+        monkeypatch.setattr(studio_handlers, "probe_remote_max_dimensions", _fake_probe)
+
+        _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        assert calls["count"] == 1
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_thumbs_poller_disables_when_no_active_page_jobs(tmp_path):
+    """Thumbs endpoint should render live poller only while page jobs are active."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_POLLER_AUTO_STOP"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_poll_active", "state": "queued", "source_ts": ""}},
+        )
+        active_panel = studio_handlers.get_studio_export_thumbs(
+            doc_id=doc_id,
+            library=library,
+            thumb_page=1,
+            page_size=24,
+        )
+        active_rendered = repr(active_panel)
+        assert 'id="studio-export-live-state-poller"' in active_rendered
+        assert 'hx-trigger="load, every 4s"' in active_rendered
+
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_poll_done", "state": "completed", "source_ts": "2026-03-08 12:00:00"}},
+        )
+        idle_panel = studio_handlers.get_studio_export_thumbs(
+            doc_id=doc_id,
+            library=library,
+            thumb_page=1,
+            page_size=24,
+        )
+        idle_rendered = repr(idle_panel)
+        assert 'id="studio-export-live-state-poller"' in idle_rendered
+        assert 'hx-trigger="load, every 4s"' not in idle_rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_thumbs_marks_single_green_by_current_image_source(tmp_path):
+    """Only one completed indicator should remain green based on latest source timestamp."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_SINGLE_GREEN"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        for idx in range(2):
+            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+            local_optimization_meta_json=json.dumps(
+                {
+                    "optimized_at": "2026-03-08 11:00:00",
+                    "page_deltas": [
+                        {"page": 1, "bytes_saved": 2048, "status": "ok"},
+                        {"page": 2, "bytes_saved": 2048, "status": "ok"},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {
+                "1": {"job_id": "job_hi_old", "state": "completed", "source_ts": "2026-03-08 10:00:00"},
+                "2": {"job_id": "job_hi_new", "state": "completed", "source_ts": "2026-03-08 12:00:00"},
+            },
+        )
+        vm.set_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
+
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=2)
+        rendered = repr(panel)
+        assert re.search(
+            r'id="studio-thumb-progress-hi-1"[^>]*studio-thumb-progress-idle',
+            rendered,
+        )
+        assert re.search(
+            r'id="studio-thumb-progress-opt-1"[^>]*studio-thumb-progress-done',
+            rendered,
+        )
+        assert re.search(
+            r'id="studio-thumb-progress-hi-2"[^>]*studio-thumb-progress-done',
+            rendered,
+        )
+        assert re.search(
+            r'id="studio-thumb-progress-opt-2"[^>]*studio-thumb-progress-idle',
+            rendered,
+        )
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_thumbs_switches_green_from_opt_to_hi_after_new_highres_done(tmp_path):
+    """After optimize marked current source, a new completed high-res should move green back to Hi."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_SWITCH_OPT_TO_HI"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+            local_optimization_meta_json=json.dumps(
+                {"optimized_at": "2026-03-08 11:00:00", "page_deltas": [{"page": 1, "status": "ok"}]},
+                ensure_ascii=False,
+            ),
+        )
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_page_sources",
+            {"1": {"source": "optimized", "source_ts": "123"}},
+        )
+        vm.create_download_job("job_hi_switch", doc_id, library, "https://example.org/manifest.json")
+        vm.update_download_job("job_hi_switch", current=1, total=1, status="completed")
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_hi_switch", "state": "queued", "source_ts": ""}},
+        )
+
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        rendered = repr(panel)
+        assert re.search(r'id="studio-thumb-progress-hi-1"[^>]*studio-thumb-progress-done', rendered)
+        assert re.search(r'id="studio-thumb-progress-opt-1"[^>]*studio-thumb-progress-idle', rendered)
+        source_pref = vm.get_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
+        assert str((source_pref.get("1") or {}).get("source") or "") == "highres"
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
