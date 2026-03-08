@@ -17,6 +17,10 @@ Direct `/studio` without `doc_id` and `library` opens the recent hub (`Riprendi 
 - Top section: existing PDF inventory for the selected document.
 - Sub-tabs:
   - `Crea PDF`: profile selection and optional per-job overrides.
+  - `Pagine`: thumbnail gallery with per-page actions:
+    - `High-Res`: fetch high-resolution version of individual pages from remote source.
+    - **Ottimizza scans locali**: in-place lossy optimization of local scan images to reduce storage footprint (configurable via `settings.images.local_optimize.max_long_edge_px` and `settings.images.local_optimize.jpeg_quality`).
+      - **Security**: Optimization validates all file paths to prevent symlink-based path traversal attacks. Only files within the downloads directory are processed.
   - `Job`: export queue and progress.
 - Source mode is explicit per job:
   - `PDF da Locale (bilanciato/high-res)`

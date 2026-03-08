@@ -68,7 +68,7 @@ Nel pannello **Settings > Paths & System**:
 
 Nel tab **Studio > Output**:
 * in alto visualizzi sempre l'inventario PDF locale gia presente per il documento;
-* usi i sub-tab `Crea PDF` / `Job` per separare configurazione e monitoraggio coda;
+* usi i sub-tab `Crea PDF` / `Pagine` / `Job` per separare configurazione, visualizzazione miniature e monitoraggio coda;
 * nel sub-tab `Crea PDF` il blocco principale e:
   - **Profilo PDF** + pulsante **Gestisci profili** nella stessa riga;
   - pannello override a scomparsa (**Personalizza override per questo job**) da aprire solo quando serve.
@@ -76,9 +76,11 @@ Nel tab **Studio > Output**:
   - il profilo selezionato;
   - eventuali override compilati nel pannello espanso;
   - lo scope selezionato (`Tutte le pagine` oppure `Solo selezione`).
-* la griglia miniature mostra per ogni pagina:
-  - risoluzione **Locale** e **Online max** per confronto immediato;
-  - azione puntuale **High-Res** per scaricare solo la pagina necessaria.
+* nel sub-tab `Pagine`:
+  - la griglia miniature mostra per ogni pagina risoluzione **Locale** e **Online max** per confronto immediato;
+  - azione puntuale **High-Res** per scaricare solo la pagina necessaria;
+  - pulsante **Ottimizza scans locali** per ridurre lo spazio occupato dalle scans locali con ottimizzazione lossy (resize + compressione JPEG configurabile via `settings.images.local_optimize.max_long_edge_px` e `settings.images.local_optimize.jpeg_quality`).
+    - **Nota di sicurezza**: l'ottimizzazione valida tutti i percorsi file per prevenire attacchi di path traversal via symlink. Solo i file all'interno della directory downloads vengono processati.
 
 ### 🤖 Motori OCR
 

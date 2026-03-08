@@ -27,6 +27,7 @@ iiif-cli "<manifest-url>"
   - `Aggiungi item` performs light prefetch (`metadata.json` + `manifest.json`) without full scans.
 - `Library`: local assets entrypoint.
 - `Studio`: document workspace.
+  - **Note**: Opening `/studio` without query parameters (`doc_id` and `library`) shows the **Riprendi lavoro** (Recent Documents) hub, which displays server-side persisted document contexts for quick access to recently viewed items.
 - `Export`: batch/single export hub.
   - Inside Studio, the per-item tab is named `Output`.
 
