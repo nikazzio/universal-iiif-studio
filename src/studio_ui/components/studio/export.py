@@ -164,6 +164,8 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         f"/api/studio/export/optimize_scans?doc_id={encoded_doc}&library={encoded_lib}"
         f"&thumb_page={thumb_page}&page_size={page_size}"
     )
+    hi_indicator_id = f"studio-thumb-hi-indicator-{page}"
+    opt_indicator_id = f"studio-thumb-opt-indicator-{page}"
     return Div(
         select_btn,
         Div(
@@ -176,6 +178,7 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                 Button(
                     Div(
                         Span("⬇ Hi", cls="text-[12px] font-semibold"),
+                        Span("", id=hi_indicator_id, cls="spinner htmx-indicator studio-thumb-inline-loader"),
                         Span(
                             "",
                             id=f"studio-thumb-progress-{page}",
@@ -188,7 +191,7 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     type="button",
                     hx_post=highres_url,
                     hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#studio-thumb-progress-{page}",
+                    hx_indicator=f"#{hi_indicator_id}",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     disabled=is_busy,
@@ -197,11 +200,16 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     title="Riscarica la pagina in alta risoluzione",
                 ),
                 Button(
-                    "⚙ Opt",
+                    Div(
+                        Span("⚙ Opt", cls="text-[12px] font-semibold"),
+                        Span("", id=opt_indicator_id, cls="spinner htmx-indicator studio-thumb-inline-loader"),
+                        cls="flex items-center justify-between gap-2",
+                    ),
                     type="button",
                     hx_post=optimize_url,
                     hx_vals=f'{{"optimize_scope":"selected","selected_pages":"{page}"}}',
                     hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                    hx_indicator=f"#{opt_indicator_id}",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     cls="app-btn app-btn-neutral studio-thumb-opt-btn",
@@ -1304,13 +1312,32 @@ def render_studio_export_tab(
                     applySelectionToVisible(panel);
                     syncSelectionStore(panel);
 
+                    function lockThumbActions(buttonEl) {
+                        const actionRow = buttonEl && typeof buttonEl.closest === 'function'
+                            ? buttonEl.closest('.studio-thumb-action')
+                            : null;
+                        const peers = actionRow ? actionRow.querySelectorAll('button') : [buttonEl];
+                        peers.forEach((btn) => {
+                            if (!btn) return;
+                            btn.disabled = true;
+                            btn.classList.add('opacity-60', 'cursor-not-allowed');
+                        });
+                    }
+
                     const highresButtons = panel.querySelectorAll('.studio-thumb-highres-btn');
                     highresButtons.forEach((btn) => {
                         if (btn.dataset.boundClick === '1') return;
                         btn.dataset.boundClick = '1';
                         btn.addEventListener('click', () => {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-60', 'cursor-not-allowed');
+                            lockThumbActions(btn);
+                        });
+                    });
+                    const thumbOptimizeButtons = panel.querySelectorAll('.studio-thumb-opt-btn');
+                    thumbOptimizeButtons.forEach((btn) => {
+                        if (btn.dataset.boundClick === '1') return;
+                        btn.dataset.boundClick = '1';
+                        btn.addEventListener('click', () => {
+                            lockThumbActions(btn);
                         });
                     });
                     if (optimizeBtn && optimizeBtn.dataset.boundClick !== '1') {

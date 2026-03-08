@@ -737,6 +737,8 @@ def _style_tag():
         ".studio-thumb-progress.htmx-request { animation: spin 0.9s linear infinite; }\n",
         ".studio-thumb-progress-done { --progress: 100%; background: conic-gradient(#10b981 100%, #10b981 100%); }\n",
         ".studio-thumb-progress-error { --progress: 100%; background: conic-gradient(#ef4444 100%, #ef4444 100%); }\n",
+        ".studio-thumb-inline-loader { width: 0.82rem !important; height: 0.82rem !important; "
+        "border-width: 2px !important; flex: 0 0 0.82rem; }\n",
         ".studio-export-sidepanel { box-shadow: inset 0 0 0 1px rgba(var(--app-primary-rgb), 0.06); }\n",
         ".dark .studio-export-sidepanel { box-shadow: inset 0 0 0 1px rgba(var(--app-primary-rgb), 0.26); }\n",
         ".studio-export-page-card-selected { border-color: rgba(var(--app-primary-rgb), 0.66) !important; "
