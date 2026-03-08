@@ -175,7 +175,7 @@ Runtime notes:
 - `download_strategy_mode` defines ordered size attempts before tile stitching.
 - `iiif_quality` applies to normal page downloads and temporary remote high-res export fetches.
 - `probe_remote_max_resolution` enables `info.json` probing for Studio Export thumbnails.
-- local optimize keys are used by `POST /api/library/optimize_local_scans` (in-place lossy rewrite of `scans/`).
+- local optimize keys are used by `POST /api/studio/export/optimize_scans` (in-place lossy rewrite of `scans/`).
 
 ## `settings.ocr`
 

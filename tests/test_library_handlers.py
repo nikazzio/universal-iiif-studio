@@ -1,8 +1,6 @@
-import json
 from pathlib import Path
 
 from fasthtml.common import Div
-from PIL import Image
 
 from studio_ui.routes import library_handlers
 from universal_iiif_core.config_manager import get_config_manager
@@ -68,114 +66,6 @@ def test_library_cleanup_partial_resets_state(tmp_path):
         assert ms.get("asset_state") == "saved"
         assert int(ms.get("downloaded_canvases") or 0) == 0
         assert not any(scans.glob("pag_*.jpg"))
-    finally:
-        cm.set_downloads_dir(str(old_downloads))
-
-
-def test_library_optimize_local_scans_updates_flags_and_metadata(tmp_path):
-    """Optimize action should rewrite scans in-place and persist optimization metadata."""
-    cm = get_config_manager()
-    old_downloads = cm.get_downloads_dir()
-    old_max_edge = cm.get_setting("images.local_optimize.max_long_edge_px", 2600)
-    old_quality = cm.get_setting("images.local_optimize.jpeg_quality", 82)
-    try:
-        tmp_downloads = tmp_path / "downloads"
-        cm.set_downloads_dir(str(tmp_downloads))
-        cm.set_setting("images.local_optimize.max_long_edge_px", 900)
-        cm.set_setting("images.local_optimize.jpeg_quality", 55)
-
-        vm = VaultManager()
-        doc_id = "DOC_OPTIMIZE"
-        library = "Gallica"
-        doc_root = Path(tmp_downloads) / library / doc_id
-        scans = doc_root / "scans"
-        scans.mkdir(parents=True, exist_ok=True)
-        scan_path = scans / "pag_0000.jpg"
-        Image.new("RGB", (2400, 1800), (210, 210, 210)).save(scan_path, format="JPEG", quality=95)
-        before_size = scan_path.stat().st_size
-
-        vm.upsert_manuscript(
-            doc_id,
-            library=library,
-            local_path=str(doc_root),
-            status="partial",
-            asset_state="partial",
-            downloaded_canvases=1,
-            total_canvases=2,
-        )
-
-        result = library_handlers.library_optimize_local_scans(doc_id, library)
-        assert "Ottimizzazione completata" in repr(result)
-
-        row = vm.get_manuscript(doc_id) or {}
-        assert int(row.get("local_optimized") or 0) == 1
-        meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
-        assert int(meta.get("optimized_pages") or 0) >= 1
-        assert int(meta.get("max_long_edge_px") or 0) == 900
-        assert int(meta.get("jpeg_quality") or 0) == 55
-        assert scan_path.stat().st_size <= before_size
-    finally:
-        cm.set_downloads_dir(str(old_downloads))
-        cm.set_setting("images.local_optimize.max_long_edge_px", old_max_edge)
-        cm.set_setting("images.local_optimize.jpeg_quality", old_quality)
-
-
-def test_library_optimize_local_scans_keeps_local_flags_when_optimization_fails(tmp_path, monkeypatch):
-    """If optimization fails on every page, local scan availability must remain local."""
-    cm = get_config_manager()
-    old_downloads = cm.get_downloads_dir()
-    try:
-        tmp_downloads = tmp_path / "downloads"
-        cm.set_downloads_dir(str(tmp_downloads))
-
-        vm = VaultManager()
-        doc_id = "DOC_OPT_FAIL"
-        library = "Gallica"
-        doc_root = Path(tmp_downloads) / library / doc_id
-        scans = doc_root / "scans"
-        scans.mkdir(parents=True, exist_ok=True)
-        scan_path = scans / "pag_0000.jpg"
-        Image.new("RGB", (900, 700), (180, 180, 180)).save(scan_path, format="JPEG", quality=90)
-
-        vm.upsert_manuscript(
-            doc_id,
-            library=library,
-            local_path=str(doc_root),
-            status="partial",
-            asset_state="partial",
-            downloaded_canvases=1,
-            total_canvases=2,
-            local_scans_available=1,
-            read_source_mode="local",
-        )
-
-        def _always_fail(*_args, **_kwargs):
-            raise RuntimeError("forced optimize failure")
-
-        monkeypatch.setattr(library_handlers, "_optimize_scan_file", _always_fail)
-
-        result = library_handlers.library_optimize_local_scans(doc_id, library)
-        assert "Ottimizzazione non completata" in repr(result)
-
-        row = vm.get_manuscript(doc_id) or {}
-        assert int(row.get("local_scans_available") or 0) == 1
-        assert str(row.get("read_source_mode") or "") == "local"
-        assert scan_path.exists()
-    finally:
-        cm.set_downloads_dir(str(old_downloads))
-
-
-def test_library_optimize_local_scans_rejects_path_traversal(tmp_path):
-    """Optimization endpoint must reject paths resolving outside downloads root."""
-    cm = get_config_manager()
-    old_downloads = cm.get_downloads_dir()
-    try:
-        tmp_downloads = tmp_path / "downloads"
-        cm.set_downloads_dir(str(tmp_downloads))
-        result = library_handlers.library_optimize_local_scans("DOC_TRAV", "../outside")
-        rendered = repr(result)
-        assert "Percorso documento non valido" in rendered
-        assert not (tmp_path / "outside").exists()
     finally:
         cm.set_downloads_dir(str(old_downloads))
 

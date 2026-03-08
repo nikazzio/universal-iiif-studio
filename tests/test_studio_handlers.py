@@ -463,8 +463,10 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
     assert 'name="page_size"' in rendered
     assert 'hx-trigger="change"' in rendered
     assert 'id="studio-export-subtab-btn-build"' in rendered
+    assert 'id="studio-export-subtab-btn-pages"' in rendered
     assert 'id="studio-export-subtab-btn-jobs"' in rendered
     assert 'id="studio-export-subtab-build"' in rendered
+    assert 'id="studio-export-subtab-pages"' in rendered
     assert 'id="studio-export-subtab-jobs"' in rendered
     assert 'class="studio-export-subtabs' in rendered
     assert 'class="studio-export-subtab studio-export-subtab-active"' in rendered
@@ -477,9 +479,287 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
     assert "Crea PDF selezionato" not in rendered
     assert "studio-thumb-meta" in rendered
     assert "studio-thumb-highres-btn" in rendered
+    assert 'id="studio-export-optimize-btn"' in rendered
+    assert 'id="studio-export-live-state-poller"' in rendered
+    assert 'hx-target="#studio-export-thumbs-slot"' in rendered
+    assert "/api/studio/export/thumbs?doc_id=" in rendered
+    assert "data-export-subtab" in rendered
     assert "studio-export-profile-form" not in rendered
     assert "window.__studioExportListenersBound" in rendered
     assert "initStudioExport();" in rendered
+
+
+def test_studio_optimize_scans_updates_metadata_and_feedback(tmp_path):
+    """Studio optimize action should rewrite scans and expose optimization summary."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    old_max_edge = cm.get_setting("images.local_optimize.max_long_edge_px", 2600)
+    old_quality = cm.get_setting("images.local_optimize.jpeg_quality", 82)
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        cm.set_setting("images.local_optimize.max_long_edge_px", 900)
+        cm.set_setting("images.local_optimize.jpeg_quality", 55)
+
+        vm = VaultManager()
+        doc_id = "DOC_STUDIO_OPTIMIZE"
+        library = "Gallica"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        scan_path = scans / "pag_0000.jpg"
+        Image.new("RGB", (2400, 1800), (210, 210, 210)).save(scan_path, format="JPEG", quality=95)
+        before_size = scan_path.stat().st_size
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}), encoding="utf-8"
+        )
+
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="partial",
+            asset_state="partial",
+            downloaded_canvases=1,
+            total_canvases=2,
+        )
+
+        result = studio_handlers.optimize_studio_export_scans(doc_id, library, thumb_page=1, page_size=24)
+        rendered = repr(result)
+        assert "Ottimizzazione completata" in rendered
+        assert "Ultimo run:" in rendered
+
+        row = vm.get_manuscript(doc_id) or {}
+        assert int(row.get("local_optimized") or 0) == 1
+        meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
+        assert int(meta.get("optimized_pages") or 0) >= 1
+        assert int(meta.get("max_long_edge_px") or 0) == 900
+        assert int(meta.get("jpeg_quality") or 0) == 55
+        assert isinstance(meta.get("page_deltas"), list)
+        assert scan_path.stat().st_size <= before_size
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+        cm.set_setting("images.local_optimize.max_long_edge_px", old_max_edge)
+        cm.set_setting("images.local_optimize.jpeg_quality", old_quality)
+
+
+def test_studio_optimize_scans_rejects_path_traversal(tmp_path):
+    """Studio optimize endpoint must reject paths resolving outside downloads root."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        result = studio_handlers.optimize_studio_export_scans("DOC_TRAV", "../outside")
+        rendered = repr(result)
+        assert "Percorso documento non valido" in rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
+    """High-res button should include panel state and indicator hooks."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_HIGHRES_HOOKS"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}), encoding="utf-8"
+        )
+        VaultManager().upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+        panel = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1)
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+    rendered = repr(panel)
+    assert "studio-thumb-highres-btn" in rendered
+    assert "studio-thumb-progress-" in rendered
+    assert 'hx-include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size"' in rendered
+
+
+def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_path):
+    """Selected optimize scope should process selected pages and report skipped ones."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_OPTIMIZE_SELECTED_SCOPE"
+        library = "Gallica"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1800, 1400), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG", quality=94)
+        Image.new("RGB", (1800, 1400), (210, 210, 210)).save(scans_dir / "pag_0001.jpg", format="JPEG", quality=94)
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="partial",
+            asset_state="partial",
+        )
+
+        result = studio_handlers.optimize_studio_export_scans(
+            doc_id,
+            library,
+            thumb_page=1,
+            page_size=24,
+            selected_pages="1",
+            optimize_scope="selected",
+        )
+        rendered = repr(result)
+        assert "Ultimo run: (selezione)" in rendered
+
+        row = vm.get_manuscript(doc_id) or {}
+        meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
+        assert int(meta.get("optimized_pages") or 0) == 1
+        assert int(meta.get("skipped_pages") or 0) >= 1
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypatch):
+    """Queuing high-res should persist per-page job state and render inline feedback only."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_HIGHRES_QUEUE_STATE"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        VaultManager().upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            manifest_url="https://example.org/manifest.json",
+            status="saved",
+            asset_state="saved",
+        )
+        monkeypatch.setattr(studio_handlers, "start_downloader_thread", lambda **_kwargs: "job_highres_test")
+
+        result = studio_handlers.download_highres_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
+        rendered = repr(result)
+        assert "⬇ Hi" in rendered
+        assert "studio-thumb-progress-active" in rendered
+        assert not isinstance(result, list)
+
+        pref = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_highres_jobs", {})
+        assert isinstance(pref, dict)
+        assert str((pref.get("1") or {}).get("job_id") or "") == "job_highres_test"
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_export_live_state_keeps_requested_subtab():
+    """Live-state endpoint should preserve requested subtab instead of forcing pages."""
+    doc_id = "MSS_LIVE_STATE_SUBTAB"
+    library = "Vaticana"
+    cm = get_config_manager()
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+        encoding="utf-8",
+    )
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        status="saved",
+        asset_state="saved",
+    )
+    panel = studio_handlers.get_studio_export_live_state(doc_id=doc_id, library=library, subtab="jobs")
+    rendered = repr(panel)
+    assert 'id="studio-export-subtab-jobs" class="mt-3"' in rendered
+
+
+def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_path):
+    """Thumb pagination endpoint should keep per-page high-res in-flight feedback."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_STATE"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        for idx in range(4):
+            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+            local_optimization_meta_json=json.dumps(
+                {"page_deltas": [{"page": 3, "bytes_saved": 2048}]},
+                ensure_ascii=False,
+            ),
+        )
+        vm.create_download_job("job_highres_running", doc_id, library, "https://example.org/manifest.json")
+        vm.update_download_job("job_highres_running", current=1, total=4, status="running")
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"3": {"job_id": "job_highres_running", "state": "queued"}},
+        )
+
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=3, page_size=1)
+        rendered = repr(panel)
+        assert "Pag. 3" in rendered
+        assert "⬇ Hi" in rendered
+        assert "studio-thumb-progress-active" in rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
 
 
 def test_export_thumb_page_size_preference_is_persisted_per_item():

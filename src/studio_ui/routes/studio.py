@@ -30,10 +30,12 @@ def setup_studio_routes(app):
     app.post("/api/save_transcription")(handlers.save_transcription)
     app.post("/api/studio/context/save")(handlers.save_studio_context_api)
     app.post("/api/studio/export/start")(handlers.start_studio_export)
+    app.post("/api/studio/export/optimize_scans")(handlers.optimize_studio_export_scans)
     app.post("/api/studio/export/page_highres")(handlers.download_highres_export_page)
     app.get("/api/studio/export/jobs")(handlers.get_studio_export_jobs)
     app.get("/api/studio/export/pdf_list")(handlers.get_studio_export_pdf_list)
     app.get("/api/studio/export/thumbs")(handlers.get_studio_export_thumbs)
+    app.get("/api/studio/export/live_state")(handlers.get_studio_export_live_state)
 
     # Deletions
     app.delete("/api/delete_snippet/{snippet_id}")(handlers.delete_snippet)

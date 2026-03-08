@@ -124,12 +124,10 @@ def _card_action_flags(doc: dict) -> dict[str, bool]:
     state = str(doc.get("asset_state") or "saved").lower()
     is_running = state in {"downloading", "running", "queued"}
     has_missing = bool(doc.get("has_missing_pages"))
-    local_pages_count = int(doc.get("local_pages_count") or 0)
     return {
         "download_full": not is_running and state == "saved",
         "retry_missing": not is_running and has_missing,
         "cleanup_partial": not is_running and state in {"partial", "error"},
-        "optimize_scans": not is_running and local_pages_count > 0,
         "delete_doc": not is_running,
     }
 
@@ -441,13 +439,6 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
             "neutral",
             enabled=action_flags["retry_missing"],
             hint="Attivo solo quando ci sono pagine mancanti note.",
-        ),
-        _action_button(
-            "🗜️ Ottimizza scans",
-            f"/api/library/optimize_local_scans?doc_id={doc_id}&library={library}",
-            "neutral",
-            enabled=action_flags["optimize_scans"],
-            hint="Attivo quando sono presenti scansioni locali.",
         ),
         _action_button(
             "🧹 Pulizia parziale",
