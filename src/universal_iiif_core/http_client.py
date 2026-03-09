@@ -269,6 +269,7 @@ class HTTPClient:
         status_code: int,
         retry_after_header: str | None,
         policy: dict[str, Any],
+        hostname: str = "unknown",
     ) -> float:
         """
         Calculate exponential backoff wait time.
@@ -278,6 +279,7 @@ class HTTPClient:
             status_code: HTTP status code
             retry_after_header: Optional Retry-After header value
             policy: Resolved network policy
+            hostname: Hostname for rate limiter cooldown application
 
         Returns:
             Wait time in seconds
@@ -308,7 +310,6 @@ class HTTPClient:
         wait = max(capped_wait, retry_after_wait)
 
         # Apply cooldowns for 403/429 via rate limiter
-        hostname = "unknown"  # Will be set by caller
         if status_code == 403:
             cooldown_s = int(self._get_setting(policy, "cooldown_on_403_s", 0))
             if cooldown_s > 0:
