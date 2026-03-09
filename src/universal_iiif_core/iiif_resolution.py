@@ -58,7 +58,8 @@ def probe_remote_max_dimensions(
     
     # Create temporary client if none provided
     if http_client is None:
-        from .config_manager import cm
+        from .config_manager import get_config_manager
+        cm = get_config_manager()
         http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
     
     try:
@@ -105,7 +106,8 @@ def fetch_highres_page_image(
 
     # Create temporary client if none provided
     if http_client is None:
-        from .config_manager import cm
+        from .config_manager import get_config_manager
+        cm = get_config_manager()
         http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
 
     try:

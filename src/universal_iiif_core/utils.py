@@ -44,9 +44,10 @@ def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | N
         Parsed JSON data or None on error
     """
     from .http_client import HTTPClient
-    from .config_manager import cm
+    from .config_manager import get_config_manager
     
     # Create temporary HTTPClient with current config
+    cm = get_config_manager()
     http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
     
     try:
