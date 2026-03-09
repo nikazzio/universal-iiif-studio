@@ -590,44 +590,57 @@ class IIIFDownloader:
         base_url: str,
         should_cancel: Callable[[], bool] | None = None,
     ):
-        retries = max(1, int(self.network_policy.get("retry_max_attempts") or 1))
-        for attempt in range(retries):
-            if not self._wait_before_download_attempt(should_cancel=should_cancel):
+        """
+        Download canvas image with retries.
+        
+        HTTPClient handles retries, backoff, and rate limiting automatically.
+        We just need to try each URL and save the first successful response.
+        """
+        # Check cancellation before starting
+        if self._stop_requested(should_cancel):
+            return None
+            
+        for url in urls_to_try:
+            if self._stop_requested(should_cancel):
                 return None
-
-            for url in urls_to_try:
-                if self._stop_requested(should_cancel):
-                    return None
-                try:
-                    response = self.session.get(url, timeout=self._request_timeout)
-                    saved = self._save_download_response(
-                        response,
-                        filename=filename,
-                        canvas=canvas,
-                        index=index,
-                        url=url,
+                
+            try:
+                # HTTPClient handles all retry logic, backoff, and rate limiting
+                response = self.http_client.get(
+                    url,
+                    library_name=self.library,
+                    timeout=self._request_timeout,
+                )
+                
+                # Try to save the response
+                saved = self._save_download_response(
+                    response,
+                    filename=filename,
+                    canvas=canvas,
+                    index=index,
+                    url=url,
+                )
+                
+                if saved:
+                    return saved
+                    
+                # If save failed but status was OK, log and try next URL
+                if response.status_code != 200:
+                    self.logger.debug(
+                        "Canvas %s returned status %s for %s: %s",
+                        index,
+                        response.status_code,
+                        url,
+                        response.text[:200],
                     )
-                    if saved:
-                        return saved
-                    if response.status_code != 200:
-                        self.logger.debug(
-                            "Canvas %s returned status %s for %s: %s",
-                            index,
-                            response.status_code,
-                            url,
-                            response.text[:200],
-                        )
-                    self._apply_backoff_for_status(
-                        int(response.status_code),
-                        response.headers.get("Retry-After"),
-                        attempt=attempt,
-                    )
-                    if response.status_code in {403, 429}:
-                        break
-                except Exception as exc:
-                    self.logger.debug("Download attempt failed for %s: %s", url, exc, exc_info=True)
-                    continue
-        message = f"Failed to download canvas {index} after {retries} attempts; URLs tried: {urls_to_try}"
+                    
+            except Exception as exc:
+                self.logger.debug("Download attempt failed for %s: %s", url, exc, exc_info=True)
+                # Try next URL
+                continue
+                
+        # All URLs failed
+        message = f"Failed to download canvas {index}; URLs tried: {urls_to_try}"
         self.logger.warning(message)
         self._mark_job_error(index, message)
         return None
