@@ -261,3 +261,183 @@ class HTTPClient:
                 host_stats["successes"] += 1
             else:
                 host_stats["failures"] += 1
+
+    def _compute_backoff(
+        self,
+        attempt: int,
+        status_code: int,
+        retry_after_header: str | None,
+        policy: dict[str, Any],
+    ) -> float:
+        """
+        Calculate exponential backoff wait time.
+
+        Args:
+            attempt: Retry attempt number (0-indexed)
+            status_code: HTTP status code
+            retry_after_header: Optional Retry-After header value
+            policy: Resolved network policy
+
+        Returns:
+            Wait time in seconds
+        """
+        # Exponential backoff: base * (2^attempt)
+        backoff_base = float(
+            self._get_setting(policy, "backoff_base_s", 15.0)
+            or self._get_setting(policy, "default_backoff_base_s", 15.0)
+        )
+        backoff_cap = float(
+            self._get_setting(policy, "backoff_cap_s", 300.0)
+            or self._get_setting(policy, "default_backoff_cap_s", 300.0)
+        )
+
+        base_wait = backoff_base * (2**attempt)
+        capped_wait = min(base_wait, backoff_cap)
+
+        # Honor Retry-After header if configured
+        retry_after_wait = 0.0
+        respect_retry_after = bool(self._get_setting(policy, "respect_retry_after", True))
+        if respect_retry_after and retry_after_header:
+            try:
+                retry_after_wait = max(float(retry_after_header), 0.0)
+            except (ValueError, TypeError):
+                self.logger.debug(f"Could not parse Retry-After header: {retry_after_header}")
+
+        # Use the longer of backoff or Retry-After
+        wait = max(capped_wait, retry_after_wait)
+
+        # Apply cooldowns for 403/429 via rate limiter
+        hostname = "unknown"  # Will be set by caller
+        if status_code == 403:
+            cooldown_s = int(self._get_setting(policy, "cooldown_on_403_s", 0))
+            if cooldown_s > 0:
+                limiter = get_host_limiter(hostname)
+                limiter.set_cooldown(cooldown_s)
+                self.logger.debug(f"Set {cooldown_s}s cooldown for {hostname} due to 403")
+        elif status_code == 429:
+            cooldown_s = int(self._get_setting(policy, "cooldown_on_429_s", 0))
+            if cooldown_s > 0:
+                limiter = get_host_limiter(hostname)
+                limiter.set_cooldown(cooldown_s)
+                self.logger.debug(f"Set {cooldown_s}s cooldown for {hostname} due to 429")
+
+        return wait
+
+    def _is_retriable_error(self, response: requests.Response | None, exception: Exception | None) -> bool:
+        """
+        Determine if error is retriable.
+
+        Args:
+            response: Response object if available
+            exception: Exception if raised
+
+        Returns:
+            True if error is retriable
+        """
+        # Retriable status codes
+        retriable_status_codes = {429, 500, 502, 503, 504}
+
+        if response is not None:
+            return response.status_code in retriable_status_codes
+
+        # Retriable exceptions
+        if exception is not None:
+            return isinstance(exception, (requests.Timeout, requests.ConnectionError))
+
+        return False
+
+    def _retry_request(
+        self,
+        url: str,
+        policy: dict[str, Any],
+        hostname: str,
+        timeout: tuple[int, int],
+        **kwargs,
+    ) -> requests.Response:
+        """
+        Execute request with retry logic.
+
+        Args:
+            url: Target URL
+            policy: Resolved network policy
+            hostname: Hostname for logging
+            timeout: Timeout tuple (connect, read)
+            **kwargs: Additional arguments for session.get()
+
+        Returns:
+            Response object
+
+        Raises:
+            requests.RequestException: On unrecoverable failure
+        """
+        max_retries = int(
+            self._get_setting(policy, "retry_max_attempts", 5)
+            or self._get_setting(policy, "default_retry_max_attempts", 5)
+        )
+
+        last_exception = None
+        retry_count = 0
+
+        for attempt in range(max_retries):
+            try:
+                self.logger.debug(f"Request attempt {attempt + 1}/{max_retries} for {url}")
+
+                response = self.session.get(url, timeout=timeout, **kwargs)
+
+                # Check if we should retry based on status
+                if self._is_retriable_error(response, None):
+                    retry_count += 1
+                    self.logger.debug(f"Retriable status {response.status_code} for {url}")
+
+                    # Calculate backoff
+                    wait = self._compute_backoff(
+                        attempt, response.status_code, response.headers.get("Retry-After"), policy
+                    )
+
+                    # Special handling for 403/429: break early
+                    if response.status_code in {403, 429}:
+                        self.logger.warning(
+                            f"Rate limit error {response.status_code} for {hostname}, backing off {wait:.1f}s"
+                        )
+                        if attempt < max_retries - 1:
+                            time.sleep(wait)
+                            continue
+                        else:
+                            # Last attempt, raise
+                            response.raise_for_status()
+
+                    # Other retriable errors
+                    if attempt < max_retries - 1:
+                        time.sleep(wait)
+                        continue
+                    else:
+                        # Last attempt
+                        response.raise_for_status()
+
+                # Success or non-retriable error
+                response.raise_for_status()
+                return response
+
+            except (requests.Timeout, requests.ConnectionError) as e:
+                last_exception = e
+                retry_count += 1
+                self.logger.debug(f"Request exception for {url}: {e}")
+
+                if attempt < max_retries - 1:
+                    # Calculate backoff
+                    wait = self._compute_backoff(attempt, 0, None, policy)
+                    self.logger.debug(f"Retrying after {wait:.1f}s")
+                    time.sleep(wait)
+                else:
+                    # Last attempt, raise
+                    raise
+
+            except requests.RequestException as e:
+                # Non-retriable request exception
+                self.logger.debug(f"Non-retriable exception for {url}: {e}")
+                raise
+
+        # Should not reach here, but just in case
+        if last_exception:
+            raise last_exception
+        raise requests.RequestException(f"Failed after {max_retries} attempts")

@@ -1,6 +1,7 @@
 """Tests for http_client module - skeleton and policy resolution."""
 
 import pytest
+import requests
 
 from universal_iiif_core.http_client import HTTPClient, HTTPMetrics
 
@@ -284,3 +285,91 @@ class TestMetrics:
         metrics = client.get_metrics()
         # Average: (0.1 + 0.3 + 0.2) / 3 = 0.2s = 200ms
         assert 199.0 < metrics["avg_response_time_ms"] < 201.0
+
+
+class TestRetryLogic:
+    """Test retry logic with exponential backoff."""
+
+    def test_compute_backoff_exponential(self, mock_network_policy):
+        """Test exponential backoff calculation."""
+        client = HTTPClient(mock_network_policy)
+
+        policy = client._resolve_policy("https://example.com")
+
+        # Attempt 0: 15 * (2^0) = 15s
+        wait0 = client._compute_backoff(0, 500, None, policy)
+        assert wait0 == 15.0
+
+        # Attempt 1: 15 * (2^1) = 30s
+        wait1 = client._compute_backoff(1, 500, None, policy)
+        assert wait1 == 30.0
+
+        # Attempt 2: 15 * (2^2) = 60s
+        wait2 = client._compute_backoff(2, 500, None, policy)
+        assert wait2 == 60.0
+
+    def test_compute_backoff_respects_cap(self, mock_network_policy):
+        """Test backoff respects maximum cap."""
+        client = HTTPClient(mock_network_policy)
+
+        policy = client._resolve_policy("https://example.com")
+
+        # Attempt 10: 15 * (2^10) = 15360s, but cap is 300s
+        wait = client._compute_backoff(10, 500, None, policy)
+        assert wait == 300.0
+
+    def test_compute_backoff_retry_after_header(self, mock_network_policy):
+        """Test Retry-After header is honored."""
+        client = HTTPClient(mock_network_policy)
+
+        policy = client._resolve_policy("https://example.com")
+
+        # Retry-After: 120 is longer than backoff (15s), should use 120
+        wait = client._compute_backoff(0, 429, "120", policy)
+        assert wait == 120.0
+
+    def test_compute_backoff_uses_longer_value(self, mock_network_policy):
+        """Test backoff uses longer of calculated or Retry-After."""
+        client = HTTPClient(mock_network_policy)
+
+        policy = client._resolve_policy("https://example.com")
+
+        # Attempt 3: 15 * (2^3) = 120s, Retry-After: 60s
+        # Should use 120s (longer)
+        wait = client._compute_backoff(3, 429, "60", policy)
+        assert wait == 120.0
+
+    def test_is_retriable_error_status_codes(self, mock_network_policy):
+        """Test retriable status codes are identified."""
+        client = HTTPClient(mock_network_policy)
+
+        # Mock responses with different status codes
+        class MockResponse:
+            def __init__(self, status_code):
+                self.status_code = status_code
+
+        # Retriable
+        assert client._is_retriable_error(MockResponse(429), None) is True
+        assert client._is_retriable_error(MockResponse(500), None) is True
+        assert client._is_retriable_error(MockResponse(502), None) is True
+        assert client._is_retriable_error(MockResponse(503), None) is True
+        assert client._is_retriable_error(MockResponse(504), None) is True
+
+        # Non-retriable
+        assert client._is_retriable_error(MockResponse(200), None) is False
+        assert client._is_retriable_error(MockResponse(400), None) is False
+        assert client._is_retriable_error(MockResponse(401), None) is False
+        assert client._is_retriable_error(MockResponse(403), None) is False
+        assert client._is_retriable_error(MockResponse(404), None) is False
+
+    def test_is_retriable_error_exceptions(self, mock_network_policy):
+        """Test retriable exceptions are identified."""
+        client = HTTPClient(mock_network_policy)
+
+        # Retriable
+        assert client._is_retriable_error(None, requests.Timeout()) is True
+        assert client._is_retriable_error(None, requests.ConnectionError()) is True
+
+        # Non-retriable
+        assert client._is_retriable_error(None, requests.HTTPError()) is False
+        assert client._is_retriable_error(None, ValueError()) is False
