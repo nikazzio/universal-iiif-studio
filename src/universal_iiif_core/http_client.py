@@ -441,3 +441,137 @@ class HTTPClient:
         if last_exception:
             raise last_exception
         raise requests.RequestException(f"Failed after {max_retries} attempts")
+
+    def get(
+        self,
+        url: str,
+        *,
+        library_name: str | None = None,
+        timeout: tuple[int, int] | None = None,
+        retries: int | None = None,
+        stream: bool = False,
+        headers: dict[str, str] | None = None,
+        **kwargs,
+    ) -> requests.Response:
+        """
+        GET request with retry, rate limiting, and timeout.
+
+        Integrates all HTTP client features:
+        - Per-library policy resolution
+        - Rate limiting via HostRateLimiter
+        - Per-host concurrency control via Semaphore
+        - Automatic retry with exponential backoff
+        - Metrics collection
+
+        Args:
+            url: Target URL
+            library_name: Optional library identifier for explicit policy lookup
+            timeout: Override timeout as (connect, read) tuple
+            retries: Override max retry attempts
+            stream: Stream response body
+            headers: Additional headers to merge with defaults
+            **kwargs: Additional arguments passed to requests.Session.get()
+
+        Returns:
+            requests.Response object
+
+        Raises:
+            requests.RequestException: On unrecoverable failure
+
+        Examples:
+            >>> client.get("https://example.com/image.jpg")
+            >>> client.get("https://gallica.bnf.fr/image.jpg", library_name="gallica")
+            >>> client.get("https://example.com/api", timeout=(5, 15), retries=3)
+        """
+        start_time = time.time()
+        hostname = urlparse(url).netloc or "unknown"
+
+        # Resolve effective policy
+        policy = self._resolve_policy(url, library_name)
+
+        # Resolve timeout (parameter > policy > default)
+        if timeout is None:
+            connect_timeout = int(self._get_setting(policy, "connect_timeout_s", 10))
+            read_timeout = int(self._get_setting(policy, "read_timeout_s", 30))
+            timeout = (connect_timeout, read_timeout)
+
+        # Merge headers
+        request_headers = dict(self.session.headers)
+        if headers:
+            request_headers.update(headers)
+
+        # Get per-host semaphore for concurrency control
+        semaphore = self._get_host_semaphore(hostname, policy)
+
+        # Get rate limiter for this host
+        rate_limiter = get_host_limiter(hostname)
+
+        # Wait for rate limiter
+        burst_window = int(self._get_setting(policy, "burst_window_s", 60))
+        burst_max = int(self._get_setting(policy, "burst_max_requests", 100))
+
+        if not rate_limiter.wait_turn(window_s=burst_window, max_requests=burst_max):
+            # Cancelled (should_cancel would need to be passed in)
+            raise requests.RequestException("Request cancelled during rate limiting")
+
+        # Acquire concurrency semaphore
+        acquired = semaphore.acquire(timeout=30)
+        if not acquired:
+            raise requests.RequestException(f"Could not acquire semaphore for {hostname}")
+
+        try:
+            # Execute request with retry logic
+            # Pass a modified policy if retries override was provided
+            if retries is not None:
+                policy = {**policy, "retry_max_attempts": retries}
+
+            response = self._retry_request(
+                url,
+                policy,
+                hostname,
+                timeout,
+                stream=stream,
+                headers=request_headers,
+                **kwargs,
+            )
+
+            # Update metrics on success
+            response_time = time.time() - start_time
+            retry_count = 0  # _retry_request could track this better
+            self._update_metrics(
+                success=True,
+                hostname=hostname,
+                response_time=response_time,
+                retries=retry_count,
+            )
+
+            return response
+
+        except requests.Timeout as e:
+            # Update metrics on timeout
+            response_time = time.time() - start_time
+            self._update_metrics(
+                success=False,
+                hostname=hostname,
+                response_time=response_time,
+                timeout=True,
+            )
+            self.logger.warning(f"Request timeout for {hostname}: {url}")
+            raise
+
+        except requests.RequestException as e:
+            # Update metrics on other failures
+            response_time = time.time() - start_time
+            rate_limited = "429" in str(e) or "rate limit" in str(e).lower()
+            self._update_metrics(
+                success=False,
+                hostname=hostname,
+                response_time=response_time,
+                rate_limited=rate_limited,
+            )
+            self.logger.warning(f"Request failed for {hostname}: {url}, error: {e}")
+            raise
+
+        finally:
+            # Always release semaphore
+            semaphore.release()

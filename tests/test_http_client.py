@@ -373,3 +373,125 @@ class TestRetryLogic:
         # Non-retriable
         assert client._is_retriable_error(None, requests.HTTPError()) is False
         assert client._is_retriable_error(None, ValueError()) is False
+
+
+class TestGetMethod:
+    """Test main get() method integration."""
+
+    def test_get_resolves_policy_with_library_name(self, mock_network_policy, monkeypatch):
+        """Test get() resolves policy with explicit library_name."""
+        client = HTTPClient(mock_network_policy)
+
+        # Mock the actual request
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b"test content"
+
+        def mock_get(*args, **kwargs):
+            # Verify timeout comes from Gallica policy
+            assert kwargs["timeout"] == (15, 45)  # Gallica overrides
+            return mock_response
+
+        monkeypatch.setattr(client.session, "get", mock_get)
+
+        # Make request with explicit library
+        response = client.get("https://example.com/image.jpg", library_name="gallica")
+
+        assert response.status_code == 200
+
+        # Check metrics updated
+        metrics = client.get_metrics()
+        assert metrics["total_requests"] == 1
+        assert metrics["successful_requests"] == 1
+
+    def test_get_uses_hostname_policy(self, mock_network_policy, monkeypatch):
+        """Test get() extracts hostname and uses matching policy."""
+        client = HTTPClient(mock_network_policy)
+
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b"test"
+
+        def mock_get(*args, **kwargs):
+            # Verify timeout comes from Bodleian policy
+            assert kwargs["timeout"][1] == 60  # Bodleian read timeout
+            return mock_response
+
+        monkeypatch.setattr(client.session, "get", mock_get)
+
+        response = client.get("https://digital.bodleian.ox.ac.uk/objects/123/image.jpg")
+        assert response.status_code == 200
+
+    def test_get_timeout_override(self, mock_network_policy, monkeypatch):
+        """Test explicit timeout parameter overrides policy."""
+        client = HTTPClient(mock_network_policy)
+
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b"test"
+
+        def mock_get(*args, **kwargs):
+            # Verify explicit timeout is used
+            assert kwargs["timeout"] == (5, 20)
+            return mock_response
+
+        monkeypatch.setattr(client.session, "get", mock_get)
+
+        response = client.get("https://example.com/image.jpg", timeout=(5, 20))
+        assert response.status_code == 200
+
+    def test_get_with_stream(self, mock_network_policy, monkeypatch):
+        """Test get() with stream=True."""
+        client = HTTPClient(mock_network_policy)
+
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+
+        def mock_get(*args, **kwargs):
+            assert kwargs["stream"] is True
+            return mock_response
+
+        monkeypatch.setattr(client.session, "get", mock_get)
+
+        response = client.get("https://example.com/image.jpg", stream=True)
+        assert response.status_code == 200
+
+    def test_get_with_custom_headers(self, mock_network_policy, monkeypatch):
+        """Test get() merges custom headers."""
+        client = HTTPClient(mock_network_policy)
+
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b"test"
+
+        def mock_get(*args, **kwargs):
+            # Check custom header is present
+            assert "X-Custom-Header" in kwargs["headers"]
+            assert kwargs["headers"]["X-Custom-Header"] == "test-value"
+            return mock_response
+
+        monkeypatch.setattr(client.session, "get", mock_get)
+
+        response = client.get("https://example.com/api", headers={"X-Custom-Header": "test-value"})
+        assert response.status_code == 200
+
+    def test_get_updates_per_host_stats(self, mock_network_policy, monkeypatch):
+        """Test get() updates per-host statistics."""
+        client = HTTPClient(mock_network_policy)
+
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b"test"
+
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+
+        # Make requests to different hosts
+        client.get("https://host1.com/image.jpg")
+        client.get("https://host2.com/image.jpg")
+        client.get("https://host1.com/image2.jpg")
+
+        metrics = client.get_metrics()
+        assert "host1.com" in metrics["per_host_stats"]
+        assert "host2.com" in metrics["per_host_stats"]
+        assert metrics["per_host_stats"]["host1.com"]["requests"] == 2
+        assert metrics["per_host_stats"]["host2.com"]["requests"] == 1
