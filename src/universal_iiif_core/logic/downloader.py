@@ -3,7 +3,6 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from secrets import SystemRandom
@@ -15,6 +14,7 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .._rate_limiter import get_host_limiter
 from ..config_manager import get_config_manager
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
 from ..library_catalog import parse_manifest_catalog
@@ -26,61 +26,6 @@ from ..utils import DEFAULT_HEADERS, ensure_dir, get_json, save_json
 from .download_helpers import derive_identifier
 
 SECURE_RANDOM = SystemRandom()
-_HOST_LIMITER_LOCK = threading.Lock()
-_HOST_LIMITERS: dict[str, HostRateLimiter] = {}
-
-
-class HostRateLimiter:
-    """Simple host-wide limiter shared across downloader instances."""
-
-    def __init__(self) -> None:
-        self._timestamps: deque[float] = deque()
-        self._cooldown_until = 0.0
-        self._lock = threading.Lock()
-
-    def wait_turn(
-        self,
-        *,
-        window_s: int,
-        max_requests: int,
-        should_cancel: Callable[[], bool] | None = None,
-    ) -> bool:
-        while True:
-            if should_cancel and should_cancel():
-                return False
-            wait_s = 0.0
-            now = time.time()
-            with self._lock:
-                if now < self._cooldown_until:
-                    wait_s = max(wait_s, self._cooldown_until - now)
-                cutoff = now - float(window_s)
-                while self._timestamps and self._timestamps[0] <= cutoff:
-                    self._timestamps.popleft()
-                if len(self._timestamps) < max_requests and wait_s <= 0:
-                    self._timestamps.append(now)
-                    return True
-                if self._timestamps:
-                    wait_s = max(wait_s, self._timestamps[0] + float(window_s) - now)
-                else:
-                    wait_s = max(wait_s, 0.05)
-            time.sleep(max(wait_s, 0.05))
-
-    def set_cooldown(self, cooldown_s: int) -> None:
-        if cooldown_s <= 0:
-            return
-        until = time.time() + float(cooldown_s)
-        with self._lock:
-            if until > self._cooldown_until:
-                self._cooldown_until = until
-
-
-def _get_host_limiter(host_key: str) -> HostRateLimiter:
-    with _HOST_LIMITER_LOCK:
-        limiter = _HOST_LIMITERS.get(host_key)
-        if limiter is None:
-            limiter = HostRateLimiter()
-            _HOST_LIMITERS[host_key] = limiter
-        return limiter
 
 
 class CanvasServiceLocator:
@@ -341,7 +286,7 @@ class IIIFDownloader:
         else:
             self.workers = max(1, min(int(workers), 8))
         self._host_key = str(urlparse(self.manifest_url).netloc or "unknown")
-        self._host_limiter = _get_host_limiter(self._host_key)
+        self._host_limiter = get_host_limiter(self._host_key)
         self._request_timeout = (
             int(self.network_policy.get("connect_timeout_s") or 10),
             int(self.network_policy.get("read_timeout_s") or 30),
