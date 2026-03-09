@@ -495,3 +495,120 @@ class TestGetMethod:
         assert "host2.com" in metrics["per_host_stats"]
         assert metrics["per_host_stats"]["host1.com"]["requests"] == 2
         assert metrics["per_host_stats"]["host2.com"]["requests"] == 1
+
+
+class TestGetJsonMethod:
+    """Test get_json() method with JSON parsing."""
+
+    def test_get_json_success(self, mock_network_policy, monkeypatch):
+        """Test get_json() parses JSON successfully."""
+        client = HTTPClient(mock_network_policy)
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b'{"key": "value", "number": 42}'
+        
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+        
+        result = client.get_json("https://example.com/api/data.json")
+        
+        assert result == {"key": "value", "number": 42}
+
+    def test_get_json_array(self, mock_network_policy, monkeypatch):
+        """Test get_json() handles JSON arrays."""
+        client = HTTPClient(mock_network_policy)
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b'[1, 2, 3, "test"]'
+        
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+        
+        result = client.get_json("https://example.com/api/list.json")
+        
+        assert result == [1, 2, 3, "test"]
+
+    def test_get_json_empty_response(self, mock_network_policy, monkeypatch):
+        """Test get_json() handles empty response."""
+        client = HTTPClient(mock_network_policy)
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b''
+        
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+        
+        result = client.get_json("https://example.com/api/empty.json")
+        
+        assert result is None
+
+    def test_get_json_with_bom(self, mock_network_policy, monkeypatch):
+        """Test get_json() removes BOM."""
+        client = HTTPClient(mock_network_policy)
+        
+        # JSON with UTF-8 BOM
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b'\xef\xbb\xbf{"key": "value"}'
+        mock_response.encoding = 'utf-8'
+        
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+        
+        result = client.get_json("https://example.com/api/bom.json")
+        
+        assert result == {"key": "value"}
+
+    def test_get_json_malformed_returns_none(self, mock_network_policy, monkeypatch):
+        """Test get_json() returns None for malformed JSON."""
+        client = HTTPClient(mock_network_policy)
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b'{"invalid": json syntax}'
+        
+        monkeypatch.setattr(client.session, "get", lambda *args, **kwargs: mock_response)
+        
+        result = client.get_json("https://example.com/api/malformed.json")
+        
+        assert result is None
+
+    def test_get_json_network_error_returns_none(self, mock_network_policy, monkeypatch):
+        """Test get_json() returns None on network error."""
+        client = HTTPClient(mock_network_policy)
+        
+        def mock_get(*args, **kwargs):
+            raise requests.ConnectionError("Network error")
+        
+        monkeypatch.setattr(client.session, "get", mock_get)
+        
+        result = client.get_json("https://example.com/api/data.json")
+        
+        assert result is None
+
+    def test_get_json_passes_parameters(self, mock_network_policy, monkeypatch):
+        """Test get_json() passes parameters to get()."""
+        client = HTTPClient(mock_network_policy)
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        mock_response._content = b'{"success": true}'
+        
+        captured_kwargs = {}
+        
+        def mock_get(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return mock_response
+        
+        monkeypatch.setattr(client.session, "get", mock_get)
+        
+        result = client.get_json(
+            "https://example.com/api/data.json",
+            library_name="gallica",
+            timeout=(5, 20),
+            headers={"X-Custom": "test"}
+        )
+        
+        assert result == {"success": True}
+        # Verify parameters were passed through
+        assert captured_kwargs["timeout"] == (5, 20)
+        assert "X-Custom" in captured_kwargs["headers"]

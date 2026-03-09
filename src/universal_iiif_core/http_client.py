@@ -16,6 +16,7 @@ This architecture enables unlimited library growth without code changes.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -575,3 +576,105 @@ class HTTPClient:
         finally:
             # Always release semaphore
             semaphore.release()
+
+    def get_json(
+        self,
+        url: str,
+        *,
+        library_name: str | None = None,
+        timeout: tuple[int, int] | None = None,
+        retries: int | None = None,
+        headers: dict[str, str] | None = None,
+        **kwargs,
+    ) -> dict[str, Any] | list[Any] | None:
+        """
+        GET JSON with automatic parsing and fallback handling.
+
+        Wraps get() with JSON-specific parsing logic including:
+        - Brotli decompression support
+        - BOM removal
+        - UTF-8 fallback decoding
+        - Empty response handling
+
+        Args:
+            url: Target URL
+            library_name: Optional library identifier
+            timeout: Override timeout
+            retries: Override retry attempts
+            headers: Additional headers
+            **kwargs: Additional arguments passed to get()
+
+        Returns:
+            Parsed JSON (dict or list) or None on failure
+
+        Examples:
+            >>> client.get_json("https://example.com/manifest.json")
+            >>> client.get_json("https://api.example.com/data", library_name="gallica")
+        """
+        try:
+            response = self.get(
+                url,
+                library_name=library_name,
+                timeout=timeout,
+                retries=retries,
+                headers=headers,
+                **kwargs,
+            )
+
+            # Handle empty response
+            if not response.content:
+                self.logger.warning(f"Empty response from {url}")
+                return None
+
+            # Try standard JSON parsing first
+            try:
+                return response.json()
+            except ValueError:
+                # JSON parse failed, try fallbacks
+                self.logger.debug(f"Direct JSON parse failed for {url}, trying fallbacks")
+                return self._handle_json_fallback(response)
+
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to fetch JSON from {url}: {e}")
+            return None
+
+    def _handle_json_fallback(self, response: requests.Response) -> dict[str, Any] | list[Any] | None:
+        """
+        Handle edge cases for JSON parsing.
+
+        Tries multiple fallback strategies:
+        1. Brotli decompression (if content-encoding: br)
+        2. BOM removal and text cleanup
+        3. Explicit UTF-8 decoding
+
+        Args:
+            response: Response object from requests
+
+        Returns:
+            Parsed JSON or None
+        """
+        # Try Brotli decompression
+        content_encoding = response.headers.get("content-encoding", "").lower()
+        if "br" in content_encoding:
+            try:
+                import brotli
+
+                decoded = brotli.decompress(response.content)
+                return json.loads(decoded.decode("utf-8"))
+            except ImportError:
+                self.logger.debug("Brotli compression detected but 'brotli' package not installed")
+            except (json.JSONDecodeError, ValueError) as e:
+                self.logger.debug(f"Brotli decompression failed: {e}")
+
+        # Try text cleanup (BOM removal, strip whitespace)
+        try:
+            text = response.text.strip()
+            # Remove BOM if present
+            if text.startswith("\ufeff"):
+                text = text[1:]
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError) as e:
+            self.logger.error(f"JSON fallback parsing failed: {e}")
+            # Log preview for debugging
+            self.logger.debug(f"Response preview: {response.text[:200]}")
+            return None
