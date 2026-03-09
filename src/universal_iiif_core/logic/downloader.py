@@ -654,9 +654,10 @@ class IIIFDownloader:
             max_ram_bytes = int(max_ram_gb * (1024**3))
 
             dims = stitch_iiif_tiles_to_jpeg(
-                self.session,
+                self.http_client,
                 base_url,
                 filename,
+                library_name=self.library,
                 iiif_quality=iiif_q,
                 jpeg_quality=90,
                 # Keep RAM usage under the configured cap.

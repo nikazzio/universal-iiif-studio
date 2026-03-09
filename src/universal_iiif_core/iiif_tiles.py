@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import math
 import mmap
-import time
 from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -11,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, UnidentifiedImageError
-from requests import RequestException, Session
+
+from .http_client import HTTPClient
 
 
 @dataclass(frozen=True)
@@ -131,12 +131,11 @@ def _tile_regions(plan: IIIFTilePlan) -> Iterable[tuple[int, int, int, int]]:
             yield x, y, w, h
 
 
-def _fetch_info(session: Session, info_url: str, timeout_s: int) -> dict[str, Any] | None:
+def _fetch_info(http_client: HTTPClient, info_url: str, library_name: str | None, timeout_s: int) -> dict[str, Any] | None:
+    """Fetch info.json via HTTPClient."""
     try:
-        r = session.get(info_url, timeout=timeout_s)
-        r.raise_for_status()
-        return r.json()
-    except (RequestException, ValueError, OSError):
+        return http_client.get_json(info_url, library_name=library_name, timeout=timeout_s)
+    except Exception:
         return None
 
 
@@ -194,28 +193,28 @@ def _cleanup_buffers(canvas: Image.Image | None, mm: mmap.mmap | None, raw_fh: A
 
 
 def _fetch_tile_bytes(
-    session: Session,
+    http_client: HTTPClient,
     tile_url: str,
     *,
+    library_name: str | None,
     timeout_s: int,
-    max_retries_per_tile: int,
-    throttle_base_wait_s: float,
 ) -> bytes | None:
-    for attempt in range(max_retries_per_tile):
-        try:
-            resp = session.get(tile_url, timeout=timeout_s)
-            if resp.status_code == 429:
-                time.sleep((2**attempt) * throttle_base_wait_s)
-                continue
-            resp.raise_for_status()
-            tile_bytes = resp.content
-            if not tile_bytes:
-                raise ValueError("empty tile")
-            return tile_bytes
-        except (RequestException, ValueError):
-            if attempt >= max_retries_per_tile - 1:
-                return None
-    return None
+    """
+    Fetch tile image bytes via HTTPClient.
+    
+    HTTPClient handles retries and backoff automatically, including 429 handling.
+    We removed the manual retry loop and throttle logic.
+    """
+    try:
+        resp = http_client.get(tile_url, library_name=library_name, timeout=timeout_s)
+        if resp.status_code != 200:
+            return None
+        tile_bytes = resp.content
+        if not tile_bytes:
+            return None
+        return tile_bytes
+    except Exception:
+        return None
 
 
 def _paste_tile_to_canvas(
@@ -282,28 +281,32 @@ def _save_output(
 
 
 def stitch_iiif_tiles_to_jpeg(
-    session: Session,
+    http_client: HTTPClient,
     base_url: str,
     out_path: Path,
     *,
+    library_name: str | None = None,
     iiif_quality: str = "default",
     jpeg_quality: int = 90,
     max_ram_bytes: int = int(2 * (1024**3)),
     timeout_s: int = 30,
-    max_retries_per_tile: int = 3,
-    throttle_base_wait_s: float = 2.0,
 ) -> tuple[int, int] | None:
     """Download and stitch IIIF tiles sequentially into a JPEG.
 
     Returns (width, height) of the output image on success, else None.
 
-        Memory behavior:
+    Memory behavior:
         - Never keeps more than one tile image in memory at a time.
         - If the uncompressed output would exceed `max_ram_bytes`, we assemble
             the RGB raster on disk (mmap) and then encode to JPEG.
+    
+    Network behavior:
+        - Uses HTTPClient for all requests (info.json and tiles)
+        - HTTPClient handles retries, backoff, and rate limiting automatically
+        - Removed manual retry/throttle parameters (now managed by HTTPClient policy)
     """
     info_url = base_url.rstrip("/") + "/info.json"
-    info = _fetch_info(session, info_url, timeout_s)
+    info = _fetch_info(http_client, info_url, library_name, timeout_s)
     if not info:
         return None
 
@@ -329,11 +332,10 @@ def stitch_iiif_tiles_to_jpeg(
         size = f"{w},"
         tile_url = f"{plan.base_url}/{region}/{size}/0/{iiif_quality}.jpg"
         tile_bytes = _fetch_tile_bytes(
-            session,
+            http_client,
             tile_url,
+            library_name=library_name,
             timeout_s=timeout_s,
-            max_retries_per_tile=max_retries_per_tile,
-            throttle_base_wait_s=throttle_base_wait_s,
         )
         if not tile_bytes:
             _cleanup_buffers(canvas, mm, raw_fh, raw_path)
