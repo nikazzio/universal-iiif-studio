@@ -106,3 +106,39 @@ Use the canonical docs:
 - full keys: [CONFIG_REFERENCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
 - user flow: [DOCUMENTAZIONE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
 - architecture: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
+
+## 12) Why does Studio show remote images instead of local ones?
+
+**Probable cause**: Download is incomplete or `viewer.mirador.require_complete_local_images=true` (default).  
+**Behavior**: Studio automatically uses **Remote Mode** when local pages are not fully available. Mirador loads the original manifest and fetches images on-demand from the library server.  
+**Quick fix**:
+- Complete the download to automatically switch to Local Mode.
+- Or add `?allow_remote_preview=true` to Studio URL to explicitly enable Remote Mode.
+- Or set `viewer.mirador.require_complete_local_images=false` in config to prefer remote preview by default.
+
+**Status indicator**: Check the READ_SOURCE badge in the status panel:
+- **AMBER badge**: Remote mode (fetching from original server)
+- **GREEN badge**: Local mode (using downloaded images)
+
+More details: [Studio-Workflow.md](Studio-Workflow.md)
+
+## 13) How do I preview a manuscript while it's still downloading?
+
+**Solution**: Use Remote Mode by adding `?allow_remote_preview=true` to the Studio URL.  
+**Behavior**: Mirador will load the original manifest from the library server and display ALL pages, fetching images on-demand as you navigate.  
+**Limitation**: Requires internet connection; images are not cached locally in this mode.
+
+More details: [Studio-Workflow.md](Studio-Workflow.md)
+
+## 14) Why do downloads to Gallica seem slower than other libraries?
+
+**Expected behavior**: Gallica has stricter rate limits configured in the HTTP client.  
+**Rate limits**:
+- Gallica: 4 requests per minute (burst window)
+- Other libraries: 20 requests per minute (default)
+
+**Rationale**: Gallica servers use aggressive WAF (Web Application Firewall) and rate limiting. The system automatically applies conservative limits to avoid IP blocks.
+
+**Config location**: `settings.network.libraries.gallica.*` in `config.json`.
+
+More details: [HTTP_CLIENT.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/HTTP_CLIENT.md)

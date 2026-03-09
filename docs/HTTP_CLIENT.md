@@ -303,3 +303,23 @@ data = http_client.get_json(url, library_name="Gallica", timeout=30)
 - ✅ **Backward compatibility maintained** (`get_json()`, resolution functions)
 
 **Status**: Phase 2 complete (100% core IIIF modules), Phase 3 pending (services migration).
+
+---
+
+## Related Features (v0.7.0)
+
+### Professional Status Panel
+
+The Studio interface now displays HTTP client metrics via a professional status panel:
+- Color-coded badges for technical status (read_source, state, scans, staging, PDF info)
+- **READ_SOURCE badge**: AMBER when remote (using HTTPClient to fetch from original server), GREEN when local
+- Responsive grid layout for mobile and desktop
+- Located in: `src/studio_ui/components/studio/status_panel.py`
+
+### Mirador Viewing Modes
+
+HTTPClient powers the remote preview mode:
+- **Remote Mode**: Mirador loads original manifest, HTTPClient fetches images on-demand with rate limiting
+- **Local Mode**: Uses local images, no HTTP requests needed
+- Status panel shows current mode with color-coded badge
+- See `docs/ARCHITECTURE.md` and `docs/wiki/Studio-Workflow.md` for details

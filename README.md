@@ -32,12 +32,15 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ## Features
 
 - IIIF manifest resolution and page download pipeline
+- **Centralized HTTP client** with automatic retry, exponential backoff, and per-host rate limiting
 - Discovery with free-text search plus optional Gallica filters (`all`, `manuscripts`, `printed books`)
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
 - Studio Output tab with PDF profiles, source-mode selection (`Locale` / `Remoto temporaneo`) and job monitor
+- **Mirador dual viewing modes**: remote preview for incomplete downloads, local-only for offline work
 - Thumbnail-level resolution transparency (`Locale` vs `Online max`) with on-demand `High-Res` fetch
+- Professional status panel with color-coded technical indicators
 - `src/` package layout with separated `core`, `ui`, and `cli` modules
 
 ## Run Modes
@@ -108,8 +111,10 @@ Meaning:
 - `pdf.profiles.catalog.<profile>.max_parallel_page_fetch`: parallel fetch cap for remote high-res temp exports
 - `storage.partial_promotion_mode`: controls if validated staged pages are promoted from temp to scans (`never|on_pause`)
 - `storage.remote_cache.max_bytes|retention_hours|max_items`: persistent remote-resolution cache limits (Studio Output)
-- `viewer.mirador.require_complete_local_images`: when `true`, Studio viewer is gated until local page availability is complete
+- `viewer.mirador.require_complete_local_images`: when `true`, Studio viewer is gated until local page availability is complete (set to `false` or use `?allow_remote_preview=true` URL parameter to enable remote preview mode)
 - `viewer.source_policy.saved_mode`: policy for `saved` items in Studio (`remote_first|local_first`)
+- `network.global.*`: global HTTP transport settings (timeout, retries, max concurrent jobs)
+- `network.libraries.<library>.*`: per-library network policies for rate limiting and backoff (e.g., Gallica has stricter limits: 4 req/min)
 - PDF profiles are created/edited in `Settings > PDF Export`; item Output tab selects a profile per job
 
 ## Output Layout
@@ -163,6 +168,13 @@ Studio loads but pages are missing
 - Check `data/local/temp_images/<DocumentId>/` for staged pages.
 - If pages are intentionally kept staged, use `settings.storage.partial_promotion_mode=on_pause` to promote on pause.
 - Verify `config.json` PDF flags (`prefer_native_pdf`, `create_pdf_from_images`).
+- For incomplete downloads, use `?allow_remote_preview=true` URL parameter to view all pages via remote preview mode (Mirador fetches images on-demand from original server).
+
+Mirador viewer shows "remote" or no images for incomplete download
+- **Expected behavior**: By default (`viewer.mirador.require_complete_local_images=true`), Studio gates the viewer until all pages are downloaded locally.
+- **Remote preview mode**: Add `?allow_remote_preview=true` to the Studio URL to enable remote mode, where Mirador loads the original manifest and fetches images on-demand from the library server.
+- **Local-only mode**: Once download is complete, Studio automatically switches to local mode using only downloaded images (works offline).
+- See `docs/wiki/Studio-Workflow.md` for detailed explanation of viewing modes.
 
 No results in Discovery for a known Gallica title
 - Keep the `Gallica` filter on `All materials` for broad lookup.
@@ -181,6 +193,7 @@ No results in Discovery for a known Gallica title
 
 - User/feature guide: `docs/DOCUMENTAZIONE.md`
 - Architecture: `docs/ARCHITECTURE.md`
+- HTTP Client implementation: `docs/HTTP_CLIENT.md`
 - Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
 - Wiki maintenance model and sync workflow: `docs/WIKI_MAINTENANCE.md`
 - Issue triage and governance policy: `docs/ISSUE_TRIAGE_POLICY.md`

@@ -5,6 +5,30 @@
 Open a local document from `Library` using "Apri Studio".
 Direct `/studio` without `doc_id` and `library` opens the recent hub (`Riprendi lavoro`).
 
+## Mirador Viewing Modes
+
+Studio supports **two viewing modes** for the Mirador viewer:
+
+### Remote Mode (Incomplete Downloads)
+- **When**: Download is incomplete or paused; not all pages available locally.
+- **Behavior**: Mirador loads the original manifest from the library server (e.g., `gallica.bnf.fr`).
+- **Pages shown**: ALL pages (complete manuscript), fetched on-demand from remote server.
+- **Use case**: Preview the full manuscript while download is in progress or paused.
+- **Internet**: Required.
+- **Manual override**: Add `?allow_remote_preview=true` to Studio URL.
+
+### Local Mode (Complete Downloads)
+- **When**: All pages downloaded and available in `scans/` directory.
+- **Behavior**: Mirador loads local manifest (`/iiif/manifest/...`) served by Studio.
+- **Pages shown**: Only downloaded pages using local images.
+- **Use case**: Offline work, transcription, analysis with complete local dataset.
+- **Internet**: Not required (works completely offline).
+- **Config**: Controlled by `viewer.mirador.require_complete_local_images` (default: `true`).
+
+**Status indicator**: The status panel shows a color-coded READ_SOURCE badge:
+- **AMBER**: Remote mode (fetching from original server)
+- **GREEN**: Local mode (using downloaded images)
+
 ## Download Manager and Staging
 
 - Download cards show queue/running/pausing/paused/cancelling/cancelled states with page counters.

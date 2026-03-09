@@ -98,6 +98,19 @@ Le API key vanno in `api_keys`: `openai`, `anthropic`, `google_vision`, `hugging
 
 Il sistema di download è stato completamente riscritto per essere intelligente e resiliente.
 
+### 🔌 HTTP Client Centralizzato (v0.7.0)
+
+Il nuovo `HTTPClient` centralizzato elimina oltre 200 righe di codice duplicato per retry e backoff:
+* **Retry automatico** con backoff esponenziale configurabile per biblioteca.
+* **Rate limiting per host** con algoritmo sliding window (Gallica: 4 req/min, altre: 20 req/min).
+* **Policy di rete per biblioteca** con timeout, concurrency e backoff personalizzabili.
+* **Metriche di tracciamento** (richieste, retry, timeout).
+* **Thread-safe** con semafori per limitare richieste parallele per host.
+
+Moduli migrati: downloader, IIIF tiles, resolution probe, manifest fetch, catalogo esterno.
+
+Config chiavi: `settings.network.global.*` (globale) e `settings.network.libraries.<library>.*` (per-biblioteca).
+
 ### 🧭 Discovery separata da Download Manager
 
 La pagina Discovery è divisa in due aree:
@@ -208,9 +221,14 @@ Accesso consigliato:
 ### 🖼️ Viewer e Layout
 
 * **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
+* **Modalità Visualizzazione Dual-Mode**:
+  - **Modalità Remota** (download incompleti/pause): Mirador carica il manifest originale dal server biblioteca (es. `gallica.bnf.fr`) e mostra TUTTE le pagine, scaricando immagini on-demand. Utile per anteprima durante download. Parametro URL: `?allow_remote_preview=true`.
+  - **Modalità Locale** (download completi): Mirador carica il manifest locale (`/iiif/manifest/...`) e mostra solo le pagine scaricate usando immagini locali. Funziona offline. Default quando `viewer.mirador.require_complete_local_images=true` e tutte le pagine sono disponibili.
+* **Indicatore Stato**: Badge READ_SOURCE nel pannello stato: **AMBRA** per remoto, **VERDE** per locale.
 * **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
 * **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
 * **Header stato asset**: in Studio vengono mostrati stato download e badge `Sorgente: Remota/Locale`.
+* **Pannello Stato Professionale**: Badge colorati per stato tecnico (read_source, state, scans, staging, info PDF) con design responsivo.
 
 ### ℹ️ Tab Info (riordinato)
 
@@ -260,7 +278,7 @@ Dettagli UX attuali:
 ## 6. Troubleshooting
 
 * **Errore "Connection Reset" o 403 su Gallica**:
-  * Il tuo IP potrebbe essere stato bloccato temporaneamente. Il sistema ora include un sistema di "Backoff" (attesa esponenziale), ma se il blocco persiste, prova a cambiare rete (es. Hotspot).
+  * Il tuo IP potrebbe essere stato bloccato temporaneamente. Il sistema ora include un sistema di "Backoff" (attesa esponenziale) con rate limiting per host (4 req/min per Gallica). Se il blocco persiste, prova a cambiare rete (es. Hotspot).
 * **Overlay OCR bloccato**:
   * Controlla i log (`logs/app.log`). Se il worker Python crasha, l'overlay potrebbe non ricevere il segnale di stop. Ricarica la pagina.
 * **PDF scaricato ma Studio vuoto**:
@@ -268,13 +286,27 @@ Dettagli UX attuali:
 * **Pagine presenti solo in `temp_images`**:
   * Comportamento possibile con `partial_promotion_mode=never`: il sistema sta mantenendo staging coerente.
   * Se ti serve disponibilita immediata in Studio dopo pausa, imposta `settings.storage.partial_promotion_mode=on_pause`.
+* **Studio mostra immagini remote invece di locali**:
+  * Comportamento previsto se download incompleto e `viewer.mirador.require_complete_local_images=true` (default).
+  * Studio usa **Modalità Remota** automaticamente: Mirador carica manifest originale e scarica immagini on-demand dal server biblioteca.
+  * **Badge AMBRA** nel pannello stato indica modalità remota.
+  * Per forzare modalità remota: aggiungi `?allow_remote_preview=true` all'URL Studio.
+  * Per visualizzazione locale: completa il download o imposta `require_complete_local_images=false` in config.
+* **Come visualizzare anteprima manoscritto durante download?**:
+  * Usa `?allow_remote_preview=true` nell'URL Studio per forzare Modalità Remota.
+  * Mirador mostrerà TUTTE le pagine scaricando immagini on-demand dal server originale.
+* **Download Gallica più lenti di altre biblioteche?**:
+  * Comportamento previsto: HTTP Client applica rate limiting più stretto per Gallica (4 req/min vs 20 req/min default).
+  * Motivo: server Gallica usano WAF aggressivo e rate limiting. Limiti conservativi prevengono blocchi IP.
+  * Config: `settings.network.libraries.gallica.*` in `config.json`.
 * **`/studio` non apre subito il documento**:
   * È comportamento previsto: senza contesto (`doc_id` + `library`) Studio mostra il mini-hub `Riprendi lavoro`.
 
 ## 7. Developer Notes
 
 * **Architecture**: Vedi `docs/ARCHITECTURE.md` per il diagramma dei moduli.
-* **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/utils.py` (Session, Headers, Retry).
+* **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/http_client.py` (HTTPClient con retry, backoff, rate limiting) e `src/universal_iiif_core/utils.py` (Session legacy, Headers, WAF Bypass).
+* **HTTP Client**: Documentazione completa in `docs/HTTP_CLIENT.md` (implementation, configuration, migration guide).
 * **Testing**:
   * Unit test offline (Discovery/Gallica): `pytest tests/test_search_gallica_unit.py tests/test_discovery_handlers_resolve_manifest.py`
   * Live test (Rete richiesta): `pytest tests/test_live.py` (Abilitare in config).
