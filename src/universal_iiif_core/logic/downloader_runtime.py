@@ -430,6 +430,7 @@ def attach_runtime_methods(cls) -> None:
     cls._maybe_run_native_pdf = _maybe_run_native_pdf
     cls.run = run
     cls._download_canvases = _download_canvases
+    cls._count_all_downloaded_pages = _count_all_downloaded_pages
     cls._prescan_canvases = _prescan_canvases
     cls._download_missing_canvases = _download_missing_canvases
     cls._iter_download_futures = _iter_download_futures
