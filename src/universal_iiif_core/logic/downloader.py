@@ -3,8 +3,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from contextlib import suppress
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from secrets import SystemRandom
 from typing import Any

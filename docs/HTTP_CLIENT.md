@@ -103,7 +103,7 @@ print(f"Timeouts: {metrics['total_timeouts']}")
 ## Migrated Modules (Phase 2 Complete)
 
 | Module | Usage | Status |
-|--------|-------|--------|
+| ------ | ----- | ------ |
 | **downloader.py** | Canvas downloads | ✅ Migrated |
 | **iiif_tiles.py** | Tile stitching | ✅ Migrated |
 | **iiif_resolution.py** | Resolution probe, highres fetch | ✅ Migrated |
