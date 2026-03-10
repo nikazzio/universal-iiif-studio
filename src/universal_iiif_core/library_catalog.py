@@ -469,7 +469,7 @@ def extract_external_catalog_data(url: str, timeout: int = 8) -> dict[str, Any]:
     http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
     
     try:
-        response = http_client.get(url, library_name=None, timeout=timeout)
+        response = http_client.get(url, library_name=None, timeout=(timeout, timeout))
         if response.status_code != 200:
             raise ValueError(f"HTTP {response.status_code}")
     except Exception:

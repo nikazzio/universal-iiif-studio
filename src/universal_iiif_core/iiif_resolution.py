@@ -63,7 +63,8 @@ def probe_remote_max_dimensions(
         http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
     
     try:
-        payload = http_client.get_json(info_url, library_name=library_name, timeout=max(3, int(timeout_s)))
+        t = max(3, int(timeout_s))
+        payload = http_client.get_json(info_url, library_name=library_name, timeout=(t, t))
         if not payload:
             return None, None, base
     except Exception:
@@ -111,10 +112,11 @@ def fetch_highres_page_image(
         http_client = HTTPClient(network_policy=cm.data.get("settings", {}))
 
     try:
+        t = max(8, int(timeout_s))
         response = http_client.get(
             image_url,
             library_name=library_name,
-            timeout=max(8, int(timeout_s)),
+            timeout=(t, t),
         )
         
         if response.status_code != 200:

@@ -134,7 +134,7 @@ def _tile_regions(plan: IIIFTilePlan) -> Iterable[tuple[int, int, int, int]]:
 def _fetch_info(http_client: HTTPClient, info_url: str, library_name: str | None, timeout_s: int) -> dict[str, Any] | None:
     """Fetch info.json via HTTPClient."""
     try:
-        return http_client.get_json(info_url, library_name=library_name, timeout=timeout_s)
+        return http_client.get_json(info_url, library_name=library_name, timeout=(timeout_s, timeout_s))
     except Exception:
         return None
 
@@ -206,7 +206,7 @@ def _fetch_tile_bytes(
     We removed the manual retry loop and throttle logic.
     """
     try:
-        resp = http_client.get(tile_url, library_name=library_name, timeout=timeout_s)
+        resp = http_client.get(tile_url, library_name=library_name, timeout=(timeout_s, timeout_s))
         if resp.status_code != 200:
             return None
         tile_bytes = resp.content

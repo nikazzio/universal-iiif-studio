@@ -266,7 +266,7 @@ class HTTPClient:
     def _compute_backoff(
         self,
         attempt: int,
-        status_code: int,
+        status_code: int | None,
         retry_after_header: str | None,
         policy: dict[str, Any],
         hostname: str = "unknown",
@@ -700,6 +700,15 @@ class HTTPClient:
 
                     # Success or non-retriable error
                     response.raise_for_status()
+                    
+                    # Update success metrics before returning
+                    response_time = time.time() - start_time
+                    self._update_metrics(
+                        success=True,
+                        hostname=hostname,
+                        response_time=response_time,
+                        retries=retry_count,
+                    )
                     return response
 
                 except (requests.Timeout, requests.ConnectionError) as e:
@@ -747,16 +756,6 @@ class HTTPClient:
             # Only release if we successfully acquired
             if acquired:
                 semaphore.release()
-
-            # Update success metrics if we got here without exception
-            if "response" in locals():
-                response_time = time.time() - start_time
-                self._update_metrics(
-                    success=True,
-                    hostname=hostname,
-                    response_time=response_time,
-                    retries=retry_count,
-                )
 
     def get_json(
         self,

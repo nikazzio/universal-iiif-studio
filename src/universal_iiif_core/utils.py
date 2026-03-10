@@ -52,7 +52,7 @@ def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | N
     
     try:
         # HTTPClient.get_json() handles all retry logic, backoff, rate limiting
-        return http_client.get_json(url, library_name=None, timeout=20)
+        return http_client.get_json(url, library_name=None, timeout=(10, 20))
     except Exception as e:
         logger.debug(f"get_json failed for {url}: {e}")
         return None
