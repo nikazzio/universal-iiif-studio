@@ -141,4 +141,4 @@ More details: [Studio-Workflow.md](Studio-Workflow.md)
 
 **Config location**: `settings.network.libraries.gallica.*` in `config.json`.
 
-More details: [HTTP_CLIENT.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/HTTP_CLIENT.md)
+More details: [HTTP_CLIENT.md](../HTTP_CLIENT.md)
