@@ -231,7 +231,7 @@ def render_export_thumbnail_card(
             Div(
                 Button(
                     Div(
-                        Span("⬇ Hi", cls="text-[12px] font-semibold"),
+                        Span("⬇ Hi", cls="studio-thumb-action-label text-[11px] font-semibold"),
                         Span(
                             "",
                             id=f"studio-thumb-progress-hi-{page}",
@@ -239,7 +239,7 @@ def render_export_thumbnail_card(
                             style=f"--progress:{hi_progress_percent}%;",
                             aria_hidden="true",
                         ),
-                        cls="flex items-center justify-between gap-2",
+                        cls="studio-thumb-action-inner",
                     ),
                     type="button",
                     hx_post=highres_url,
@@ -254,7 +254,7 @@ def render_export_thumbnail_card(
                 ),
                 Button(
                     Div(
-                        Span("🧩 Std", cls="text-[12px] font-semibold"),
+                        Span("🧩 Std", cls="studio-thumb-action-label text-[11px] font-semibold"),
                         Span(
                             "",
                             id=f"studio-thumb-progress-stitch-{page}",
@@ -262,7 +262,7 @@ def render_export_thumbnail_card(
                             style=f"--progress:{stitch_progress_percent}%;",
                             aria_hidden="true",
                         ),
-                        cls="flex items-center justify-between gap-2",
+                        cls="studio-thumb-action-inner",
                     ),
                     type="button",
                     hx_post=stitch_url,
@@ -280,7 +280,7 @@ def render_export_thumbnail_card(
                 ),
                 Button(
                     Div(
-                        Span("⚙ Opt", cls="text-[12px] font-semibold"),
+                        Span("⚙ Opt", cls="studio-thumb-action-label text-[11px] font-semibold"),
                         Span(
                             "",
                             id=f"studio-thumb-progress-opt-{page}",
@@ -288,7 +288,7 @@ def render_export_thumbnail_card(
                             style=f"--progress:{opt_progress_percent}%;",
                             aria_hidden="true",
                         ),
-                        cls="flex items-center justify-between gap-2",
+                        cls="studio-thumb-action-inner",
                     ),
                     type="button",
                     hx_post=optimize_url,

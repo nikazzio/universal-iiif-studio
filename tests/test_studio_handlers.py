@@ -700,6 +700,8 @@ def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
     rendered = repr(panel)
     assert "studio-thumb-highres-btn" in rendered
     assert "studio-thumb-stitch-btn" in rendered
+    assert "studio-thumb-action-inner" in rendered
+    assert "studio-thumb-action-label" in rendered
     assert "studio-thumb-progress-" in rendered
     assert 'hx-target="#studio-thumb-card-1"' in rendered
     assert "/api/studio/export/page_stitch" in rendered
