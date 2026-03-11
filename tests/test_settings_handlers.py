@@ -1,6 +1,11 @@
 import asyncio
 
+import pytest
+
 from studio_ui.routes import settings_handlers
+
+# Mark as slow (8 tests with config manipulation)
+pytestmark = pytest.mark.slow
 
 
 class _DummyRequest:

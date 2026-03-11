@@ -9,6 +9,9 @@ from starlette.requests import Request
 from studio_ui.routes.api import get_manifest, serve_download_file
 from universal_iiif_core.config_manager import get_config_manager
 
+# Mark as slow (8 tests with request mocking and file operations)
+pytestmark = pytest.mark.slow
+
 
 def test_path_traversal_blocked():
     """Ensure downloads endpoint rejects path traversal attempts."""
