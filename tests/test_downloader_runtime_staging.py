@@ -1,8 +1,12 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from universal_iiif_core.logic import downloader_runtime
+
+# Mark as slow (creates images, tests file promotion/staging)
+pytestmark = pytest.mark.slow
 
 
 class _Logger:
