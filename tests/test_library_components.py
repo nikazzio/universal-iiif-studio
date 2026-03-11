@@ -102,6 +102,19 @@ def test_library_card_truncates_long_title():
     assert "[...]" in rendered
 
 
+def test_library_card_places_metadata_links_in_media_column():
+    """Metadata/catalog links should live under thumbnail and technical rows."""
+    rendered = repr(render_library_card(_base_doc(source_detail_url="https://example.org/catalog")))
+    assert 'data-library-meta-links="1"' in rendered
+    assert rendered.index("Pagine mancanti:") < rendered.index('data-library-meta-links="1"')
+
+
+def test_library_card_category_select_uses_readable_text_colors():
+    """Category selector should keep readable text in both themes."""
+    rendered = repr(render_library_card(_base_doc(item_type="musica/spartito")))
+    assert "text-slate-900 dark:text-slate-100" in rendered
+
+
 def test_library_archive_view_has_persisted_collapsible_sections():
     """Archive sections should expose stable collapsible keys for persistence."""
     rendered = repr(render_library_page([_base_doc()], mode="archivio", default_mode="operativa"))

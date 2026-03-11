@@ -1541,22 +1541,39 @@ def _resolve_manifest_for_selected_source(
     read_source_mode: str,
     page: int,
     manifest_path: Path,
+    local_manifest_url: str,
     remote_manifest_url: str,
     fallback_manifest: dict,
     fallback_canvas: str | None,
-) -> tuple[dict, str | None, bool]:
+) -> tuple[dict, str | None, bool, str, str]:
     manifest_exists_local = manifest_path.exists()
     if read_source_mode == "remote" and remote_manifest_url:
         remote_manifest = get_json(remote_manifest_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
-            return remote_manifest, _resolve_initial_canvas(remote_manifest, page), manifest_exists_local
+            return (
+                remote_manifest,
+                _resolve_initial_canvas(remote_manifest, page),
+                manifest_exists_local,
+                remote_manifest_url,
+                "remote",
+            )
+        if manifest_exists_local:
+            local_manifest, local_canvas = _load_manifest_payload(manifest_path, page)
+            if local_manifest:
+                return local_manifest, local_canvas, True, local_manifest_url, "local"
 
     if read_source_mode == "local" and manifest_exists_local:
         local_manifest, local_canvas = _load_manifest_payload(manifest_path, page)
         if local_manifest:
-            return local_manifest, local_canvas, True
+            return local_manifest, local_canvas, True, local_manifest_url, "local"
 
-    return fallback_manifest, fallback_canvas, manifest_exists_local
+    fallback_source_mode = "local" if manifest_exists_local else "remote"
+    fallback_manifest_url = (
+        local_manifest_url
+        if fallback_source_mode == "local"
+        else (remote_manifest_url or local_manifest_url)
+    )
+    return fallback_manifest, fallback_canvas, manifest_exists_local, fallback_manifest_url, fallback_source_mode
 
 
 def _persist_studio_source_state(
@@ -1581,6 +1598,19 @@ def _manifest_missing_response(is_hx: bool):
     if is_hx:
         return _with_toast(panel, message, tone="danger")
     return panel
+
+
+def _build_source_notice(*, read_source_mode: str, degraded_remote_manifest: bool) -> tuple[str, str]:
+    mode = str(read_source_mode or "").strip().lower()
+    if mode != "remote":
+        return "", "info"
+    if degraded_remote_manifest:
+        return (
+            "Stai leggendo la versione online del documento. Il manifest remoto non è disponibile lato server in "
+            "questo momento, quindi alcuni metadati e contatori potrebbero essere incompleti.",
+            "warning",
+        )
+    return ("Stai leggendo la versione online/remota del documento.", "info")
 
 
 def _build_workspace_base_context(
@@ -1634,9 +1664,7 @@ def _resolve_workspace_manifest_context(
         remote_manifest_url=remote_manifest_url,
         page=requested_page,
     )
-    if not manifest_json:
-        return None
-    resolved_manifest_pages = _manifest_total_pages(manifest_json, ms_row)
+    resolved_manifest_pages = _manifest_total_pages(manifest_json or {}, ms_row)
     require_complete_local = bool(
         get_config_manager().get_setting("viewer.mirador.require_complete_local_images", True)
     )
@@ -1656,25 +1684,30 @@ def _resolve_workspace_manifest_context(
     if read_source_mode == "local" and not manifest_exists_local and remote_manifest_url:
         read_source_mode = "remote"
         should_gate_mirador = False
-    manifest_url = _select_studio_manifest_url(
-        read_source_mode=read_source_mode,
-        local_manifest_url=workspace["local_manifest_url"],
-        remote_manifest_url=remote_manifest_url,
+    manifest_json, initial_canvas, manifest_exists_local, manifest_url, resolved_read_source_mode = (
+        _resolve_manifest_for_selected_source(
+            read_source_mode=read_source_mode,
+            page=requested_page,
+            manifest_path=manifest_path,
+            local_manifest_url=workspace["local_manifest_url"],
+            remote_manifest_url=remote_manifest_url,
+            fallback_manifest=manifest_json,
+            fallback_canvas=initial_canvas,
+        )
     )
-    manifest_json, initial_canvas, manifest_exists_local = _resolve_manifest_for_selected_source(
-        read_source_mode=read_source_mode,
-        page=requested_page,
-        manifest_path=manifest_path,
-        remote_manifest_url=remote_manifest_url,
-        fallback_manifest=manifest_json,
-        fallback_canvas=initial_canvas,
-    )
+    degraded_remote_manifest = False
     if not manifest_json:
-        return None
+        if resolved_read_source_mode != "remote" or not remote_manifest_url:
+            return None
+        degraded_remote_manifest = True
     manifest_pages = _manifest_total_pages(manifest_json, ms_row)
     safe_page = requested_page if manifest_pages <= 0 else max(1, min(requested_page, manifest_pages))
-    if safe_page != requested_page:
+    if manifest_json:
         initial_canvas = _resolve_initial_canvas(manifest_json, safe_page)
+    source_notice_text, source_notice_tone = _build_source_notice(
+        read_source_mode=resolved_read_source_mode,
+        degraded_remote_manifest=degraded_remote_manifest,
+    )
     meta = {
         **workspace["meta"],
         "full_display_title": workspace["full_title"],
@@ -1692,7 +1725,7 @@ def _resolve_workspace_manifest_context(
     )
     _persist_studio_source_state(
         doc_id=str(workspace["doc_id"]),
-        read_source_mode=read_source_mode,
+        read_source_mode=resolved_read_source_mode,
         local_pages_count=int(inventory.local_pages_count),
         manifest_exists_local=manifest_exists_local,
     )
@@ -1700,12 +1733,15 @@ def _resolve_workspace_manifest_context(
         "manifest_url": manifest_url,
         "manifest_json": manifest_json,
         "initial_canvas": initial_canvas,
+        "mirador_initial_page": int(safe_page) if not initial_canvas and safe_page > 1 else None,
         "manifest_pages": int(manifest_pages),
         "safe_page": int(safe_page),
-        "read_source_mode": read_source_mode,
+        "read_source_mode": resolved_read_source_mode,
         "should_gate_mirador": should_gate_mirador,
         "mirador_override_url": mirador_override_url,
         "meta": meta,
+        "source_notice_text": source_notice_text,
+        "source_notice_tone": source_notice_tone,
     }
 
 
@@ -1765,8 +1801,11 @@ def studio_page(
             manifest_total_pages=int(resolved["manifest_pages"]),
             read_source_mode=str(resolved["read_source_mode"]),
             mirador_enabled=not bool(resolved["should_gate_mirador"]),
+            mirador_initial_page=resolved.get("mirador_initial_page"),
             mirador_override_url=str(resolved["mirador_override_url"]),
             active_tab=active_tab,
+            source_notice_text=str(resolved.get("source_notice_text") or ""),
+            source_notice_tone=str(resolved.get("source_notice_tone") or "info"),
         )
         _save_studio_context_best_effort(
             doc_id=doc_id,

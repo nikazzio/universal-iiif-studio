@@ -12,13 +12,19 @@ from fasthtml.common import Div, Script
 from studio_ui.common.mirador import window_config_json
 
 
-def mirador_viewer(manifest_url: str, container_id: str = "mirador-viewer", canvas_id: str = None) -> list:
+def mirador_viewer(
+    manifest_url: str,
+    container_id: str = "mirador-viewer",
+    canvas_id: str | None = None,
+    initial_page: int | None = None,
+) -> list:
     """Return the HTML/JS required to render Mirador with Redux bridging.
 
     Args:
         manifest_url: The URL of the IIIF manifest to load.
         container_id: The ID of the HTML div element.
         canvas_id: Optional initial canvas ID to display.
+        initial_page: Optional 1-based page hint used when the server cannot resolve a canvas ID.
     """
     config_json = window_config_json(manifest_url, canvas_id)
 
@@ -28,8 +34,24 @@ def mirador_viewer(manifest_url: str, container_id: str = "mirador-viewer", canv
         # 2. Initialization Script
         Script(f"""
             (function() {{
-                const containerId = '{container_id}';
-                const manifestId = '{manifest_url}';
+                const containerId = {json.dumps(container_id)};
+                const manifestId = {json.dumps(manifest_url)};
+                const initialPage = {json.dumps(initial_page)};
+
+                function resolveCanvasId(manifestJson, page) {{
+                    const targetIndex = Number(page) - 1;
+                    if (targetIndex < 0) return null;
+
+                    if (manifestJson.sequences) {{
+                        const canvases = ((manifestJson.sequences || [{{}}])[0] || {{}}).canvases || [];
+                        const canvas = canvases[targetIndex];
+                        return canvas ? (canvas['@id'] || canvas.id || null) : null;
+                    }}
+
+                    const items = manifestJson.items || [];
+                    const canvas = items[targetIndex];
+                    return canvas ? (canvas['@id'] || canvas.id || null) : null;
+                }}
 
                 function initMirador() {{
                     if (!window.Mirador) {{
@@ -82,9 +104,42 @@ def mirador_viewer(manifest_url: str, container_id: str = "mirador-viewer", canv
 
                     // Use json.dumps for the initial canvas ID safety too, though unlikely to be complex
                     let currentCanvasId = {json.dumps(canvas_id) if canvas_id else "''"};
+                    let pendingInitialPage = !currentCanvasId && Number.isInteger(initialPage) && initialPage > 1
+                        ? initialPage
+                        : 0;
+
+                    function tryApplyInitialPage(state) {{
+                        if (!pendingInitialPage) return;
+
+                        const winIds = Object.keys(state.windows);
+                        if (winIds.length === 0) return;
+
+                        const winId = winIds[0];
+                        const windowState = state.windows[winId] || {{}};
+                        const windowManifestId = windowState.manifestId || manifestId;
+                        const manifestData = state.manifests[windowManifestId] || state.manifests[manifestId];
+                        if (!manifestData || !manifestData.json) return;
+
+                        const targetCanvasId = resolveCanvasId(manifestData.json, pendingInitialPage);
+                        if (!targetCanvasId) return;
+
+                        pendingInitialPage = 0;
+                        if (windowState.canvasId === targetCanvasId) {{
+                            currentCanvasId = targetCanvasId;
+                            return;
+                        }}
+
+                        currentCanvasId = targetCanvasId;
+                        miradorInstance.store.dispatch({{
+                            type: 'mirador/SET_CANVAS',
+                            windowId: winId,
+                            canvasId: targetCanvasId
+                        }});
+                    }}
 
                     miradorInstance.store.subscribe(() => {{
                         const state = miradorInstance.store.getState();
+                        tryApplyInitialPage(state);
 
                         // We normally have only one window in this app
                         const winIds = Object.keys(state.windows);
@@ -133,6 +188,7 @@ def mirador_viewer(manifest_url: str, container_id: str = "mirador-viewer", canv
 
                     // Store instance globally for external control (e.g. navigation buttons)
                     window.miradorInstance = miradorInstance;
+                    tryApplyInitialPage(miradorInstance.store.getState());
                 }}
 
                 // Start initialization

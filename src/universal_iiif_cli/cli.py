@@ -252,7 +252,7 @@ def _resolve_download_args(args: argparse.Namespace):
 
 
 def _resolve_manifest(url: str):
-    manifest_url, suggested_id, library = resolve_url(url)
+    manifest_url, suggested_id, library = resolve_url_with_library(url)
     if manifest_url:
         return manifest_url, suggested_id, library
 

@@ -45,9 +45,9 @@ def test_resolve_manifest_gallica_search_results_list(monkeypatch):
     result = discovery_handlers.resolve_manifest("Gallica", "dante")
     result_str = repr(result)
     assert "Trovati 2 risultati" in result_str
-    assert "Verifica PDF" in result_str
+    assert "PDF: verifica automatica" in result_str
     assert "/api/discovery/pdf_capability?manifest_url=" in result_str
-    assert 'hx_trigger="load"' not in result_str
+    assert 'hx-trigger="load"' in result_str
 
 
 def test_resolve_manifest_gallica_passes_optional_filter(monkeypatch):
