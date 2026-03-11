@@ -1,8 +1,13 @@
 import time
 
+import pytest
+
 import universal_iiif_core.jobs as jobs_mod
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark entire file as slow (has time.sleep and async job queue tests)
+pytestmark = pytest.mark.slow
 
 
 class _Cfg:

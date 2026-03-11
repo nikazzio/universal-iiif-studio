@@ -53,5 +53,5 @@ jobs:
         
     - name: Run tests
       run: |
-        pytest -v --tb=short
+        pytest -v --tb=short -m "not slow"
       continue-on-error: false

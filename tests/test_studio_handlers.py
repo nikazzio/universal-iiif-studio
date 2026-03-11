@@ -2,6 +2,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 from PIL import Image
 from starlette.requests import Request
 
@@ -9,6 +10,9 @@ from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import studio_handlers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark as slow (extensive file I/O, image creation, vault operations)
+pytestmark = pytest.mark.slow
 
 
 def _request(

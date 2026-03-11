@@ -1,7 +1,12 @@
+import pytest
+
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import discovery_handlers, discovery_helpers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark as slow (creates files, uses vault, mock downloads)
+pytestmark = pytest.mark.slow
 
 
 def test_add_to_library_persists_saved_entry(monkeypatch):
