@@ -1,8 +1,9 @@
 """Tests for _rate_limiter module."""
 
-import pytest
 import threading
 import time
+
+import pytest
 
 from universal_iiif_core._rate_limiter import (
     HostRateLimiter,
