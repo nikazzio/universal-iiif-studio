@@ -174,6 +174,12 @@ def _download_missing_canvases(
     """Download missing pages using ThreadPoolExecutor and update progress and stats.
 
     Args:
+        to_download: List of (local_idx, canvas_idx, canvas) tuples to download
+        downloaded: List tracking downloaded filenames (None if not yet downloaded)
+        page_stats: List to accumulate page statistics
+        progress_callback: Optional callback for progress updates (completed, total)
+        should_cancel: Optional callable that returns True when download should stop
+        total_canvases: Total number of canvases in the manuscript
         pages_outside_plan: Count of pages completed in previous runs that are NOT in current canvas_plan.
                            This is used to offset progress updates without double-counting resumed pages.
     """

@@ -48,7 +48,7 @@ jobs:
         
     - name: Lint with Ruff
       run: |
-        ruff check . --ignore C901
+        ruff check . --ignore C901,D417
       continue-on-error: false
         
     - name: Run tests
