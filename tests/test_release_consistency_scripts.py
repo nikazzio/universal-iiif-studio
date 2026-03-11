@@ -42,6 +42,44 @@ def test_changelog_policy_accepts_python_semantic_release_format(tmp_path, monke
     assert check_changelog_policy.main() == 0
 
 
+def test_changelog_policy_accepts_historical_release_with_pr_and_commit_links(tmp_path, monkeypatch):
+    """Historical auto-generated bullets may include both PR links and commit links."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        (
+            "# Changelog\n\n"
+            "<!-- version list -->\n\n"
+            "## v0.10.2 (2026-02-23)\n\n"
+            "### Bug Fixes\n\n"
+            "- Repair toast dismiss behavior ([#19](https://example.invalid/pull/19), "
+            "[`2d4579a`](https://example.invalid/commit/2d4579a))\n"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_changelog_policy, "CHANGELOG_PATH", changelog)
+
+    assert check_changelog_policy.main() == 0
+
+
+def test_changelog_policy_accepts_sparse_historical_release_without_sections(tmp_path, monkeypatch):
+    """Some old releases only have a heading and detailed changes footer."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        (
+            "# Changelog\n\n"
+            "<!-- version list -->\n\n"
+            "## v0.14.0 (2026-03-02)\n\n"
+            "_This release is published under the MIT License._\n\n"
+            "---\n\n"
+            "**Detailed Changes**: [v0.13.4...v0.14.0](https://example.invalid/compare)\n"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_changelog_policy, "CHANGELOG_PATH", changelog)
+
+    assert check_changelog_policy.main() == 0
+
+
 def test_release_consistency_accepts_semantic_release_v10_config(tmp_path, monkeypatch):
     """Release consistency should accept synchronized versions and v10 changelog config."""
     pyproject = tmp_path / "pyproject.toml"

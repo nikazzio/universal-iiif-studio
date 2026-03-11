@@ -16,7 +16,7 @@ CHANGELOG_PATH = Path("CHANGELOG.md")
 INSERTION_FLAG = "<!-- version list -->"
 RE_HEADING = re.compile(r"^(## \[(v\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})|## v\d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\))$")
 RE_SECTION = re.compile(r"^### (?P<section>[A-Za-z][A-Za-z /-]*)$")
-RE_ISSUE_REF = re.compile(r"\(#\d+\)\.?$")
+RE_ISSUE_REF = re.compile(r"(\(#\d+\)|\[#\d+\]\()")
 RE_COMMIT_LINK = re.compile(r"\(\[`[0-9a-f]{7,}`\]\(https?://[^)]+\)\)\.?$")
 
 
@@ -69,7 +69,7 @@ def _validate_release_block(title: str, block_lines: list[str]) -> list[str]:
             if not RE_ISSUE_REF.search(item) and not RE_COMMIT_LINK.search(item):
                 errors.append(f"{title}: bullet missing issue/PR reference -> '{line}'")
 
-    if not sections_seen:
+    if not sections_seen and not any(line.startswith("**Detailed Changes**:") for line in block_lines):
         errors.append(f"{title}: missing at least one '### <section>' subsection")
 
     return errors
