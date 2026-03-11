@@ -673,16 +673,37 @@ def render_download_manager(jobs: list[dict]) -> Div:
     active_statuses = {"queued", "running", "cancelling", "pausing", "pending", "starting"}
     should_poll = any(str(job.get("status") or "").lower() in active_statuses for job in jobs)
     manager_poll_trigger = build_every_seconds_trigger(get_download_manager_interval_seconds())
+    library_jobs = [job for job in jobs if str(job.get("job_origin") or "library_download") != "studio_export_page"]
+    studio_jobs = [job for job in jobs if str(job.get("job_origin") or "") == "studio_export_page"]
 
-    if not jobs:
+    sections: list = []
+    if not library_jobs:
         body = Div(
             P("Nessun download in coda.", cls="text-sm text-slate-400"),
             P("Puoi continuare a cercare mentre i download vengono eseguiti qui.", cls="text-xs text-slate-500 mt-1"),
             cls="bg-slate-900/40 border border-slate-700 rounded-lg p-4",
         )
+        sections.append(body)
     else:
-        cards = [render_download_job_card(job) for job in jobs]
-        body = Div(*cards, cls="space-y-3")
+        cards = [render_download_job_card(job) for job in library_jobs]
+        sections.append(Div(*cards, cls="space-y-3"))
+
+    if studio_jobs:
+        compact_rows = [render_studio_export_job_row(job) for job in studio_jobs]
+        sections.append(
+            Div(
+                Div(
+                    H3("Attività Immagini Studio", cls="text-sm font-semibold text-slate-100"),
+                    P(
+                        "Job generati dai pulsanti pagina dello Studio Export.",
+                        cls="text-[11px] text-slate-400 mt-1",
+                    ),
+                    cls="mb-2",
+                ),
+                Div(*compact_rows, cls="space-y-2"),
+                cls="bg-slate-900/40 border border-slate-700 rounded-lg p-4",
+            )
+        )
 
     attrs = {
         "id": "download-manager-area",
@@ -697,7 +718,63 @@ def render_download_manager(jobs: list[dict]) -> Div:
             }
         )
 
-    return Div(body, **attrs)
+    return Div(*sections, **attrs)
+
+
+def render_studio_export_job_row(job: dict) -> Div:
+    """Render a compact row for page-level Studio Export jobs."""
+    status = str(job.get("status") or "queued").strip().lower()
+    doc_id = str(job.get("doc_id") or "-")
+    library = str(job.get("library") or "-")
+    job_id = str(job.get("job_id") or "")
+    current = int(job.get("current", 0) or 0)
+    total = int(job.get("total", 0) or 0)
+    title = truncate_title(resolve_preferred_title(job, fallback_doc_id=doc_id), max_len=60, suffix="[...]")
+
+    status_map = {
+        "queued": "In coda",
+        "running": "In corso",
+        "cancelling": "Annullamento",
+        "pausing": "Pausa",
+        "paused": "In pausa",
+        "completed": "Completato",
+        "cancelled": "Annullato",
+        "error": "Errore",
+    }
+    status_text = status_map.get(status, status.upper() or "Sconosciuto")
+    progress_text = f"{current}/{total}" if total > 0 else "job pagina"
+    details = f"{title} · {library} · {status_text} · {progress_text}"
+
+    if status in {"running", "queued", "cancelling", "pausing"}:
+        action = Button(
+            "⛔ Annulla",
+            cls=(
+                "inline-flex items-center gap-1.5 text-xs font-semibold "
+                "bg-rose-700 hover:bg-rose-600 text-white px-3 py-1.5 rounded-md "
+                "border border-rose-500/60 shadow-sm transition-colors"
+            ),
+            hx_post=f"/api/download_manager/cancel/{job_id}",
+            hx_target="#download-manager-area",
+            hx_swap="outerHTML",
+        )
+    else:
+        action = Button(
+            "🗑️ Rimuovi",
+            cls=(
+                "inline-flex items-center gap-1.5 text-xs font-semibold "
+                "bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-md "
+                "border border-slate-600 shadow-sm transition-colors"
+            ),
+            hx_post=f"/api/download_manager/remove/{job_id}",
+            hx_target="#download-manager-area",
+            hx_swap="outerHTML",
+        )
+
+    return Div(
+        P(details, cls="text-xs text-slate-300"),
+        action,
+        cls="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2",
+    )
 
 
 def _download_job_badge(status: str, queue_position: int) -> tuple[str, str]:

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import pytest
 from PIL import Image
 
 from studio_ui.routes import export_handlers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark as slow (creates test files, image I/O)
+pytestmark = pytest.mark.slow
 
 
 def _seed_library_item(doc_id: str, library: str, pages: int = 3) -> None:

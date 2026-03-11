@@ -34,7 +34,8 @@
                 "max_concurrent_download_jobs": 2,
                 "connect_timeout_s": 10,
                 "read_timeout_s": 30,
-                "transport_retries": 3
+                "transport_retries": 3,
+                "per_host_concurrency": 4
             },
             "download": {
                 "default_workers_per_job": 2,

@@ -1,8 +1,12 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from universal_iiif_core.logic import downloader_runtime
+
+# Mark as slow (creates images, tests file promotion/staging)
+pytestmark = pytest.mark.slow
 
 
 class _Logger:
@@ -23,15 +27,18 @@ class _DummyDownloader:
         self.scans_dir = root / "scans"
         self.temp_dir = root / "temp"
         self.pdf_dir = root / "pdf"
+        self.data_dir = root / "data"
         self.scans_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.overwrite_existing_scans = False
         self.expected_total_canvases = expected_total
         self.total_canvases = expected_total
         self.ms_id = "DOC_STAGE"
         self.logger = _Logger()
         self.vault = _Vault()
+        self.stats_path = self.data_dir / "image_stats.json"
 
 
 def _write_valid_jpg(path: Path, color: str = "white") -> None:
@@ -112,6 +119,24 @@ def test_finalize_downloads_promotes_previous_valid_temp_pages_when_now_complete
     assert not dummy.temp_dir.exists()
 
 
+def test_finalize_downloads_promotes_page_refresh_immediately_when_overwriting(tmp_path):
+    """Page-only refreshes should overwrite scans immediately even if the full manuscript is incomplete."""
+    dummy = _DummyDownloader(tmp_path, expected_total=5)
+    dummy.overwrite_existing_scans = True
+
+    existing = dummy.scans_dir / "pag_0000.jpg"
+    staged = dummy.temp_dir / "pag_0000.jpg"
+    _write_valid_jpg(existing, color="blue")
+    _write_valid_jpg(staged, color="red")
+
+    out = downloader_runtime._finalize_downloads(dummy, [str(staged)])
+
+    assert str(existing) in out
+    assert existing.exists()
+    assert not staged.exists()
+    assert not dummy.temp_dir.exists()
+
+
 def test_finalize_downloads_excludes_stale_scans_outside_manifest_scope(tmp_path):
     """Finalized files should be restricted to current manifest page scope."""
     dummy = _DummyDownloader(tmp_path, expected_total=2)
@@ -180,3 +205,58 @@ def test_run_calls_finalize_even_when_stop_requested_late():
     dummy = _RunDummy()
     downloader_runtime.run(dummy, should_cancel=lambda: True)
     assert dummy.finalize_calls == [["staged/pag_0000.jpg", "staged/pag_0001.jpg"]]
+
+
+def test_run_fails_selected_direct_refresh_when_no_page_was_replaced():
+    """Page-only direct refreshes must error when no selected page download succeeds."""
+
+    class _DirectRefreshDummy(_RunDummy):
+        def __init__(self):
+            super().__init__()
+            self.force_redownload = True
+            self.overwrite_existing_scans = True
+            self.stitch_mode = "direct_only"
+
+        def _build_canvas_plan(self, canvases, target_pages):
+            selected = set(target_pages or set())
+            return selected, [(idx, canvas) for idx, canvas in enumerate(canvases) if (idx + 1) in selected]
+
+        def _download_canvases(self, _canvas_plan, progress_callback=None, should_cancel=None, total_for_progress=0):
+            _ = progress_callback
+            _ = should_cancel
+            _ = total_for_progress
+            return ([], [])
+
+    dummy = _DirectRefreshDummy()
+
+    with pytest.raises(RuntimeError, match="Refresh diretto high-res fallito"):
+        downloader_runtime.run(dummy, target_pages={1})
+
+
+def test_store_page_stats_merges_existing_pages(tmp_path):
+    """Saving fresh stats should merge by page index instead of dropping prior entries."""
+    dummy = _DummyDownloader(tmp_path, expected_total=2)
+    downloader_runtime.save_json(
+        dummy.data_dir / "image_stats.json",
+        {
+            "doc_id": dummy.ms_id,
+            "pages": [
+                {"page_index": 0, "download_method": "direct"},
+                {"page_index": 1, "download_method": "tile_stitch"},
+            ],
+        },
+    )
+    dummy.stats_path = dummy.data_dir / "image_stats.json"
+
+    downloader_runtime._store_page_stats(
+        dummy,
+        [
+            {"page_index": 1, "download_method": "direct"},
+        ],
+    )
+
+    payload = downloader_runtime.load_json(dummy.stats_path)
+    assert payload["pages"] == [
+        {"page_index": 0, "download_method": "direct"},
+        {"page_index": 1, "download_method": "direct"},
+    ]

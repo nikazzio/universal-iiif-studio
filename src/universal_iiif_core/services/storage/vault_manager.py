@@ -137,6 +137,7 @@ class VaultManager:
                 total_pages INTEGER DEFAULT 0,
                 queue_position INTEGER DEFAULT 0,
                 priority INTEGER DEFAULT 0,
+                job_origin TEXT DEFAULT 'library_download',
                 error_message TEXT,
                 started_at TIMESTAMP,
                 finished_at TIMESTAMP,
@@ -247,6 +248,7 @@ class VaultManager:
         self._ensure_column(cursor, "download_jobs", "priority", "INTEGER DEFAULT 0")
         self._ensure_column(cursor, "download_jobs", "started_at", "TIMESTAMP")
         self._ensure_column(cursor, "download_jobs", "finished_at", "TIMESTAMP")
+        self._ensure_column(cursor, "download_jobs", "job_origin", "TEXT DEFAULT 'library_download'")
 
     def _migrate_export_jobs_table(self, cursor: sqlite3.Cursor) -> None:
         self._ensure_column(cursor, "export_jobs", "scope_type", "TEXT DEFAULT 'batch'")

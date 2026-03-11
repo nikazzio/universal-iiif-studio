@@ -4,6 +4,7 @@ import json
 
 from fasthtml.common import H2, A, Div, Script, Span
 
+from studio_ui.components.studio.status_panel import technical_status_panel
 from studio_ui.components.studio.tabs import render_studio_tabs
 from studio_ui.components.viewer import mirador_viewer
 from studio_ui.ocr_state import is_ocr_job_running
@@ -48,16 +49,6 @@ def studio_layout(
     local_count = int(local_pages_count or 0)
     manifest_count = int(manifest_total_pages or 0)
     local_progress = f"{local_count}/{manifest_count}" if manifest_count > 0 else str(local_count)
-    technical_rows = [
-        ("id", doc_id),
-        ("library", library),
-        ("state", status_value),
-        ("read_source", source_value),
-        ("scans_local", local_progress),
-        ("staging_pages", str(staging_count)),
-        ("pdf_source", pdf_source_value),
-        ("pdf_local", pdf_local_value),
-    ]
     if mirador_enabled:
         viewer_block = Div(
             *mirador_viewer(manifest_url, "mirador-viewer", canvas_id=initial_canvas),
@@ -112,35 +103,16 @@ def studio_layout(
                     Div(
                         Div(
                             Div(
-                                H2(title, cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight"),
-                                Div(
-                                    *[
-                                        Div(
-                                            Span(
-                                                f"{key}:",
-                                                cls=(
-                                                    "text-[11px] font-bold text-slate-700 "
-                                                    "dark:text-slate-300 tracking-tight"
-                                                ),
-                                            ),
-                                            Span(
-                                                str(value),
-                                                cls=(
-                                                    "font-mono text-[11px] text-slate-700 "
-                                                    "dark:text-slate-300 tracking-tight"
-                                                ),
-                                            ),
-                                            cls=(
-                                                "flex items-baseline justify-between gap-2 sm:justify-start sm:gap-1.5"
-                                            ),
-                                        )
-                                        for key, value in technical_rows
-                                    ],
-                                    cls=(
-                                        "mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 "
-                                        "rounded-md border border-slate-200 dark:border-slate-700 "
-                                        "bg-slate-50 dark:bg-slate-800/35 px-3 py-2"
-                                    ),
+                                H2(title, cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-3"),
+                                technical_status_panel(
+                                    doc_id=doc_id,
+                                    library=library,
+                                    state=status_value,
+                                    read_source=source_value,
+                                    scans_local=local_progress,
+                                    staging_pages=str(staging_count),
+                                    pdf_source=pdf_source_value,
+                                    pdf_local=pdf_local_value,
                                 ),
                                 cls="flex-1 min-w-0",
                             ),

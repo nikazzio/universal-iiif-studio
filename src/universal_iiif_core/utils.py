@@ -10,16 +10,12 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-import requests
-from requests import RequestException, Session
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
 from .logger import get_logger
 
 logger = get_logger(__name__)
 
-# Headers mimetici (Firefox)
+# Headers mimetici (Firefox) - kept for backward compatibility
+# New code should use HTTPClient which has these headers built-in
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -31,116 +27,70 @@ DEFAULT_HEADERS = {
 }
 
 
-def get_request_session() -> Session:
-    """Restituisce una sessione requests configurata per resilienza e performance."""
+def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | None:
+    """Fetch JSON from a URL with retry logic (LEGACY).
+
+    DEPRECATED: New code should use HTTPClient.get_json() instead.
+    This function is kept for backward compatibility and creates a temporary
+    HTTPClient instance for each call.
+
+    Args:
+        url: URL to fetch
+        headers: Optional additional headers (merged with defaults)
+        retries: Optional override for max retry attempts, kept for backward compatibility
+
+    Returns:
+        Parsed JSON data or None on error
+    """
+    from .config_manager import get_config_manager
+    from .http_client import HTTPClient
+
+    # Create temporary HTTPClient with current config
+    cm = get_config_manager()
+    network_policy = cm.data.get("settings", {}).get("network", {})
+    http_client = HTTPClient(network_policy=network_policy)
+
+    try:
+        # HTTPClient.get_json() handles all retry logic, backoff, rate limiting
+        return http_client.get_json(url, library_name=None, timeout=(10, 20), headers=headers, retries=retries)
+    except Exception as e:
+        logger.debug(f"get_json failed for {url}: {e}")
+        return None
+
+
+def get_request_session():
+    """Create a requests Session with default headers and retry strategy (LEGACY).
+
+    DEPRECATED: New code should use HTTPClient instead.
+    This function is kept for backward compatibility with code that needs
+    direct Session access (e.g., streaming downloads).
+
+    Returns a plain requests.Session with:
+    - DEFAULT_HEADERS configured
+    - Basic retry strategy for transport errors
+
+    For new code, use HTTPClient which provides better rate limiting,
+    metrics tracking, and per-library policies.
+    """
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
     session = requests.Session()
     session.headers.update(DEFAULT_HEADERS)
 
-    # Configura una strategia di retry robusta a livello di socket
+    # Basic retry strategy (transport level only)
     retry_strategy = Retry(
-        total=3,  # Numero massimo di tentativi totali
-        backoff_factor=5,  # Attesa esponenziale (1s, 2s, 4s...)
-        status_forcelist=[429, 500, 502, 503, 504],  # Retry su errori server o rate limit
-        allowed_methods=["HEAD", "GET", "OPTIONS"],  # Metodi sicuri da riprovare
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
     )
 
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
-
-
-def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | None:
-    """Fetches JSON from a URL with robust retry logic and session reuse."""
-    final_headers = DEFAULT_HEADERS.copy()
-    if headers:
-        final_headers.update(headers)
-
-    # Usa una sessione per riutilizzare la connessione TCP (più veloce e meno sospetto)
-    session = get_request_session()
-
-    logger.debug("Fetching JSON from %s", url)
-
-    for attempt in range(retries):
-        try:
-            # Timeout esplicito per evitare hang infiniti
-            resp = session.get(url, headers=final_headers, timeout=20)
-
-            # Gestione specifica Rate Limit (se il Retry automatico dell'adapter fallisce)
-            if resp.status_code == 429:
-                wait_time = (attempt + 1) * 10
-                logger.warning(f"Rate limited (429) on {url}, waiting {wait_time}s")
-                time.sleep(wait_time)
-                continue
-
-            resp.raise_for_status()
-
-            # Gestione contenuti vuoti
-            if not resp.content:
-                logger.warning(f"Empty response from {url}")
-                return None
-
-            try:
-                return resp.json()
-            except ValueError:
-                # Fallback: gestione Brotli manuale o encoding errati
-                logger.debug("Direct JSON parse failed for %s, trying fallbacks...", url)
-                return _handle_json_fallback(resp)
-
-        except RequestException as e:
-            # Se siamo all'ultimo tentativo, logghiamo e usciamo
-            if attempt == retries - 1:
-                _log_request_exception(url, e)
-                return None
-
-            # Altrimenti attendiamo un po' (backoff manuale sopra quello dell'adapter)
-            wait = (2**attempt) * 0.5
-            logger.debug(f"Attempt {attempt + 1} failed for {url}: {e}. Retrying in {wait}s...")
-            time.sleep(wait)
-
-    return None
-
-
-def _handle_json_fallback(resp: requests.Response) -> Any | None:
-    """Gestisce casi limite di decompressione o parsing JSON."""
-    # 1. Prova Brotli manuale se presente header ma non gestito
-    ce = resp.headers.get("content-encoding", "").lower()
-    if "br" in ce:
-        try:
-            import brotli
-
-            decoded = brotli.decompress(resp.content)
-            return json.loads(decoded.decode("utf-8"))
-        except ImportError:
-            logger.debug("Brotli compression detected but 'brotli' package not installed.")
-        except (json.JSONDecodeError, ValueError) as exc:
-            logger.exception(
-                "Brotli decompression failed for response from %s: %s",
-                getattr(resp, "url", "unknown"),
-                exc,
-            )
-
-    # 2. Prova a pulire il testo (a volte i server mandano BOM o caratteri sporchi)
-    try:
-        text = resp.text.strip()
-        # Rimuovi BOM se presente
-        if text.startswith("\ufeff"):
-            text = text[1:]
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"JSON fallback parsing failed: {e}")
-        # Log anteprima per debug
-        logger.debug(f"Response preview: {resp.text[:200]}")
-        return None
-
-
-def _log_request_exception(url: str, exc: RequestException) -> None:
-    logger.error("Failed to fetch JSON from %s: %s", url, exc)
-    response = getattr(exc, "response", None)
-    if response is not None:
-        status_code = getattr(response, "status_code", None)
-        if status_code is not None:
-            logger.error("HTTP Status: %s", status_code)
 
 
 def save_json(path, data):

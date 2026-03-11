@@ -22,9 +22,10 @@ Parametri **override per biblioteca** (attivi solo con `settings.network.librari
 * `workers_per_job`, `min_delay_s`, `max_delay_s`, `retry_max_attempts`, `backoff_base_s`, `backoff_cap_s`, `respect_retry_after`.
 
 * `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
-* `settings.images.probe_remote_max_resolution`: Abilita il probing automatico della risoluzione massima online per pagina.
-* `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi size IIIF.
-* `settings.images.download_strategy_custom`: Strategia custom (lista size, es. `3000,1740,max`) usata solo quando `mode=custom`.
+* `settings.images.probe_remote_max_resolution`: mantiene il probing `info.json` usato dalla riga informativa `Remote` nelle miniature Studio; non cambia la strategia di download.
+* `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi diretti IIIF prima dell'eventuale stitch.
+* `settings.images.download_strategy_custom`: Strategia custom (lista size, es. `3000,1740,max`) usata solo quando `mode=custom`. E un ordine di tentativi, non una classifica assoluta di qualità.
+* `settings.images.stitch_mode_default`: decide se il download standard puo fare fallback automatico a stitch (`auto_fallback`), restare solo diretto (`direct_only`) o usare solo stitch (`stitch_only`).
 * `settings.images.iiif_quality`: Segmento quality nelle URL IIIF (`.../quality.jpg`). In generale lasciare `default`; usare `gray/bitonal` solo per casi specifici.
 * `settings.images.local_optimize.max_long_edge_px`: lato lungo massimo usato da `Ottimizza scans locali`.
 * `settings.images.local_optimize.jpeg_quality`: qualità JPEG usata da `Ottimizza scans locali`.
@@ -34,6 +35,7 @@ Parametri **override per biblioteca** (attivi solo con `settings.network.librari
 * `settings.pdf.prefer_native_pdf` (default: `true`): se il manifest IIIF espone un PDF nativo (`rendering`), il downloader lo usa come sorgente primaria.
 * `settings.pdf.create_pdf_from_images` (default: `false`): se non viene usato un PDF nativo, crea un PDF compilato dalle immagini scaricate.
 * `settings.pdf.viewer_dpi` (default: `150`): DPI usati per estrarre le immagini JPG dal PDF nativo per il viewer.
+* `settings.pdf.viewer_jpeg_quality` (default: `95`): qualità JPEG usata solo nella rasterizzazione dei PDF nativi in scans locali.
 * `settings.pdf.profiles`: catalogo preset PDF avanzati (`balanced`, `high_quality`, `archival_highres`, `lightweight`) con supporto custom globale.
 * `settings.pdf.profiles.catalog.<profilo>.image_source_mode`: definisce la sorgente immagini del profilo (`local_balanced`, `local_highres`, `remote_highres_temp`).
 * `settings.pdf.profiles.catalog.<profilo>.max_parallel_page_fetch`: limite di fetch parallelo quando il profilo usa il remoto high-res temporaneo.
@@ -77,8 +79,9 @@ Nel tab **Studio > Output**:
   - eventuali override compilati nel pannello espanso;
   - lo scope selezionato (`Tutte le pagine` oppure `Solo selezione`).
 * nel sub-tab `Pagine`:
-  - la griglia miniature mostra per ogni pagina risoluzione **Locale** e **Online max** per confronto immediato;
-  - azione puntuale **High-Res** per scaricare solo la pagina necessaria;
+  - la griglia miniature mostra per ogni pagina **Locale** e **Remote**; se una dimensione diretta è stata verificata da un download reale, compare un pallino verde accanto a `Locale`;
+  - azione puntuale **Hi** per forzare un refresh diretto `full/max` della singola pagina;
+  - azione puntuale **Std** per usare la stessa strategia standard del volume (tentativi diretti + stitch solo come fallback);
   - pulsante **Ottimizza scans locali** per ridurre lo spazio occupato dalle scans locali con ottimizzazione lossy (resize + compressione JPEG configurabile via `settings.images.local_optimize.max_long_edge_px` e `settings.images.local_optimize.jpeg_quality`).
     - **Nota di sicurezza**: l'ottimizzazione valida tutti i percorsi file per prevenire attacchi di path traversal via symlink. Solo i file all'interno della directory downloads vengono processati.
 
@@ -98,11 +101,25 @@ Le API key vanno in `api_keys`: `openai`, `anthropic`, `google_vision`, `hugging
 
 Il sistema di download è stato completamente riscritto per essere intelligente e resiliente.
 
+### 🔌 HTTP Client Centralizzato (v0.7.0)
+
+Il nuovo `HTTPClient` centralizzato elimina oltre 200 righe di codice duplicato per retry e backoff:
+* **Retry automatico** con backoff esponenziale configurabile per biblioteca.
+* **Rate limiting per host** con algoritmo sliding window (Gallica: 4 req/min, altre: 20 req/min).
+* **Policy di rete per biblioteca** con timeout, concurrency e backoff personalizzabili.
+* **Metriche di tracciamento** (richieste, retry, timeout).
+* **Thread-safe** con semafori per limitare richieste parallele per host.
+
+Moduli migrati: downloader, IIIF tiles, resolution probe, manifest fetch, catalogo esterno.
+
+Config chiavi: `settings.network.global.*` (globale) e `settings.network.libraries.<library>.*` (per-biblioteca).
+
 ### 🧭 Discovery separata da Download Manager
 
 La pagina Discovery è divisa in due aree:
 * **Sinistra**: ricerca/risoluzione manifest e anteprime.
 * **Destra**: **Download Manager** con coda, job in esecuzione, errori e retry.
+* I job pagina generati da `Hi` / `Std` nello Studio non sporcano più la lista principale: vengono mostrati in una sezione compatta separata (`Attività Immagini Studio`) con solo testo e azione `Annulla` o `Rimuovi`.
 
 Questo permette di continuare a cercare nuovi manoscritti mentre uno o più download sono in corso.
 
@@ -162,8 +179,9 @@ Indicazioni pratiche:
 
 Per collezioni con pagine molto pesanti, il flusso consigliato e:
 * mantieni nel repository locale una copia **bilanciata** per lavorare veloce in viewer e trascrizione;
-* usa il confronto **Locale vs Online max** nel tab `Studio > Output` per capire subito dove manca dettaglio;
-* scarica la high-res solo sulle pagine necessarie con il pulsante **High-Res** della miniatura;
+* usa il confronto **Locale / Remote** nel tab `Studio > Output` per capire subito dove il dato dichiarato dal servizio IIIF differisce dal locale;
+* usa **Hi** solo per forzare il miglior diretto disponibile sulla singola pagina;
+* usa **Std** quando vuoi riallineare una pagina alla stessa strategia standard usata dal download automatico del volume;
 * quando serve un PDF finale ad altissima qualita, usa un profilo con `image_source_mode=remote_highres_temp`;
 * abilita `cleanup_temp_after_export` nel profilo per eliminare in automatico i temporanei high-res a fine export.
 
@@ -208,9 +226,14 @@ Accesso consigliato:
 ### 🖼️ Viewer e Layout
 
 * **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
+* **Modalità Visualizzazione Dual-Mode**:
+  - **Modalità Remota** (download incompleti/pause): Mirador carica il manifest originale dal server biblioteca (es. `gallica.bnf.fr`) e mostra TUTTE le pagine, scaricando immagini on-demand. Utile per anteprima durante download. Parametro URL: `?allow_remote_preview=true`.
+  - **Modalità Locale** (download completi): Mirador carica il manifest locale (`/iiif/manifest/...`) e mostra solo le pagine scaricate usando immagini locali. Funziona offline. Default quando `viewer.mirador.require_complete_local_images=true` e tutte le pagine sono disponibili.
+* **Indicatore Stato**: Badge READ_SOURCE nel pannello stato: **AMBRA** per remoto, **VERDE** per locale.
 * **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
 * **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
 * **Header stato asset**: in Studio vengono mostrati stato download e badge `Sorgente: Remota/Locale`.
+* **Pannello Stato Professionale**: Badge colorati per stato tecnico (read_source, state, scans, staging, info PDF) con design responsivo.
 
 ### ℹ️ Tab Info (riordinato)
 
@@ -260,7 +283,7 @@ Dettagli UX attuali:
 ## 6. Troubleshooting
 
 * **Errore "Connection Reset" o 403 su Gallica**:
-  * Il tuo IP potrebbe essere stato bloccato temporaneamente. Il sistema ora include un sistema di "Backoff" (attesa esponenziale), ma se il blocco persiste, prova a cambiare rete (es. Hotspot).
+  * Il tuo IP potrebbe essere stato bloccato temporaneamente. Il sistema ora include un sistema di "Backoff" (attesa esponenziale) con rate limiting per host (4 req/min per Gallica). Se il blocco persiste, prova a cambiare rete (es. Hotspot).
 * **Overlay OCR bloccato**:
   * Controlla i log (`logs/app.log`). Se il worker Python crasha, l'overlay potrebbe non ricevere il segnale di stop. Ricarica la pagina.
 * **PDF scaricato ma Studio vuoto**:
@@ -268,13 +291,27 @@ Dettagli UX attuali:
 * **Pagine presenti solo in `temp_images`**:
   * Comportamento possibile con `partial_promotion_mode=never`: il sistema sta mantenendo staging coerente.
   * Se ti serve disponibilita immediata in Studio dopo pausa, imposta `settings.storage.partial_promotion_mode=on_pause`.
+* **Studio mostra immagini remote invece di locali**:
+  * Comportamento previsto se download incompleto e `viewer.mirador.require_complete_local_images=true` (default).
+  * Studio usa **Modalità Remota** automaticamente: Mirador carica manifest originale e scarica immagini on-demand dal server biblioteca.
+  * **Badge AMBRA** nel pannello stato indica modalità remota.
+  * Per forzare modalità remota: aggiungi `?allow_remote_preview=true` all'URL Studio.
+  * Per visualizzazione locale: completa il download o imposta `require_complete_local_images=false` in config.
+* **Come visualizzare anteprima manoscritto durante download?**:
+  * Usa `?allow_remote_preview=true` nell'URL Studio per forzare Modalità Remota.
+  * Mirador mostrerà TUTTE le pagine scaricando immagini on-demand dal server originale.
+* **Download Gallica più lenti di altre biblioteche?**:
+  * Comportamento previsto: HTTP Client applica rate limiting più stretto per Gallica (4 req/min vs 20 req/min default).
+  * Motivo: server Gallica usano WAF aggressivo e rate limiting. Limiti conservativi prevengono blocchi IP.
+  * Config: `settings.network.libraries.gallica.*` in `config.json`.
 * **`/studio` non apre subito il documento**:
   * È comportamento previsto: senza contesto (`doc_id` + `library`) Studio mostra il mini-hub `Riprendi lavoro`.
 
 ## 7. Developer Notes
 
 * **Architecture**: Vedi `docs/ARCHITECTURE.md` per il diagramma dei moduli.
-* **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/utils.py` (Session, Headers, Retry).
+* **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/http_client.py` (HTTPClient con retry, backoff, rate limiting) e `src/universal_iiif_core/utils.py` (Session legacy, Headers, WAF Bypass).
+* **HTTP Client**: Documentazione completa in `docs/HTTP_CLIENT.md` (implementation, configuration, migration guide).
 * **Testing**:
   * Unit test offline (Discovery/Gallica): `pytest tests/test_search_gallica_unit.py tests/test_discovery_handlers_resolve_manifest.py`
   * Live test (Rete richiesta): `pytest tests/test_live.py` (Abilitare in config).

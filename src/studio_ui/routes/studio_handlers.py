@@ -21,7 +21,11 @@ from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.studio.cropper import render_cropper_modal
 from studio_ui.components.studio.export import (
+    _thumbnail_card_id,
+    render_export_pages_summary,
+    render_export_thumbnail_card,
     render_export_thumbnails_panel,
+    render_export_thumbs_poller,
     render_pdf_inventory_panel,
     render_studio_export_tab,
 )
@@ -386,6 +390,9 @@ def _normalize_remote_cache(raw_cache: object) -> dict[str, dict]:
             "width": value.get("width"),
             "height": value.get("height"),
             "service_url": value.get("service_url"),
+            "verified_direct_width": value.get("verified_direct_width"),
+            "verified_direct_height": value.get("verified_direct_height"),
+            "verified_direct_ts": int(value.get("verified_direct_ts") or value.get("updated_ts") or now_ts),
             "last_access_ts": int(value.get("last_access_ts") or value.get("updated_ts") or now_ts),
             "updated_ts": int(value.get("updated_ts") or value.get("last_access_ts") or now_ts),
         }
@@ -458,11 +465,12 @@ def _page_delta_map(meta: dict[str, Any]) -> dict[int, dict[str, Any]]:
 
 
 _STUDIO_EXPORT_HIGHRES_PREF_KEY = "studio_export_highres_jobs"
+_STUDIO_EXPORT_STITCH_PREF_KEY = "studio_export_stitch_jobs"
 _STUDIO_EXPORT_PAGE_SOURCE_PREF_KEY = "studio_export_page_sources"
 _ACTIVE_DOWNLOAD_STATES = {"queued", "running", "cancelling", "pausing"}
 
 
-def _normalize_highres_pref(raw_pref: Any) -> dict[int, dict[str, Any]]:
+def _normalize_page_job_pref(raw_pref: Any) -> dict[int, dict[str, Any]]:
     if not isinstance(raw_pref, dict):
         return {}
     normalized: dict[int, dict[str, Any]] = {}
@@ -487,12 +495,12 @@ def _normalize_highres_pref(raw_pref: Any) -> dict[int, dict[str, Any]]:
     return normalized
 
 
-def _load_highres_pref(doc_id: str) -> dict[int, dict[str, Any]]:
-    raw_pref = VaultManager().get_manuscript_ui_pref(doc_id, _STUDIO_EXPORT_HIGHRES_PREF_KEY, {})
-    return _normalize_highres_pref(raw_pref)
+def _load_page_job_pref(doc_id: str, pref_key: str) -> dict[int, dict[str, Any]]:
+    raw_pref = VaultManager().get_manuscript_ui_pref(doc_id, pref_key, {})
+    return _normalize_page_job_pref(raw_pref)
 
 
-def _save_highres_pref(doc_id: str, page_jobs: dict[int, dict[str, Any]]) -> None:
+def _save_page_job_pref(doc_id: str, pref_key: str, page_jobs: dict[int, dict[str, Any]]) -> None:
     payload = {
         str(int(page)): {
             "job_id": str((entry or {}).get("job_id") or ""),
@@ -502,7 +510,23 @@ def _save_highres_pref(doc_id: str, page_jobs: dict[int, dict[str, Any]]) -> Non
         for page, entry in page_jobs.items()
         if int(page) > 0 and str((entry or {}).get("job_id") or "").strip()
     }
-    VaultManager().set_manuscript_ui_pref(doc_id, _STUDIO_EXPORT_HIGHRES_PREF_KEY, payload)
+    VaultManager().set_manuscript_ui_pref(doc_id, pref_key, payload)
+
+
+def _load_highres_pref(doc_id: str) -> dict[int, dict[str, Any]]:
+    return _load_page_job_pref(doc_id, _STUDIO_EXPORT_HIGHRES_PREF_KEY)
+
+
+def _save_highres_pref(doc_id: str, page_jobs: dict[int, dict[str, Any]]) -> None:
+    _save_page_job_pref(doc_id, _STUDIO_EXPORT_HIGHRES_PREF_KEY, page_jobs)
+
+
+def _load_stitch_pref(doc_id: str) -> dict[int, dict[str, Any]]:
+    return _load_page_job_pref(doc_id, _STUDIO_EXPORT_STITCH_PREF_KEY)
+
+
+def _save_stitch_pref(doc_id: str, page_jobs: dict[int, dict[str, Any]]) -> None:
+    _save_page_job_pref(doc_id, _STUDIO_EXPORT_STITCH_PREF_KEY, page_jobs)
 
 
 def _normalize_page_source_pref(raw_pref: Any) -> dict[int, dict[str, str]]:
@@ -518,7 +542,7 @@ def _normalize_page_source_pref(raw_pref: Any) -> dict[int, dict[str, str]]:
             continue
         source = str(payload.get("source") or "").strip().lower()
         source_ts = str(payload.get("source_ts") or "").strip()
-        if source not in {"highres", "optimized"}:
+        if source not in {"highres", "optimized", "stitched"}:
             continue
         normalized[page_num] = {"source": source, "source_ts": source_ts}
     return normalized
@@ -536,7 +560,7 @@ def _save_page_source_pref(doc_id: str, page_source_map: dict[int, dict[str, str
             "source_ts": str((entry or {}).get("source_ts") or ""),
         }
         for page, entry in page_source_map.items()
-        if int(page) > 0 and str((entry or {}).get("source") or "").strip() in {"highres", "optimized"}
+        if int(page) > 0 and str((entry or {}).get("source") or "").strip() in {"highres", "optimized", "stitched"}
     }
     VaultManager().set_manuscript_ui_pref(doc_id, _STUDIO_EXPORT_PAGE_SOURCE_PREF_KEY, payload)
 
@@ -555,7 +579,7 @@ def _merge_page_source_pref(
             continue
         source = str((payload or {}).get("source") or "").strip().lower()
         source_ts = str((payload or {}).get("source_ts") or "").strip()
-        if source not in {"highres", "optimized"}:
+        if source not in {"highres", "optimized", "stitched"}:
             continue
         merged[page] = {"source": source, "source_ts": source_ts}
     return merged
@@ -582,27 +606,68 @@ def _set_idle_feedback(feedback: dict[str, str], *, label: str, tone: str = "inf
     return feedback
 
 
+def _force_done_feedback(feedback: dict[str, str], *, label: str) -> dict[str, str]:
+    out = dict(feedback or {})
+    out["state"] = "done"
+    out["progress_percent"] = "100"
+    out["tone"] = str(out.get("tone") or "success")
+    out["label"] = label
+    return out
+
+
+def _apply_single_preferred_source(
+    *,
+    preferred_source: str,
+    preferred_feedback: dict[str, str],
+    preferred_label: str,
+    other_feedbacks: list[tuple[dict[str, str], str]],
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    preferred_state = str(preferred_feedback.get("state") or "").strip().lower()
+    if preferred_state not in {"queued", "running"}:
+        preferred_feedback = _force_done_feedback(preferred_feedback, label=preferred_label)
+    updated_others: list[dict[str, str]] = []
+    for payload, label in other_feedbacks:
+        if str(payload.get("state") or "").strip().lower() == "done":
+            payload = _set_idle_feedback(payload, label=label)
+        updated_others.append(payload)
+    return preferred_feedback, updated_others
+
+
 def _apply_preferred_source_to_feedback(
     *,
     highres_feedback: dict[str, str],
+    stitch_feedback: dict[str, str],
     optimize_feedback: dict[str, str],
     preferred_source: str,
-) -> tuple[dict[str, str], dict[str, str], bool]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], bool]:
     if preferred_source == "highres":
-        highres_state = str(highres_feedback.get("state") or "").strip().lower()
-        if highres_state not in {"queued", "running"}:
-            highres_feedback["state"] = "done"
-            highres_feedback["progress_percent"] = "100"
-        if str(optimize_feedback.get("state") or "").strip().lower() == "done":
-            optimize_feedback = _set_idle_feedback(optimize_feedback, label="Ottimizza")
-        return highres_feedback, optimize_feedback, True
+        highres_feedback, others = _apply_single_preferred_source(
+            preferred_source=preferred_source,
+            preferred_feedback=highres_feedback,
+            preferred_label="High-Res",
+            other_feedbacks=[(stitch_feedback, "Strategia standard"), (optimize_feedback, "Ottimizza")],
+        )
+        stitch_feedback, optimize_feedback = others
+        return highres_feedback, stitch_feedback, optimize_feedback, True
+    if preferred_source == "stitched":
+        stitch_feedback, others = _apply_single_preferred_source(
+            preferred_source=preferred_source,
+            preferred_feedback=stitch_feedback,
+            preferred_label="Strategia standard",
+            other_feedbacks=[(highres_feedback, "High-Res"), (optimize_feedback, "Ottimizza")],
+        )
+        highres_feedback, optimize_feedback = others
+        return highres_feedback, stitch_feedback, optimize_feedback, True
     if preferred_source == "optimized":
-        optimize_feedback["state"] = "done"
-        optimize_feedback["progress_percent"] = "100"
-        if str(highres_feedback.get("state") or "").strip().lower() == "done":
-            highres_feedback = _set_idle_feedback(highres_feedback, label="High-Res")
-        return highres_feedback, optimize_feedback, True
-    return highres_feedback, optimize_feedback, False
+        optimize_feedback, others = _apply_single_preferred_source(
+            preferred_source=preferred_source,
+            preferred_feedback=optimize_feedback,
+            preferred_label="Ottimizzata",
+            other_feedbacks=[(highres_feedback, "High-Res"), (stitch_feedback, "Strategia standard")],
+        )
+        highres_feedback, stitch_feedback = others
+        return highres_feedback, stitch_feedback, optimize_feedback, True
+    return highres_feedback, stitch_feedback, optimize_feedback, False
 
 
 def _should_mark_highres_source_update(prev_state: str, current_state: str) -> bool:
@@ -613,26 +678,38 @@ def _should_mark_highres_source_update(prev_state: str, current_state: str) -> b
     return now == "done" and prev != "done"
 
 
-def _highres_feedback_row(*, status: str, current: int, total: int, source_ts: str = "") -> dict[str, str]:
+def _download_feedback_row(
+    *,
+    status: str,
+    current: int,
+    total: int,
+    source_ts: str = "",
+    idle_label: str,
+    queued_label: str,
+    running_label: str,
+    done_label: str,
+    error_label: str,
+    interrupted_label: str,
+) -> dict[str, str]:
     status_key = str(status or "").strip().lower()
     source_value = str(source_ts or "").strip()
     percent = 0
     if total > 0:
         percent = int(max(0, min(100, (max(0, int(current)) / max(1, int(total))) * 100)))
     if status_key == "queued":
-        return {"state": "queued", "tone": "info", "label": "High-Res in coda", "progress_percent": "0"}
+        return {"state": "queued", "tone": "info", "label": queued_label, "progress_percent": "0"}
     if status_key in {"running", "cancelling", "pausing"}:
         return {
             "state": "running",
             "tone": "warning",
-            "label": "High-Res in corso",
+            "label": running_label,
             "progress_percent": str(percent),
         }
     if status_key == "completed":
         return {
             "state": "done",
             "tone": "success",
-            "label": "High-Res completato",
+            "label": done_label,
             "progress_percent": "100",
             "source_ts": source_value,
         }
@@ -640,7 +717,7 @@ def _highres_feedback_row(*, status: str, current: int, total: int, source_ts: s
         return {
             "state": "error",
             "tone": "danger",
-            "label": "Errore High-Res",
+            "label": error_label,
             "progress_percent": "100",
             "source_ts": source_value,
         }
@@ -648,15 +725,27 @@ def _highres_feedback_row(*, status: str, current: int, total: int, source_ts: s
         return {
             "state": "error",
             "tone": "warning",
-            "label": "High-Res interrotto",
+            "label": interrupted_label,
             "progress_percent": "100",
             "source_ts": source_value,
         }
-    return {"state": "idle", "tone": "info", "label": "High-Res", "progress_percent": "0"}
+    return {"state": "idle", "tone": "info", "label": idle_label, "progress_percent": "0"}
 
 
-def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int, dict[str, str]], bool]:
-    pref = _load_highres_pref(doc_id)
+def _resolve_page_download_feedback(
+    doc_id: str,
+    library: str,
+    *,
+    pref_key: str,
+    success_source: str,
+    idle_label: str,
+    queued_label: str,
+    running_label: str,
+    done_label: str,
+    error_label: str,
+    interrupted_label: str,
+) -> tuple[dict[int, dict[str, str]], bool]:
+    pref = _load_page_job_pref(doc_id, pref_key)
     if not pref:
         return {}, False
 
@@ -681,7 +770,18 @@ def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int,
         current = int(job.get("current") or 0)
         total = int(job.get("total") or 0)
         source_ts = str(job.get("finished_at") or job.get("updated_at") or entry.get("source_ts") or "").strip()
-        feedback = _highres_feedback_row(status=status, current=current, total=total, source_ts=source_ts)
+        feedback = _download_feedback_row(
+            status=status,
+            current=current,
+            total=total,
+            source_ts=source_ts,
+            idle_label=idle_label,
+            queued_label=queued_label,
+            running_label=running_label,
+            done_label=done_label,
+            error_label=error_label,
+            interrupted_label=interrupted_label,
+        )
         feedback["job_id"] = job_id
         feedback_by_page[page_num] = feedback
 
@@ -690,7 +790,7 @@ def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int,
             _should_mark_highres_source_update(str(entry.get("state") or ""), state)
             or (page_num not in existing_source_pref and bool(job))
         ):
-            source_updates[page_num] = {"source": "highres", "source_ts": str(int(time.time() * 1000))}
+            source_updates[page_num] = {"source": success_source, "source_ts": str(int(time.time() * 1000))}
         if status in _ACTIVE_DOWNLOAD_STATES or state in {"queued", "running"}:
             has_active = True
             updated_pref[page_num] = {"job_id": job_id, "state": status or state, "source_ts": source_ts}
@@ -699,13 +799,43 @@ def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int,
 
     if updated_pref != pref:
         with suppress(Exception):
-            _save_highres_pref(doc_id, updated_pref)
+            _save_page_job_pref(doc_id, pref_key, updated_pref)
     if source_updates:
         with suppress(Exception):
             merged_source_pref = _merge_page_source_pref(existing_source_pref, source_updates)
             if merged_source_pref != existing_source_pref:
                 _save_page_source_pref(doc_id, merged_source_pref)
     return feedback_by_page, has_active
+
+
+def _resolve_highres_page_feedback(doc_id: str, library: str) -> tuple[dict[int, dict[str, str]], bool]:
+    return _resolve_page_download_feedback(
+        doc_id,
+        library,
+        pref_key=_STUDIO_EXPORT_HIGHRES_PREF_KEY,
+        success_source="highres",
+        idle_label="High-Res",
+        queued_label="High-Res in coda",
+        running_label="High-Res in corso",
+        done_label="High-Res completato",
+        error_label="Errore High-Res",
+        interrupted_label="High-Res interrotto",
+    )
+
+
+def _resolve_stitch_page_feedback(doc_id: str, library: str) -> tuple[dict[int, dict[str, str]], bool]:
+    return _resolve_page_download_feedback(
+        doc_id,
+        library,
+        pref_key=_STUDIO_EXPORT_STITCH_PREF_KEY,
+        success_source="stitched",
+        idle_label="Strategia standard",
+        queued_label="Strategia standard in coda",
+        running_label="Strategia standard in corso",
+        done_label="Strategia standard completata",
+        error_label="Errore strategia standard",
+        interrupted_label="Strategia standard interrotta",
+    )
 
 
 def _merge_page_feedback(
@@ -772,43 +902,64 @@ def _optimize_feedback_from_deltas(
 
 def _resolve_current_image_feedback(
     highres_feedback_by_num: dict[int, dict[str, str]],
+    stitch_feedback_by_num: dict[int, dict[str, str]],
     optimize_feedback_by_num: dict[int, dict[str, str]],
     preferred_source_by_page: dict[int, dict[str, str]] | None = None,
-) -> tuple[dict[int, dict[str, str]], dict[int, dict[str, str]]]:
+) -> tuple[dict[int, dict[str, str]], dict[int, dict[str, str]], dict[int, dict[str, str]]]:
     resolved_highres = _normalize_feedback_map(highres_feedback_by_num)
+    resolved_stitch = _normalize_feedback_map(stitch_feedback_by_num)
     resolved_opt = _normalize_feedback_map(optimize_feedback_by_num)
     preferred = _normalize_feedback_map(preferred_source_by_page)
-    pages = set(resolved_highres.keys()) | set(resolved_opt.keys()) | set(preferred.keys())
+    pages = (
+        set(resolved_highres.keys()) | set(resolved_stitch.keys()) | set(resolved_opt.keys()) | set(preferred.keys())
+    )
+    done_priority = {"highres": 0, "stitched": 1, "optimized": 2}
+    labels = {"highres": "High-Res", "stitched": "Strategia standard", "optimized": "Ottimizza"}
     for page in pages:
         hi = resolved_highres.get(page) or {}
+        stitch = resolved_stitch.get(page) or {}
         opt = resolved_opt.get(page) or {}
         preferred_source = str((preferred.get(page) or {}).get("source") or "").strip().lower()
-        hi, opt, consumed = _apply_preferred_source_to_feedback(
+        hi, stitch, opt, consumed = _apply_preferred_source_to_feedback(
             highres_feedback=hi,
+            stitch_feedback=stitch,
             optimize_feedback=opt,
             preferred_source=preferred_source,
         )
         resolved_highres[page] = hi
+        resolved_stitch[page] = stitch
         resolved_opt[page] = opt
         if consumed:
             continue
-        hi_state = str(hi.get("state") or "").strip().lower()
-        opt_state = str(opt.get("state") or "").strip().lower()
-        if hi_state != "done" or opt_state != "done":
+        all_feedback = {
+            "highres": hi,
+            "stitched": stitch,
+            "optimized": opt,
+        }
+        done_sources = [
+            source
+            for source, payload in all_feedback.items()
+            if str(payload.get("state") or "").strip().lower() == "done"
+        ]
+        if not done_sources:
             continue
-        hi_ts = str(hi.get("source_ts") or "").strip()
-        opt_ts = str(opt.get("source_ts") or "").strip()
-        prefer_highres = bool(hi_ts and (hi_ts >= opt_ts or not opt_ts))
-        if not hi_ts and not opt_ts:
-            prefer_highres = True
-        if prefer_highres:
-            opt = _set_idle_feedback(opt, label="Ottimizza")
-            resolved_opt[page] = opt
-            continue
-        hi = _set_idle_feedback(hi, label="High-Res")
-        resolved_highres[page] = hi
+        preferred_done = max(
+            done_sources,
+            key=lambda source: (
+                str(all_feedback[source].get("source_ts") or ""),
+                -done_priority[source],
+            ),
+        )
+        for source, payload in all_feedback.items():
+            if source == preferred_done:
+                continue
+            if str(payload.get("state") or "").strip().lower() == "done":
+                all_feedback[source] = _set_idle_feedback(payload, label=labels[source])
+        resolved_highres[page] = all_feedback["highres"]
+        resolved_stitch[page] = all_feedback["stitched"]
+        resolved_opt[page] = all_feedback["optimized"]
 
-    return resolved_highres, resolved_opt
+    return resolved_highres, resolved_stitch, resolved_opt
 
 
 def _persist_optimized_page_source_pref(doc_id: str, meta: dict[str, Any]) -> None:
@@ -880,6 +1031,90 @@ def _resolve_remote_dims(
     return remote_w, remote_h, remote_service
 
 
+def _normalize_download_method(raw_method: Any, original_url: Any = "") -> str:
+    method = str(raw_method or "").strip().lower()
+    if method in {"direct", "tile_stitch", "cached"}:
+        return method
+    original_text = str(original_url or "").strip().lower()
+    if "tile-stitch" in original_text:
+        return "tile_stitch"
+    if "(cached)" in original_text:
+        return "cached"
+    if original_text:
+        return "direct"
+    return ""
+
+
+def _stats_download_method_map(stats_payload: dict[str, Any]) -> dict[int, str]:
+    methods: dict[int, str] = {}
+    for entry in stats_payload.get("pages") or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            page_num = int(entry.get("page_index", -1)) + 1
+        except (TypeError, ValueError):
+            continue
+        if page_num <= 0:
+            continue
+        method = _normalize_download_method(entry.get("download_method"), entry.get("original_url"))
+        if method:
+            methods[page_num] = method
+    return methods
+
+
+def _stats_page_meta_map(stats_payload: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    items: dict[int, dict[str, Any]] = {}
+    for entry in stats_payload.get("pages") or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            page_num = int(entry.get("page_index", -1)) + 1
+        except (TypeError, ValueError):
+            continue
+        if page_num > 0:
+            items[page_num] = entry
+    return items
+
+
+def _verified_direct_dims(
+    *,
+    page_num: int,
+    stats_by_num: dict[int, dict[str, Any]],
+    remote_cache: dict[str, dict],
+) -> tuple[int | None, int | None]:
+    stats_entry = stats_by_num.get(page_num) or {}
+    method = _normalize_download_method(stats_entry.get("download_method"), stats_entry.get("original_url"))
+    if method in {"direct", "cached"}:
+        try:
+            width = int(stats_entry.get("width") or 0)
+        except (TypeError, ValueError):
+            width = 0
+        try:
+            height = int(stats_entry.get("height") or 0)
+        except (TypeError, ValueError):
+            height = 0
+        if width > 0 and height > 0:
+            remote_cache.setdefault(str(page_num), {}).update(
+                {
+                    "verified_direct_width": width,
+                    "verified_direct_height": height,
+                    "verified_direct_ts": int(time.time()),
+                }
+            )
+            return width, height
+
+    cache_entry = remote_cache.get(str(page_num)) or {}
+    try:
+        cached_width = int(cache_entry.get("verified_direct_width") or 0)
+    except (TypeError, ValueError):
+        cached_width = 0
+    try:
+        cached_height = int(cache_entry.get("verified_direct_height") or 0)
+    except (TypeError, ValueError):
+        cached_height = 0
+    return (cached_width or None), (cached_height or None)
+
+
 def _build_thumbnail_item(
     *,
     page_num: int,
@@ -892,7 +1127,10 @@ def _build_thumbnail_item(
     remote_probe_enabled: bool,
     page_delta_by_num: dict[int, dict[str, Any]],
     page_feedback_by_num: dict[int, dict[str, str]],
+    stitch_feedback_by_num: dict[int, dict[str, str]],
     optimize_feedback_by_num: dict[int, dict[str, str]],
+    download_method_by_num: dict[int, str],
+    stats_by_num: dict[int, dict[str, Any]],
     force_remote_refresh: bool = False,
 ) -> tuple[dict[str, Any], int]:
     thumb_path = ensure_thumbnail(
@@ -912,12 +1150,18 @@ def _build_thumbnail_item(
         remote_probe_enabled=remote_probe_enabled,
         force_refresh=force_remote_refresh,
     )
+    verified_w, verified_h = _verified_direct_dims(
+        page_num=page_num,
+        stats_by_num=stats_by_num,
+        remote_cache=remote_cache,
+    )
     delta_entry = page_delta_by_num.get(page_num) or {}
     delta_saved = 0
     if delta_entry:
         with suppress(Exception):
             delta_saved = int(delta_entry.get("bytes_saved") or 0)
     highres_feedback = page_feedback_by_num.get(page_num) or {}
+    stitch_feedback = stitch_feedback_by_num.get(page_num) or {}
     optimize_feedback = optimize_feedback_by_num.get(page_num) or {}
     return (
         {
@@ -926,12 +1170,16 @@ def _build_thumbnail_item(
             "local_width": local_w,
             "local_height": local_h,
             "local_bytes": int(local_bytes),
-            "remote_width": remote_w,
-            "remote_height": remote_h,
-            "remote_service_url": remote_service,
+            "iiif_declared_width": remote_w,
+            "iiif_declared_height": remote_h,
+            "iiif_service_url": remote_service,
+            "verified_direct_width": verified_w,
+            "verified_direct_height": verified_h,
+            "download_method": str(download_method_by_num.get(page_num) or ""),
             "delta_saved_bytes": int(max(delta_saved, 0)),
             "action_feedback": highres_feedback,
             "highres_feedback": highres_feedback,
+            "stitch_feedback": stitch_feedback,
             "optimize_feedback": optimize_feedback,
         },
         int(local_bytes),
@@ -944,8 +1192,11 @@ def _build_export_thumbnail_slice(
     *,
     thumb_page: int = 1,
     page_size: int | None = None,
+    persist_page_size: bool = True,
+    include_items: bool = True,
     page_delta_by_num: dict[int, dict[str, Any]] | None = None,
     page_feedback_by_num: dict[int, dict[str, str]] | None = None,
+    stitch_feedback_by_num: dict[int, dict[str, str]] | None = None,
     optimize_feedback_by_num: dict[int, dict[str, str]] | None = None,
 ) -> dict[str, object]:
     storage = OCRStorage()
@@ -972,7 +1223,7 @@ def _build_export_thumbnail_slice(
     thumbs_retention = int(cm.get_setting("storage.thumbnails_retention_days", 14) or 14)
     _prune_stale_thumbnails(thumbnails_dir, thumbs_retention)
     safe_page_size = _thumb_page_size(page_size, doc_id=doc_id)
-    if page_size not in {None, 0}:
+    if persist_page_size and page_size not in {None, 0}:
         try:
             VaultManager().set_manuscript_ui_pref(doc_id, "studio_export_thumb_page_size", safe_page_size)
         except Exception:
@@ -981,6 +1232,7 @@ def _build_export_thumbnail_slice(
     total_pages = len(available_pages)
     page_delta_by_num = page_delta_by_num or {}
     page_feedback_by_num = page_feedback_by_num or {}
+    stitch_feedback_by_num = stitch_feedback_by_num or {}
     optimize_feedback_by_num = optimize_feedback_by_num or {}
 
     if total_pages <= 0:
@@ -1000,13 +1252,28 @@ def _build_export_thumbnail_slice(
     start = (safe_thumb_page - 1) * safe_page_size
     stop = start + safe_page_size
     page_slice = available_pages[start:stop]
+    scan_summary = summarize_scan_folder(scans_dir)
+
+    if not include_items:
+        return {
+            "items": [],
+            "available_pages": available_pages,
+            "thumb_page": safe_thumb_page,
+            "thumb_page_count": thumb_page_count,
+            "total_pages": total_pages,
+            "page_size": safe_page_size,
+            "scan_summary": scan_summary,
+        }
 
     manifest_json = load_json(paths["manifest"]) or {}
+    stats_payload = load_json(paths["stats"]) or {}
     remote_cache_path = Path(paths["data"]) / "remote_resolution_cache.json"
     cache_max_bytes, cache_retention_hours, cache_max_items = _remote_cache_limits(cm)
     remote_cache = _normalize_remote_cache(load_json(remote_cache_path) or {})
 
     remote_probe_enabled = bool(cm.get_setting("images.probe_remote_max_resolution", True))
+    download_method_by_num = _stats_download_method_map(stats_payload)
+    stats_by_num = _stats_page_meta_map(stats_payload)
     items: list[dict] = []
     total_bytes = 0
     bytes_min = 0
@@ -1025,7 +1292,10 @@ def _build_export_thumbnail_slice(
             remote_probe_enabled=remote_probe_enabled,
             page_delta_by_num=page_delta_by_num,
             page_feedback_by_num=page_feedback_by_num,
+            stitch_feedback_by_num=stitch_feedback_by_num,
             optimize_feedback_by_num=optimize_feedback_by_num,
+            download_method_by_num=download_method_by_num,
+            stats_by_num=stats_by_num,
             force_remote_refresh=should_refresh_remote,
         )
         if local_bytes > 0:
@@ -1043,7 +1313,6 @@ def _build_export_thumbnail_slice(
     with suppress(Exception):
         save_json(remote_cache_path, remote_cache)
 
-    scan_summary = summarize_scan_folder(scans_dir)
     if total_bytes > 0:
         scan_summary.update(
             {
@@ -1076,28 +1345,21 @@ def _build_studio_export_fragment(
     page_feedback_by_num: dict[int, dict[str, str]] | None = None,
     optimize_feedback: dict[str, Any] | None = None,
 ):
-    optimization_meta = _load_last_optimization_meta(doc_id)
-    page_delta_by_num = _page_delta_map(optimization_meta)
-    optimize_feedback_by_num = _optimize_feedback_from_deltas(
-        page_delta_by_num,
-        optimized_at=str(optimization_meta.get("optimized_at") or ""),
-    )
-    highres_feedback_by_num, has_active_highres_jobs = _resolve_highres_page_feedback(doc_id, library)
-    page_source_pref = _load_page_source_pref(doc_id)
-    merged_feedback_by_num = _merge_page_feedback(highres_feedback_by_num, page_feedback_by_num)
-    resolved_highres_feedback_by_num, resolved_opt_feedback_by_num = _resolve_current_image_feedback(
-        merged_feedback_by_num,
-        optimize_feedback_by_num,
-        page_source_pref,
+    thumb_render_state = _resolve_export_thumb_render_state(
+        doc_id=doc_id,
+        library=library,
+        page_feedback_by_num=page_feedback_by_num,
     )
     thumb_state = _build_export_thumbnail_slice(
         doc_id,
         library,
         thumb_page=thumb_page,
         page_size=page_size,
-        page_delta_by_num=page_delta_by_num,
-        page_feedback_by_num=resolved_highres_feedback_by_num,
-        optimize_feedback_by_num=resolved_opt_feedback_by_num,
+        include_items=False,
+        page_delta_by_num=thumb_render_state["page_delta_by_num"],
+        page_feedback_by_num=thumb_render_state["resolved_highres_feedback_by_num"],
+        stitch_feedback_by_num=thumb_render_state["resolved_stitch_feedback_by_num"],
+        optimize_feedback_by_num=thumb_render_state["resolved_opt_feedback_by_num"],
     )
     pdf_files = list_item_pdf_files(doc_id, library)
     for row in pdf_files:
@@ -1122,10 +1384,45 @@ def _build_studio_export_fragment(
         selected_subtab=selected_subtab,
         selected_build_subtab=selected_build_subtab,
         scan_summary=dict(thumb_state.get("scan_summary") or {}),
-        optimization_meta=optimization_meta,
+        optimization_meta=thumb_render_state["optimization_meta"],
         optimize_feedback=optimize_feedback or {},
-        has_active_page_actions=has_active_highres_jobs,
+        has_active_page_actions=bool(thumb_render_state["has_active_page_actions"]),
+        defer_thumbs_load=True,
     )
+
+
+def _resolve_export_thumb_render_state(
+    *,
+    doc_id: str,
+    library: str,
+    page_feedback_by_num: dict[int, dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    optimization_meta = _load_last_optimization_meta(doc_id)
+    page_delta_by_num = _page_delta_map(optimization_meta)
+    optimize_feedback_by_num = _optimize_feedback_from_deltas(
+        page_delta_by_num,
+        optimized_at=str(optimization_meta.get("optimized_at") or ""),
+    )
+    highres_feedback_by_num, has_active_highres_jobs = _resolve_highres_page_feedback(doc_id, library)
+    stitch_feedback_by_num, has_active_stitch_jobs = _resolve_stitch_page_feedback(doc_id, library)
+    page_source_pref = _load_page_source_pref(doc_id)
+    merged_feedback_by_num = _merge_page_feedback(highres_feedback_by_num, page_feedback_by_num)
+    resolved_highres_feedback_by_num, resolved_stitch_feedback_by_num, resolved_opt_feedback_by_num = (
+        _resolve_current_image_feedback(
+            merged_feedback_by_num,
+            stitch_feedback_by_num,
+            optimize_feedback_by_num,
+            page_source_pref,
+        )
+    )
+    return {
+        "optimization_meta": optimization_meta,
+        "page_delta_by_num": page_delta_by_num,
+        "resolved_highres_feedback_by_num": resolved_highres_feedback_by_num,
+        "resolved_stitch_feedback_by_num": resolved_stitch_feedback_by_num,
+        "resolved_opt_feedback_by_num": resolved_opt_feedback_by_num,
+        "has_active_page_actions": (has_active_highres_jobs or has_active_stitch_jobs),
+    }
 
 
 def build_studio_tab_content(
@@ -1580,27 +1877,16 @@ def get_studio_export_thumbs(
 ):
     """Return one thumbnails page slice for Studio Export tab."""
     doc_id, library = unquote(doc_id), unquote(library)
-    optimization_meta = _load_last_optimization_meta(doc_id)
-    page_delta_by_num = _page_delta_map(optimization_meta)
-    optimize_feedback_by_num = _optimize_feedback_from_deltas(
-        page_delta_by_num,
-        optimized_at=str(optimization_meta.get("optimized_at") or ""),
-    )
-    highres_feedback_by_num, has_active_highres_jobs = _resolve_highres_page_feedback(doc_id, library)
-    page_source_pref = _load_page_source_pref(doc_id)
-    resolved_highres_feedback_by_num, resolved_opt_feedback_by_num = _resolve_current_image_feedback(
-        highres_feedback_by_num,
-        optimize_feedback_by_num,
-        page_source_pref,
-    )
+    thumb_render_state = _resolve_export_thumb_render_state(doc_id=doc_id, library=library)
     thumb_state = _build_export_thumbnail_slice(
         doc_id,
         library,
         thumb_page=int(thumb_page or 1),
         page_size=int(page_size or 0),
-        page_delta_by_num=page_delta_by_num,
-        page_feedback_by_num=resolved_highres_feedback_by_num,
-        optimize_feedback_by_num=resolved_opt_feedback_by_num,
+        page_delta_by_num=thumb_render_state["page_delta_by_num"],
+        page_feedback_by_num=thumb_render_state["resolved_highres_feedback_by_num"],
+        stitch_feedback_by_num=thumb_render_state["resolved_stitch_feedback_by_num"],
+        optimize_feedback_by_num=thumb_render_state["resolved_opt_feedback_by_num"],
     )
     return render_export_thumbnails_panel(
         doc_id=doc_id,
@@ -1611,8 +1897,106 @@ def get_studio_export_thumbs(
         total_pages=int(thumb_state.get("total_pages") or 0),
         page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
         page_size_options=_thumb_page_size_options(),
-        has_active_page_actions=has_active_highres_jobs,
+        has_active_page_actions=bool(thumb_render_state["has_active_page_actions"]),
     )
+
+
+def _render_export_thumb_card_fragment(
+    *,
+    doc_id: str,
+    library: str,
+    page_num: int,
+    thumb_page: int,
+    page_size: int,
+    hx_swap_oob: str | None = None,
+):
+    thumb_render_state = _resolve_export_thumb_render_state(doc_id=doc_id, library=library)
+    paths = OCRStorage().get_document_paths(doc_id, library)
+    available_pages = guess_available_pages(Path(paths["scans"]))
+    if page_num not in available_pages:
+        attrs: dict[str, str] = {"id": _thumbnail_card_id(page_num), "cls": "hidden"}
+        if hx_swap_oob:
+            attrs["hx_swap_oob"] = hx_swap_oob
+        return Div("", **attrs)
+    single_thumb_page = available_pages.index(page_num) + 1
+    thumb_state = _build_export_thumbnail_slice(
+        doc_id,
+        library,
+        thumb_page=single_thumb_page,
+        page_size=1,
+        persist_page_size=False,
+        page_delta_by_num=thumb_render_state["page_delta_by_num"],
+        page_feedback_by_num=thumb_render_state["resolved_highres_feedback_by_num"],
+        stitch_feedback_by_num=thumb_render_state["resolved_stitch_feedback_by_num"],
+        optimize_feedback_by_num=thumb_render_state["resolved_opt_feedback_by_num"],
+    )
+    items = list(thumb_state.get("items") or [])
+    if not items:
+        attrs = {"id": _thumbnail_card_id(page_num), "cls": "hidden"}
+        if hx_swap_oob:
+            attrs["hx_swap_oob"] = hx_swap_oob
+        return Div("", **attrs)
+    return render_export_thumbnail_card(
+        item=items[0],
+        doc_id=doc_id,
+        library=library,
+        thumb_page=thumb_page,
+        page_size=page_size,
+        hx_swap_oob=hx_swap_oob,
+    )
+
+
+def get_studio_export_thumbs_live(
+    doc_id: str,
+    library: str,
+    thumb_page: int = 1,
+    page_size: int = 0,
+):
+    """Return out-of-band updates for visible thumbnail cards and poller state."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    thumb_render_state = _resolve_export_thumb_render_state(doc_id=doc_id, library=library)
+    thumb_state = _build_export_thumbnail_slice(
+        doc_id,
+        library,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+        page_delta_by_num=thumb_render_state["page_delta_by_num"],
+        page_feedback_by_num=thumb_render_state["resolved_highres_feedback_by_num"],
+        stitch_feedback_by_num=thumb_render_state["resolved_stitch_feedback_by_num"],
+        optimize_feedback_by_num=thumb_render_state["resolved_opt_feedback_by_num"],
+    )
+    fragments = [
+        render_export_thumbnail_card(
+            item=item,
+            doc_id=doc_id,
+            library=library,
+            thumb_page=int(thumb_state.get("thumb_page") or 1),
+            page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
+            hx_swap_oob=f"outerHTML:#{_thumbnail_card_id(int(item.get('page') or 0))}",
+        )
+        for item in list(thumb_state.get("items") or [])
+    ]
+    fragments.append(
+        render_export_pages_summary(
+            scan_summary=dict(thumb_state.get("scan_summary") or {}),
+            thumb_total_pages=int(thumb_state.get("total_pages") or 0),
+            thumb_page=int(thumb_state.get("thumb_page") or 1),
+            thumb_page_count=int(thumb_state.get("thumb_page_count") or 1),
+            thumb_page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
+            hx_swap_oob="outerHTML:#studio-export-pages-summary",
+        )
+    )
+    fragments.append(
+        render_export_thumbs_poller(
+            doc_id=doc_id,
+            library=library,
+            thumb_page=int(thumb_state.get("thumb_page") or 1),
+            page_size=int(thumb_state.get("page_size") or _thumb_page_size(doc_id=doc_id)),
+            has_active_page_actions=bool(thumb_render_state["has_active_page_actions"]),
+            hx_swap_oob="outerHTML:#studio-export-live-state-poller",
+        )
+    )
+    return fragments
 
 
 def get_studio_export_live_state(
@@ -1847,6 +2231,131 @@ def optimize_studio_export_scans(
     )
 
 
+def optimize_studio_export_page(
+    doc_id: str,
+    library: str,
+    page: int,
+    thumb_page: int = 1,
+    page_size: int = 0,
+):
+    """Optimize a single page and refresh only the affected thumbnail card."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    page_num = max(1, int(page or 1))
+    result = optimize_local_scans(doc_id, library, target_pages={page_num})
+    meta = dict(result.get("meta") or {})
+    _persist_optimized_page_source_pref(doc_id, meta)
+    card = _render_export_thumb_card_fragment(
+        doc_id=doc_id,
+        library=library,
+        page_num=page_num,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+    )
+    tone = str(result.get("tone") or "info")
+    message = str(result.get("message") or "Ottimizzazione completata.")
+    if tone == "danger":
+        return _with_toast(card, message, tone="danger")
+    return card
+
+
+def _thumbs_with_toast(
+    *,
+    doc_id: str,
+    library: str,
+    page_num: int,
+    thumb_page: int,
+    page_size: int,
+    message: str,
+    tone: str,
+):
+    card = _render_export_thumb_card_fragment(
+        doc_id=doc_id,
+        library=library,
+        page_num=page_num,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+    )
+    thumb_render_state = _resolve_export_thumb_render_state(doc_id=doc_id, library=library)
+    poller = render_export_thumbs_poller(
+        doc_id=doc_id,
+        library=library,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+        has_active_page_actions=bool(thumb_render_state["has_active_page_actions"]),
+        hx_swap_oob="outerHTML:#studio-export-live-state-poller",
+    )
+    return [card, poller, build_toast(message, tone=tone)]
+
+
+def _queue_page_download_job(
+    *,
+    doc_id: str,
+    library: str,
+    page_num: int,
+    thumb_page: int,
+    page_size: int,
+    pref_loader,
+    pref_saver,
+    action_error_text: str,
+    start_kwargs: dict[str, Any],
+):
+    manifest_url = str((VaultManager().get_manuscript(doc_id) or {}).get("manifest_url") or "").strip()
+    if not manifest_url:
+        return _thumbs_with_toast(
+            doc_id=doc_id,
+            library=library,
+            page_num=page_num,
+            thumb_page=thumb_page,
+            page_size=page_size,
+            message="Manifest URL non disponibile per questo item.",
+            tone="danger",
+        )
+
+    try:
+        job_id = start_downloader_thread(
+            manifest_url=manifest_url,
+            doc_id=doc_id,
+            library=library,
+            target_pages={page_num},
+            force_redownload=True,
+            overwrite_existing_scans=True,
+            job_origin="studio_export_page",
+            **start_kwargs,
+        )
+    except Exception as exc:
+        return _thumbs_with_toast(
+            doc_id=doc_id,
+            library=library,
+            page_num=page_num,
+            thumb_page=thumb_page,
+            page_size=page_size,
+            message=f"{action_error_text}: {exc}",
+            tone="danger",
+        )
+
+    pref = pref_loader(doc_id)
+    pref[page_num] = {"job_id": job_id, "state": "queued", "source_ts": ""}
+    with suppress(Exception):
+        pref_saver(doc_id, pref)
+
+    card = _render_export_thumb_card_fragment(
+        doc_id=doc_id,
+        library=library,
+        page_num=page_num,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+    )
+    poller = render_export_thumbs_poller(
+        doc_id=doc_id,
+        library=library,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+        has_active_page_actions=True,
+        hx_swap_oob="outerHTML:#studio-export-live-state-poller",
+    )
+    return [card, poller]
+
+
 def download_highres_export_page(
     doc_id: str,
     library: str,
@@ -1858,82 +2367,40 @@ def download_highres_export_page(
     """Queue a page-only high-resolution refresh for one local scan."""
     doc_id, library = unquote(doc_id), unquote(library)
     page_num = max(1, int(page or 1))
-    manifest_url = str((VaultManager().get_manuscript(doc_id) or {}).get("manifest_url") or "").strip()
-    if not manifest_url:
-        return _with_toast(
-            _build_studio_export_fragment(
-                doc_id,
-                library,
-                thumb_page=int(thumb_page or 1),
-                page_size=int(page_size or 0),
-                selected_pages_raw=selected_pages,
-                selected_subtab="pages",
-                page_feedback_by_num={
-                    page_num: {
-                        "tone": "danger",
-                        "label": "High-Res non disponibile (manifest mancante)",
-                        "state": "error",
-                        "progress_percent": "100",
-                    },
-                },
-            ),
-            "Manifest URL non disponibile per questo item.",
-            tone="danger",
-        )
-
-    try:
-        job_id = start_downloader_thread(
-            manifest_url=manifest_url,
-            doc_id=doc_id,
-            library=library,
-            target_pages={page_num},
-            force_max_resolution=True,
-            force_redownload=True,
-            overwrite_existing_scans=True,
-        )
-    except Exception as exc:
-        return _with_toast(
-            _build_studio_export_fragment(
-                doc_id,
-                library,
-                thumb_page=int(thumb_page or 1),
-                page_size=int(page_size or 0),
-                selected_pages_raw=selected_pages,
-                selected_subtab="pages",
-                page_feedback_by_num={
-                    page_num: {
-                        "tone": "danger",
-                        "label": "Errore avvio High-Res",
-                        "state": "error",
-                        "progress_percent": "100",
-                    }
-                },
-            ),
-            f"Errore download high-res pagina {page_num}: {exc}",
-            tone="danger",
-        )
-
-    pref = _load_highres_pref(doc_id)
-    pref[page_num] = {"job_id": job_id, "state": "queued", "source_ts": ""}
-    with suppress(Exception):
-        _save_highres_pref(doc_id, pref)
-
-    return _build_studio_export_fragment(
-        doc_id,
-        library,
+    _ = selected_pages
+    return _queue_page_download_job(
+        doc_id=doc_id,
+        library=library,
+        page_num=page_num,
         thumb_page=int(thumb_page or 1),
         page_size=int(page_size or 0),
-        selected_pages_raw=selected_pages,
-        selected_subtab="pages",
-        page_feedback_by_num={
-            page_num: {
-                "tone": "info",
-                "label": "High-Res in coda",
-                "state": "queued",
-                "job_id": job_id,
-                "progress_percent": "0",
-            },
-        },
+        pref_loader=_load_highres_pref,
+        pref_saver=_save_highres_pref,
+        action_error_text=f"Errore download high-res pagina {page_num}",
+        start_kwargs={"force_max_resolution": True, "stitch_mode": "direct_only"},
+    )
+
+
+def download_stitch_export_page(
+    doc_id: str,
+    library: str,
+    page: int,
+    thumb_page: int = 1,
+    page_size: int = 0,
+):
+    """Queue a page-only refresh using the same strategy configured for normal volume downloads."""
+    doc_id, library = unquote(doc_id), unquote(library)
+    page_num = max(1, int(page or 1))
+    return _queue_page_download_job(
+        doc_id=doc_id,
+        library=library,
+        page_num=page_num,
+        thumb_page=int(thumb_page or 1),
+        page_size=int(page_size or 0),
+        pref_loader=_load_stitch_pref,
+        pref_saver=_save_stitch_pref,
+        action_error_text=f"Errore strategia standard pagina {page_num}",
+        start_kwargs={},
     )
 
 

@@ -8,11 +8,10 @@ from html import unescape
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-import requests
 from bs4 import BeautifulSoup
 
+from .http_client import HTTPClient
 from .logger import get_logger
-from .utils import DEFAULT_HEADERS
 
 logger = get_logger(__name__)
 
@@ -458,31 +457,19 @@ def _merge_external_metadata(metadata_map: dict[str, str], external_fields: dict
     return merged
 
 
-def extract_external_catalog_data(url: str, timeout: int = 8) -> dict[str, Any]:
-    """Extract catalog reference text and extra metadata from an external page."""
-    if not url:
-        return {"reference_text": "", "external_fields": {}}
-    try:
-        response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
-        response.raise_for_status()
-    except (requests.RequestException, requests.Timeout):
-        logger.debug("Reference fetch failed for %s", url, exc_info=True)
-        return {"reference_text": "", "external_fields": {}}
+def _add_vatican_reference_fields(host: str, html: str, external_fields: dict[str, str]) -> None:
+    if "digi.vatlib.it" not in host:
+        return
+    refs = _extract_vatican_bibliographic_refs(html)
+    if not refs:
+        return
+    external_fields["bibliographic_references_count"] = str(len(refs))
+    external_fields["bibliographic_reference_1"] = refs[0][:240]
+    if len(refs) > 1:
+        external_fields["bibliographic_reference_2"] = refs[1][:240]
 
-    html = response.text
-    reference_text = _extract_reference_from_html(html)
-    json_ld = _extract_json_ld_objects(html)
-    external_fields = _extract_host_specific_fields(url)
-    host = urlparse(url).netloc.lower()
 
-    if "digi.vatlib.it" in host:
-        refs = _extract_vatican_bibliographic_refs(html)
-        if refs:
-            external_fields["bibliographic_references_count"] = str(len(refs))
-            external_fields["bibliographic_reference_1"] = refs[0][:240]
-            if len(refs) > 1:
-                external_fields["bibliographic_reference_2"] = refs[1][:240]
-
+def _add_common_external_fields(html: str, json_ld: list[dict[str, Any]], external_fields: dict[str, str]) -> None:
     author = _extract_json_ld_value(json_ld, ("author", "creator"))
     if not author:
         author = next(iter(_extract_meta_contents(html, ["author", "citation_author", "dc.creator"])), "")
@@ -494,6 +481,36 @@ def extract_external_catalog_data(url: str, timeout: int = 8) -> dict[str, Any]:
         description = next(iter(_extract_meta_contents(html, ["description", "dc.description"])), "")
     if description and not _is_generic_site_title(description):
         external_fields["description"] = description[:240]
+
+
+def extract_external_catalog_data(url: str, timeout: int = 8) -> dict[str, Any]:
+    """Extract catalog reference text and extra metadata from an external page."""
+    if not url:
+        return {"reference_text": "", "external_fields": {}}
+
+    # Create temporary HTTPClient for this fetch
+    from .config_manager import get_config_manager
+
+    cm = get_config_manager()
+    network_policy = cm.data.get("settings", {}).get("network", {})
+    http_client = HTTPClient(network_policy=network_policy)
+
+    try:
+        response = http_client.get(url, library_name=None, timeout=(timeout, timeout))
+        if response.status_code != 200:
+            raise ValueError(f"HTTP {response.status_code}")
+    except Exception:
+        logger.debug("Reference fetch failed for %s", url, exc_info=True)
+        return {"reference_text": "", "external_fields": {}}
+
+    html = response.text
+    reference_text = _extract_reference_from_html(html)
+    json_ld = _extract_json_ld_objects(html)
+    external_fields = _extract_host_specific_fields(url)
+    host = urlparse(url).netloc.lower()
+
+    _add_vatican_reference_fields(host, html, external_fields)
+    _add_common_external_fields(html, json_ld, external_fields)
 
     return {
         "reference_text": reference_text,

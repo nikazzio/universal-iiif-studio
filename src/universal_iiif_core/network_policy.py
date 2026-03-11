@@ -38,6 +38,7 @@ DEFAULT_NETWORK_SETTINGS: dict[str, Any] = {
         "connect_timeout_s": 10,
         "read_timeout_s": 30,
         "transport_retries": 3,
+        "per_host_concurrency": 4,
     },
     "download": {
         "default_workers_per_job": 2,
@@ -53,6 +54,7 @@ DEFAULT_NETWORK_SETTINGS: dict[str, Any] = {
             "enabled": True,
             "use_custom_policy": True,
             "workers_per_job": 1,
+            "per_host_concurrency": 2,
             "min_delay_s": 2.5,
             "max_delay_s": 6.0,
             "retry_max_attempts": 3,

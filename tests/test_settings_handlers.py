@@ -1,6 +1,11 @@
 import asyncio
 
+import pytest
+
 from studio_ui.routes import settings_handlers
+
+# Mark as slow (8 tests with config manipulation)
+pytestmark = pytest.mark.slow
 
 
 class _DummyRequest:
@@ -100,6 +105,36 @@ def test_save_settings_applies_download_strategy_mode(monkeypatch):
     assert images["download_strategy_mode"] == "quality_first"
     assert images["download_strategy"] == ["max", "3000", "1740"]
     assert images["download_strategy_custom"] == ["1740", "1200", "max"]
+
+
+def test_save_settings_applies_default_stitch_mode(monkeypatch):
+    """Saving settings should normalize the default stitch mode."""
+    dummy_cm = _DummyConfigManager()
+    monkeypatch.setattr(settings_handlers, "get_config_manager", lambda: dummy_cm)
+    monkeypatch.setattr(settings_handlers, "setup_logging", lambda: None)
+
+    request = _DummyRequest(
+        {
+            "settings.images.stitch_mode_default": "direct_only",
+        }
+    )
+    _ = asyncio.run(settings_handlers.save_settings(request))
+
+    images = dummy_cm.data["settings"]["images"]
+    assert images["stitch_mode_default"] == "direct_only"
+
+
+def test_save_settings_migrates_legacy_viewer_quality_to_pdf(monkeypatch):
+    """Legacy images.viewer_quality should populate the PDF raster quality setting."""
+    dummy_cm = _DummyConfigManager()
+    dummy_cm.data["settings"]["images"] = {"viewer_quality": 87}
+    monkeypatch.setattr(settings_handlers, "get_config_manager", lambda: dummy_cm)
+    monkeypatch.setattr(settings_handlers, "setup_logging", lambda: None)
+
+    request = _DummyRequest({})
+    _ = asyncio.run(settings_handlers.save_settings(request))
+
+    assert dummy_cm.data["settings"]["pdf"]["viewer_jpeg_quality"] == 87
 
 
 def test_save_settings_creates_new_pdf_profile_from_legacy_payload(monkeypatch):

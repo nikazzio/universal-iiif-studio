@@ -2,9 +2,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
 from requests import RequestException
 
+from ...http_client import HTTPClient
 from ...logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,6 +57,13 @@ class ModelManager:
             # Last-resort fallback for non-writable install locations
             self.models_dir = _default_cache_dir()
             self.models_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize HTTPClient for model downloads
+        # Use default network policy (no library-specific policy needed for Zenodo)
+        from ...config_manager import get_config_manager
+
+        network_policy = get_config_manager().data.get("settings", {}).get("network", {})
+        self.http_client = HTTPClient(network_policy=network_policy)
 
     def list_installed_models(self) -> list[str]:
         """Returns a list of installed `.mlmodel` file names."""
@@ -133,9 +140,9 @@ class ModelManager:
             "all_versions": "false",
         }
         try:
-            r = requests.get(url, params=params, timeout=20)
-            r.raise_for_status()
-            data = r.json()
+            response = self.http_client.get(url, params=params, timeout=(10, 20))
+            response.raise_for_status()
+            data = response.json()
             hits = data.get("hits", {}).get("hits", [])
             results = []
             for h in hits:
@@ -186,9 +193,9 @@ class ModelManager:
 
     def _zenodo_record(self, record_id: str) -> dict:
         url = f"https://zenodo.org/api/records/{record_id}"
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        return r.json()
+        response = self.http_client.get(url, timeout=(10, 30))
+        response.raise_for_status()
+        return response.json()
 
     def _extract_mlmodel_files(self, record: dict, record_id: str) -> tuple[list[dict], str | None]:
         files = record.get("files") or []
@@ -225,14 +232,19 @@ class ModelManager:
         return self.models_dir / local_name
 
     def _download_file(self, download_url: str, dest: Path) -> tuple[bool, str]:
+        """Download model file with HTTPClient and streaming."""
         tmp = dest.with_suffix(dest.suffix + ".part")
+        response = None
         try:
-            with requests.get(download_url, stream=True, timeout=60) as r:
-                r.raise_for_status()
-                with tmp.open("wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
+            # Use HTTPClient for download with longer timeout for large files
+            response = self.http_client.get(download_url, stream=True, timeout=(10, 120))
+            response.raise_for_status()
+
+            # Write streamed content to file
+            with tmp.open("wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
             tmp.replace(dest)
         except (RequestException, OSError) as e:
             try:
@@ -241,6 +253,9 @@ class ModelManager:
             except OSError:
                 pass
             return False, f"Download failed: {e}"
+        finally:
+            if response is not None:
+                response.close()
         return True, f"Downloaded model to: {dest.name}"
 
     def download_model(

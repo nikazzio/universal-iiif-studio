@@ -27,6 +27,14 @@ def _cached_image_matches_target(*, img_path: Path, target_long_edge: int) -> bo
     return abs(long_edge - target_long_edge) <= 2
 
 
+def _source_is_newer_than_cache(*, source_path: Path, cached_path: Path) -> bool:
+    """Return True when the source image changed after the cached derivative."""
+    try:
+        return source_path.stat().st_mtime_ns > cached_path.stat().st_mtime_ns
+    except OSError:
+        return True
+
+
 def guess_available_pages(scans_dir: Path) -> list[int]:
     """Return available 1-based page numbers from pag_XXXX.jpg files."""
     pages: list[int] = []
@@ -66,17 +74,18 @@ def ensure_thumbnail(
     try:
         thumbnails_dir.mkdir(parents=True, exist_ok=True)
         out_path = thumbnail_path(thumbnails_dir, page_num_1_based)
-        if out_path.exists() and _cached_image_matches_target(
-            img_path=out_path, target_long_edge=int(max_long_edge_px)
+        scan_path = scans_dir / f"pag_{page_num_1_based - 1:04d}.jpg"
+        if not scan_path.exists():
+            return None
+        if (
+            out_path.exists()
+            and _cached_image_matches_target(img_path=out_path, target_long_edge=int(max_long_edge_px))
+            and not _source_is_newer_than_cache(source_path=scan_path, cached_path=out_path)
         ):
             return out_path
         if out_path.exists():
             with suppress(OSError):
                 out_path.unlink()
-
-        scan_path = scans_dir / f"pag_{page_num_1_based - 1:04d}.jpg"
-        if not scan_path.exists():
-            return None
 
         with PILImage.open(str(scan_path)) as img:
             if img.mode != "RGB":
@@ -111,17 +120,18 @@ def ensure_hover_preview(
     try:
         thumbnails_dir.mkdir(parents=True, exist_ok=True)
         out_path = hover_preview_path(thumbnails_dir, page_num_1_based)
-        if out_path.exists() and _cached_image_matches_target(
-            img_path=out_path, target_long_edge=int(max_long_edge_px)
+        scan_path = scans_dir / f"pag_{page_num_1_based - 1:04d}.jpg"
+        if not scan_path.exists():
+            return None
+        if (
+            out_path.exists()
+            and _cached_image_matches_target(img_path=out_path, target_long_edge=int(max_long_edge_px))
+            and not _source_is_newer_than_cache(source_path=scan_path, cached_path=out_path)
         ):
             return out_path
         if out_path.exists():
             with suppress(OSError):
                 out_path.unlink()
-
-        scan_path = scans_dir / f"pag_{page_num_1_based - 1:04d}.jpg"
-        if not scan_path.exists():
-            return None
 
         with PILImage.open(str(scan_path)) as img:
             if img.mode != "RGB":

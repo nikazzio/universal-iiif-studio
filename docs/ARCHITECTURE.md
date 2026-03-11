@@ -11,13 +11,14 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 ### 1. Presentation Layer (`studio_ui/`)
 
 * **Pages**: Layout builders (`studio_layout`, Mirador wiring).
-* **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards).
+* **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards, professional status panel).
 * **Routes**:
-  * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations.
+  * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations. Implements Mirador local/remote mode selection.
   * `discovery_handlers.py`: Orchestrates search, add-to-library, and download manager actions.
   * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
   * `library_query.py`: Shared filtering/query/view-model helpers for Library routes.
 * **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
+* **Status Panel**: Color-coded badges for technical status (read_source: AMBER for remote, GREEN for local; state, scans, staging, PDF info).
 
 ### 2. Core Business Logic (`universal_iiif_core/`)
 
@@ -32,6 +33,12 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **Network Layer (`utils.py`)**:
   * Provides a resilient `requests.Session`.
   * Handles WAF Bypass (Browser User-Agents, Dynamic Brotli).
+* **HTTP Client (`http_client.py`)**:
+  * Centralized HTTP client with automatic retry, exponential backoff, and per-host rate limiting.
+  * Per-library network policies (timeout, concurrency, backoff, rate limits).
+  * Metrics tracking for requests, retries, and timeouts.
+  * Sliding window rate limiter prevents overwhelming library servers (Gallica: 4 req/min, others: 20 req/min).
+  * Used by: downloader, IIIF tiles, resolution probing, manifest fetching, external catalog scraping.
 * **OCR Module**:
   * Abstracts differences between local Kraken models and Cloud APIs (OpenAI/Anthropic).
 * **Storage**:
@@ -71,25 +78,52 @@ Queued jobs are promoted FIFO (with optional prioritization) and each running wo
 3. **Polling**: The UI shows an overlay that polls `/api/check_ocr_status` every 2 seconds.
 4. **Completion**: Text is saved to `transcription.json` and the History table.
 
+### 4. Mirador Viewing Modes
+
+Studio supports **two distinct viewing modes** for the Mirador viewer, automatically selected based on download completeness:
+
+* **REMOTE MODE** (for incomplete/paused downloads):
+  - Mirador loads the **original manifest** from the library server (e.g., `gallica.bnf.fr`).
+  - Displays **ALL pages** by fetching images on-demand from the remote server.
+  - Useful for previewing documents before full download completes.
+  - Requires internet connection.
+  - User can force this mode with `?allow_remote_preview=true` URL parameter.
+
+* **LOCAL MODE** (for completed downloads):
+  - Mirador loads the **local manifest** (`/iiif/manifest/...`) served by Studio.
+  - Displays **only downloaded pages** using local images from `scans/`.
+  - Works completely offline.
+  - Default mode when `viewer.mirador.require_complete_local_images=true` (default) and all pages are available locally.
+
+**Mode Selection Logic** (`studio_handlers.py`):
+- `_resolve_studio_read_source_mode()`: Determines if local images are sufficient or remote preview is needed.
+- `_select_studio_manifest_url()`: Returns appropriate manifest URL (local or remote) based on mode.
+- Config setting: `viewer.mirador.require_complete_local_images` (default: `true`) gates local viewer until download completes.
+- User override: `?allow_remote_preview=true` URL parameter forces remote mode regardless of settings.
+
 ---
 
 ## UI & Configuration Details
 
-* **Viewer Config**: The `config.json` (`settings.viewer`) section directly controls Mirador's behavior (Zoom levels) and the Visual Tab's default image filters.
+* **Viewer Config**: The `config.json` (`settings.viewer`) section directly controls Mirador's behavior (Zoom levels, viewing modes) and the Visual Tab's default image filters.
+* **Mirador Modes**: Automatic switching between remote preview (incomplete downloads) and local-only (complete downloads) based on `viewer.mirador.require_complete_local_images` setting.
 * **State Persistence**:
   * **Server-side**: SQLite (`vault.db`) and JSON files (`data/local/`).
   * **Client-side**: Sidebar state (collapsed/expanded) is saved in `localStorage`.
 * **Visual Feedback**:
   * **Toasts**: Floating notifications anchored to the top-right viewport.
   * **Progress**: Real-time queue/running status driven by DB polling in the Download Manager side panel.
+  * **Studio page jobs**: per-page `Hi/Std` actions are stored as `studio_export_page` jobs and rendered in Discovery as a compact auxiliary section, not as full document download cards.
+  * **Status Panel**: Professional color-coded badges for technical status (read_source, state, scans, staging, PDF info).
 
 ## Key Design Decisions
 
 1. **Scans as Operational Source + Temp Staging**: `scans/` is the operational source for Viewer/OCR/Cropper, but runtime can stage validated pages in `temp_images/<doc_id>` before promotion. Promotion policy can stay strict (`never`) or happen on pause (`settings.storage.partial_promotion_mode=on_pause`), with overwrite of existing scans enabled only for explicit refresh/redownload flows.
 2. **Zero Legacy**: Deprecated APIs are removed or stubbed. No "dead code" is allowed in the codebase.
-3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic and header mimicking.
+3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic, header mimicking, and centralized HTTP client with per-host rate limiting.
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
 5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.
+6. **Centralized HTTP Client (Issue #71, 2026-03-09)**: Eliminated ~200+ lines of duplicate retry/backoff logic by introducing `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics. All IIIF core modules now use this centralized client.
 
 ## Local Data & Cleanup
 

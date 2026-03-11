@@ -10,6 +10,14 @@ from studio_ui.components.layout import base_layout
 from studio_ui.components.settings import settings_content
 from studio_ui.theme import normalize_ui_theme_in_place
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.image_settings import (
+    IMAGE_STRATEGY_PRESETS,
+    normalize_iiif_quality,
+    normalize_stitch_mode,
+    normalize_strategy_mode,
+    normalize_strategy_values,
+    resolve_download_strategy,
+)
 from universal_iiif_core.logger import get_logger, setup_logging
 from universal_iiif_core.network_policy import migrate_legacy_network_settings, normalize_network_settings
 
@@ -155,31 +163,6 @@ def _is_truthy(value: Any) -> bool:
     return text in {"1", "true", "yes", "on"}
 
 
-def _normalize_strategy_values(raw: Any) -> list[str]:
-    if isinstance(raw, str):
-        candidates = [token.strip() for token in raw.split(",") if token.strip()]
-    elif isinstance(raw, list):
-        candidates = [str(item).strip() for item in raw if str(item).strip()]
-    else:
-        candidates = []
-
-    out: list[str] = []
-    seen: set[str] = set()
-    for token in candidates:
-        norm = token.lower()
-        if norm == "max":
-            value = "max"
-        elif token.isdigit() and int(token) > 0:
-            value = token
-        else:
-            continue
-        if value in seen:
-            continue
-        seen.add(value)
-        out.append(value)
-    return out
-
-
 def _normalize_pdf_profile_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
     compression = str(raw_payload.get("compression") or "Standard")
     if compression not in {"High-Res", "Standard", "Light"}:
@@ -222,26 +205,40 @@ def _postprocess_images_settings(settings_node: dict[str, Any]) -> None:
         settings_node["images"] = {}
         images = settings_node["images"]
 
-    preset_map = {
-        "balanced": ["3000", "1740", "max"],
-        "quality_first": ["max", "3000", "1740"],
-        "fast": ["1740", "1200", "max"],
-        "archival": ["max"],
-    }
-    requested_mode = str(images.get("download_strategy_mode") or "balanced").strip().lower()
-    mode = requested_mode if requested_mode in {*preset_map.keys(), "custom"} else "balanced"
+    mode = normalize_strategy_mode(images.get("download_strategy_mode"), default="balanced")
     images["download_strategy_mode"] = mode
 
-    custom_values = _normalize_strategy_values(images.get("download_strategy_custom", []))
-    legacy_values = _normalize_strategy_values(images.get("download_strategy", []))
+    custom_values = normalize_strategy_values(images.get("download_strategy_custom", []))
+    legacy_values = normalize_strategy_values(images.get("download_strategy", []))
     if not custom_values:
-        custom_values = legacy_values or preset_map["balanced"]
+        custom_values = legacy_values or list(IMAGE_STRATEGY_PRESETS["balanced"])
     images["download_strategy_custom"] = custom_values
 
-    images["download_strategy"] = preset_map.get(mode, custom_values)
+    images["download_strategy"] = resolve_download_strategy(images)
+    images["stitch_mode_default"] = normalize_stitch_mode(images.get("stitch_mode_default"))
+    images["iiif_quality"] = normalize_iiif_quality(images.get("iiif_quality"))
 
     if "probe_remote_max_resolution" not in images:
         images["probe_remote_max_resolution"] = True
+
+
+def _postprocess_pdf_settings(settings_node: dict[str, Any]) -> None:
+    pdf = settings_node.setdefault("pdf", {})
+    if not isinstance(pdf, dict):
+        settings_node["pdf"] = {}
+        pdf = settings_node["pdf"]
+
+    images = settings_node.setdefault("images", {})
+    if not isinstance(images, dict):
+        images = {}
+        settings_node["images"] = images
+
+    legacy_quality = images.get("viewer_quality")
+    try:
+        viewer_jpeg_quality = int(pdf.get("viewer_jpeg_quality") or legacy_quality or 95)
+    except (TypeError, ValueError):
+        viewer_jpeg_quality = 95
+    pdf["viewer_jpeg_quality"] = max(10, min(viewer_jpeg_quality, 100))
 
 
 def _postprocess_network_settings(settings_node: dict[str, Any]) -> None:
@@ -426,6 +423,7 @@ async def save_settings(request):
         _merge_payload_into_config(cm.data, payload)
         settings_node = cm.data.setdefault("settings", {})
         _postprocess_images_settings(settings_node)
+        _postprocess_pdf_settings(settings_node)
         _postprocess_network_settings(settings_node)
         _postprocess_storage_settings(settings_node)
         profile_changes = _postprocess_pdf_profiles(settings_node)

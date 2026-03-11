@@ -103,6 +103,11 @@ minversion = "6.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external services",
+    "unit: fast unit tests without external dependencies",
+]
 
 [tool.pyright]
 include = ["src"]

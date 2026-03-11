@@ -31,17 +31,21 @@ def test_parse_manifest_catalog_extracts_see_also_reference(monkeypatch):
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1231"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = (
             "<html><head><title>DigiVatLib</title></head>"
             "<body><h1>Orafo da Cremona, trattato di oreficeria</h1></body></html>"
         )
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,
@@ -63,14 +67,18 @@ def test_parse_manifest_catalog_ignores_generic_site_title_for_catalog_title(mon
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1779"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = "<html><head><title>Digital Vatican Library</title></head><body></body></html>"
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,
@@ -109,14 +117,18 @@ def test_parse_manifest_catalog_ignores_search_and_discover_placeholder(monkeypa
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1777"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = "<html><head><title>Search and discover manuscripts</title></head><body></body></html>"
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,
@@ -215,7 +227,8 @@ def test_parse_manifest_catalog_enrichment_merges_external_fields(monkeypatch):
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1231"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = (
             "<html><head>"
             '<meta name="author" content="Giovanni Boccaccio"/>'
@@ -223,11 +236,14 @@ def test_parse_manifest_catalog_enrichment_merges_external_fields(monkeypatch):
             "</head><body><h1>Tractatus de astronomia</h1></body></html>"
         )
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,
@@ -248,7 +264,8 @@ def test_parse_manifest_catalog_extracts_vatican_bibliographic_references(monkey
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1777"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = (
             "<html><head><title>Manuscript - Urb.lat.1777</title></head>"
             "<body>"
@@ -257,11 +274,14 @@ def test_parse_manifest_catalog_extracts_vatican_bibliographic_references(monkey
             "</body></html>"
         )
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,
@@ -281,7 +301,8 @@ def test_parse_manifest_catalog_extracts_vatican_bibliographic_references_from_d
         "seeAlso": ["https://digi.vatlib.it/mss/detail/Urb.lat.1777"],
     }
 
-    class _Resp:
+    class _MockResponse:
+        status_code = 200
         text = (
             "<html><head><title>DigiVatLib</title></head>"
             "<body>"
@@ -296,11 +317,14 @@ def test_parse_manifest_catalog_extracts_vatican_bibliographic_references_from_d
             "</body></html>"
         )
 
-        @staticmethod
-        def raise_for_status():
-            return None
+    class _MockHTTPClient:
+        def __init__(self, **_kwargs):
+            pass
 
-    monkeypatch.setattr(library_catalog.requests, "get", lambda *_a, **_k: _Resp())
+        def get(self, *_args, **_kwargs):
+            return _MockResponse()
+
+    monkeypatch.setattr("universal_iiif_core.library_catalog.HTTPClient", _MockHTTPClient)
 
     parsed = library_catalog.parse_manifest_catalog(
         manifest,

@@ -30,6 +30,9 @@ Profiles are global presets defined in `Settings > PDF Export` and selected per 
 ## Practical Strategy
 
 - Keep local workflow balanced for speed and storage.
-- Use thumbnail `Online max` vs `Locale` metadata to decide if extra detail is needed.
+- Use thumbnail `Remote` vs `Locale` metadata to decide if extra detail is needed.
+- Treat `Remote` as the IIIF-declared size, not as a guaranteed ceiling for every direct fetch.
+- If you want the same behavior as a normal volume download on a single page, use `Std` in `Studio > Output > Pagine`.
+- If you want to force the best direct page fetch regardless of the standard strategy, use `Hi`.
 - Use `remote_highres_temp` only for pages/jobs that require maximum quality.
 - Keep `cleanup_temp_after_export` enabled to avoid temp high-res accumulation.

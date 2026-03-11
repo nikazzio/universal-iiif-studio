@@ -7,6 +7,9 @@ from PIL import Image
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
+# Mark entire file as slow (has time.sleep and job queue tests)
+pytestmark = pytest.mark.slow
+
 
 class _PromotionCfg:
     data = {"settings": {"network": {"global": {"max_concurrent_download_jobs": 1}}}}

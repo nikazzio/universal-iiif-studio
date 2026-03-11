@@ -12,6 +12,40 @@ All notable changes to this project are documented in this file.
 - Every non-empty bullet should reference an issue or PR number using the `(#123)` suffix.
 - If a section has no items, use `- None.`
 
+## [Unreleased]
+
+### Added
+
+- **Centralized HTTP Client**: New `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics tracking (#71).
+  - Eliminated ~200+ lines of duplicate retry/backoff code across 6 core modules.
+  - Per-library network policies with configurable timeout, concurrency, and rate limits.
+  - Sliding window rate limiter prevents overwhelming library servers (Gallica: 4 req/min, others: 20 req/min).
+  - Migrated modules: `downloader.py`, `iiif_tiles.py`, `iiif_resolution.py`, `utils.py`, `resolvers/discovery.py`, `library_catalog.py`.
+- **Professional Status Panel**: New status badge component in Studio interface with color-coded technical status indicators.
+  - Color-coded badges for `read_source`, `state`, `scans`, `staging`, and PDF info.
+  - READ_SOURCE badge: AMBER when remote, GREEN when local for clear visual feedback.
+  - Responsive grid layout (2x2 mobile, 4 columns desktop).
+- **Mirador Local/Remote Mode**: Studio now supports dual viewing modes for incomplete downloads.
+  - **REMOTE MODE**: Mirador loads manifest from original server, displays ALL pages by fetching images on-demand (useful for incomplete/paused downloads).
+  - **LOCAL MODE**: Mirador loads local manifest, displays only downloaded pages using local images, works offline.
+  - User can override default behavior with `?allow_remote_preview=true` URL parameter.
+  - Configurable via `viewer.mirador.require_complete_local_images` setting.
+
+### Changed
+
+- HTTP client retry logic now uses centralized `HTTPClient` class instead of module-specific implementations.
+- Network policy configuration now supports global defaults plus per-library overrides for rate limiting and concurrency.
+- Studio viewer source mode selection logic now clearly distinguishes between remote preview and local-only modes.
+
+### Fixed
+
+- Fixed critical method signature mismatch in `_compute_backoff()` that broke all retry logic (#71).
+- Fixed semaphore counter corruption (only release if acquired) in HTTPClient (#71).
+- Fixed rate limiter hostname hardcoded to "unknown" which broke per-host limits (#71).
+- Fixed retry metrics always showing zero (#71).
+- Restored `get_request_session()` for backward compatibility (#71).
+- Fixed ConfigManager singleton import to use `get_config_manager()` (#71).
+
 ## [v0.6.1] - 2026-03-02
 
 ### Added

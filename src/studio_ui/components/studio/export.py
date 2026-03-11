@@ -112,17 +112,42 @@ def _thumb_progress_state(feedback: dict | None) -> tuple[str, int, bool]:
     return progress_cls, percent, is_busy
 
 
-def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, page_size: int):
+def _thumbnail_card_id(page: int) -> str:
+    return f"studio-thumb-card-{int(page)}"
+
+
+def _thumb_live_url(*, doc_id: str, library: str, thumb_page: int, page_size: int) -> str:
+    encoded_doc = quote(doc_id, safe="")
+    encoded_lib = quote(library, safe="")
+    return (
+        f"/api/studio/export/thumbs/live?doc_id={encoded_doc}&library={encoded_lib}"
+        f"&thumb_page={thumb_page}&page_size={page_size}"
+    )
+
+
+def render_export_thumbnail_card(
+    *,
+    item: dict,
+    doc_id: str,
+    library: str,
+    thumb_page: int,
+    page_size: int,
+    hx_swap_oob: str | None = None,
+):
+    """Render one export thumbnail card with per-page action controls."""
     page = int(item.get("page") or 0)
     thumb_url = str(item.get("thumb_url") or "")
     local_dims = _dims_label(item.get("local_width"), item.get("local_height"))
-    remote_dims = _dims_label(item.get("remote_width"), item.get("remote_height"))
+    iiif_dims = _dims_label(item.get("iiif_declared_width"), item.get("iiif_declared_height"))
+    verified_dims = _dims_label(item.get("verified_direct_width"), item.get("verified_direct_height"))
     local_bytes = int(item.get("local_bytes") or 0)
     highres_feedback = item.get("highres_feedback") or item.get("action_feedback") or {}
+    stitch_feedback = item.get("stitch_feedback") or {}
     optimize_feedback = item.get("optimize_feedback") or {}
     hi_progress_cls, hi_progress_percent, hi_busy = _thumb_progress_state(highres_feedback)
+    stitch_progress_cls, stitch_progress_percent, stitch_busy = _thumb_progress_state(stitch_feedback)
     opt_progress_cls, opt_progress_percent, opt_busy = _thumb_progress_state(optimize_feedback)
-    is_busy = hi_busy or opt_busy
+    is_busy = hi_busy or stitch_busy or opt_busy
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
     image = (
@@ -168,17 +193,40 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
         f"/api/studio/export/page_highres?doc_id={encoded_doc}&library={encoded_lib}"
         f"&page={page}&thumb_page={thumb_page}&page_size={page_size}"
     )
-    optimize_url = (
-        f"/api/studio/export/optimize_scans?doc_id={encoded_doc}&library={encoded_lib}"
-        f"&thumb_page={thumb_page}&page_size={page_size}"
+    stitch_url = (
+        f"/api/studio/export/page_stitch?doc_id={encoded_doc}&library={encoded_lib}"
+        f"&page={page}&thumb_page={thumb_page}&page_size={page_size}"
     )
+    optimize_url = (
+        f"/api/studio/export/page_optimize?doc_id={encoded_doc}&library={encoded_lib}"
+        f"&page={page}&thumb_page={thumb_page}&page_size={page_size}"
+    )
+    card_id = _thumbnail_card_id(page)
+    card_attrs = {"id": card_id}
+    if hx_swap_oob:
+        card_attrs["hx_swap_oob"] = hx_swap_oob
     return Div(
         select_btn,
         Div(
             Div(
-                Span(f"Locale {local_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
-                Span(f"Remoto {remote_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
-                cls="flex items-center justify-between gap-2",
+                Div(
+                    Span(f"Locale {local_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
+                    *(
+                        [
+                            Span(
+                                "",
+                                cls="inline-block h-2 w-2 rounded-full bg-emerald-500",
+                                title=f"Dimensione verificata via download diretto: {verified_dims}",
+                                aria_label=f"Dimensione verificata via download diretto: {verified_dims}",
+                            )
+                        ]
+                        if verified_dims != "n/a"
+                        else []
+                    ),
+                    cls="flex items-center gap-1.5",
+                ),
+                Span(f"Remote {iiif_dims}", cls="text-[11px] text-slate-500 dark:text-slate-400"),
+                cls="grid gap-0.5",
             ),
             Div(
                 Button(
@@ -195,14 +243,40 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     ),
                     type="button",
                     hx_post=highres_url,
-                    hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
+                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
                     hx_indicator=f"#studio-thumb-progress-hi-{page}",
-                    hx_target="#studio-export-panel",
+                    hx_target=f"#{card_id}",
                     hx_swap="outerHTML",
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-highres-btn",
                     data_page=str(page),
-                    title="Riscarica la pagina in alta risoluzione",
+                    title="Riscarica la pagina con fetch diretto max, senza fallback stitching",
+                ),
+                Button(
+                    Div(
+                        Span("🧩 Std", cls="text-[12px] font-semibold"),
+                        Span(
+                            "",
+                            id=f"studio-thumb-progress-stitch-{page}",
+                            cls=f"studio-thumb-progress {stitch_progress_cls}",
+                            style=f"--progress:{stitch_progress_percent}%;",
+                            aria_hidden="true",
+                        ),
+                        cls="flex items-center justify-between gap-2",
+                    ),
+                    type="button",
+                    hx_post=stitch_url,
+                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                    hx_indicator=f"#studio-thumb-progress-stitch-{page}",
+                    hx_target=f"#{card_id}",
+                    hx_swap="outerHTML",
+                    disabled=is_busy,
+                    cls="app-btn app-btn-neutral studio-thumb-stitch-btn",
+                    data_page=str(page),
+                    title=(
+                        "Riscarica la pagina usando la strategia standard del volume "
+                        "(es. 3000 -> 1740 -> max, con fallback stitch se serve)"
+                    ),
                 ),
                 Button(
                     Div(
@@ -218,10 +292,9 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
                     ),
                     type="button",
                     hx_post=optimize_url,
-                    hx_vals=f'{{"optimize_scope":"selected","selected_pages":"{page}"}}',
                     hx_include="#studio-export-thumb-page,#studio-export-page-size",
                     hx_indicator=f"#studio-thumb-progress-opt-{page}",
-                    hx_target="#studio-export-panel",
+                    hx_target=f"#{card_id}",
                     hx_swap="outerHTML",
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-opt-btn",
@@ -233,6 +306,80 @@ def _thumbnail_card(*, item: dict, doc_id: str, library: str, thumb_page: int, p
             cls="studio-thumb-meta",
         ),
         cls="studio-thumb-card studio-thumb-shell",
+        **card_attrs,
+    )
+
+
+def render_export_thumbs_poller(
+    *,
+    doc_id: str,
+    library: str,
+    thumb_page: int,
+    page_size: int,
+    has_active_page_actions: bool,
+    hx_swap_oob: str | None = None,
+) -> Div:
+    """Render the hidden live poller used for per-card export updates."""
+    attrs: dict[str, str] = {"id": "studio-export-live-state-poller", "cls": "hidden"}
+    if has_active_page_actions:
+        attrs.update(
+            {
+                "hx_get": _thumb_live_url(doc_id=doc_id, library=library, thumb_page=thumb_page, page_size=page_size),
+                "hx_trigger": "load, every 2s",
+                "hx_swap": "none",
+            }
+        )
+    if hx_swap_oob:
+        attrs["hx_swap_oob"] = hx_swap_oob
+    return Div("", **attrs)
+
+
+def render_export_thumbnails_loading_shell(
+    *,
+    doc_id: str,
+    library: str,
+    thumb_page: int,
+    thumb_page_count: int,
+    total_pages: int,
+    page_size: int,
+) -> Div:
+    """Render a lightweight placeholder while the visible thumbnails page is generated."""
+    return Div(
+        Div(
+            Span(
+                f"Miniature: pagina {thumb_page}/{thumb_page_count} · {total_pages} pagine totali",
+                cls="text-xs text-slate-500 dark:text-slate-400",
+            ),
+            Span(
+                "Caricamento iniziale",
+                cls="text-[11px] font-medium text-slate-500 dark:text-slate-400",
+            ),
+            cls="flex items-center justify-between mb-2",
+        ),
+        Div(
+            Div(
+                Div("", cls="h-4 w-24 rounded bg-slate-200/80 dark:bg-slate-700/70 animate-pulse"),
+                Div("", cls="h-44 rounded-lg bg-slate-200/70 dark:bg-slate-800/70 animate-pulse"),
+                Div("", cls="h-8 rounded-lg bg-slate-200/60 dark:bg-slate-800/60 animate-pulse"),
+                cls="space-y-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3",
+            ),
+            Div(
+                "Sto preparando le miniature della pagina visibile. Le thumb vengono create on-demand "
+                "alla prima apertura e poi riusate dalla cache finché il file sorgente non cambia.",
+                cls="text-xs text-slate-500 dark:text-slate-400",
+            ),
+            cls="space-y-3",
+        ),
+        id="studio-export-thumbs-slot",
+        hx_get=_thumb_page_url(doc_id=doc_id, library=library, thumb_page=thumb_page, page_size=page_size),
+        hx_trigger="load",
+        hx_swap="outerHTML",
+        **{
+            "data-thumb-page": str(thumb_page),
+            "data-thumb-pages": str(thumb_page_count),
+            "data-page-size": str(page_size),
+            "data-thumbs-endpoint": _thumb_base_url(doc_id=doc_id, library=library),
+        },
     )
 
 
@@ -265,7 +412,13 @@ def render_export_thumbnails_panel(
 ) -> Div:
     """Render one paginated thumbnails slice for export selection."""
     cards = [
-        _thumbnail_card(item=item, doc_id=doc_id, library=library, thumb_page=thumb_page, page_size=page_size)
+        render_export_thumbnail_card(
+            item=item,
+            doc_id=doc_id,
+            library=library,
+            thumb_page=thumb_page,
+            page_size=page_size,
+        )
         for item in thumbnails
     ]
     if not cards:
@@ -295,19 +448,12 @@ def render_export_thumbnails_panel(
         }
     )
 
-    poller = (
-        Div(
-            "",
-            id="studio-export-live-state-poller",
-            hx_get=_thumb_page_url(doc_id=doc_id, library=library, thumb_page=thumb_page, page_size=page_size),
-            hx_trigger="load, every 12s",
-            hx_include="#studio-export-thumb-page,#studio-export-page-size",
-            hx_target="#studio-export-thumbs-slot",
-            hx_swap="outerHTML",
-            cls="hidden",
-        )
-        if has_active_page_actions
-        else Div("", id="studio-export-live-state-poller", cls="hidden")
+    poller = render_export_thumbs_poller(
+        doc_id=doc_id,
+        library=library,
+        thumb_page=thumb_page,
+        page_size=page_size,
+        has_active_page_actions=has_active_page_actions,
     )
 
     return Div(
@@ -364,6 +510,41 @@ def render_export_thumbnails_panel(
     )
 
 
+def render_export_pages_summary(
+    *,
+    scan_summary: dict,
+    thumb_total_pages: int,
+    thumb_page: int,
+    thumb_page_count: int,
+    thumb_page_size: int,
+    hx_swap_oob: str | None = None,
+):
+    """Render the aggregated image workspace summary block."""
+    attrs = {"id": "studio-export-pages-summary"}
+    if hx_swap_oob:
+        attrs["hx_swap_oob"] = hx_swap_oob
+    return Div(
+        Span(
+            (
+                f"Pagine {thumb_total_pages} · File {int(scan_summary.get('files_count') or 0)} · "
+                f"Locale {_bytes_label(int(scan_summary.get('bytes_total') or 0))} · "
+                f"Media {_bytes_label(int(scan_summary.get('bytes_avg') or 0))} · "
+                f"Max {_bytes_label(int(scan_summary.get('bytes_max') or 0))}"
+            ),
+            cls="text-xs font-mono text-slate-700 dark:text-slate-200",
+        ),
+        Span(
+            f"Thumb page {thumb_page}/{thumb_page_count} · {thumb_page_size} per pagina",
+            cls="text-[11px] text-slate-500 dark:text-slate-400",
+        ),
+        cls=(
+            "flex flex-col gap-1 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 "
+            "bg-white/80 dark:bg-slate-900/80"
+        ),
+        **attrs,
+    )
+
+
 def _render_export_pages_subtab(
     *,
     doc_id: str,
@@ -378,6 +559,7 @@ def _render_export_pages_subtab(
     thumb_page_size: int,
     thumb_page_size_options: list[int],
     has_active_page_actions: bool = False,
+    defer_thumbs_load: bool = False,
 ):
     encoded_doc = quote(doc_id, safe="")
     encoded_lib = quote(library, safe="")
@@ -406,27 +588,18 @@ def _render_export_pages_subtab(
         Div(
             H3("Workspace Immagini", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
             P(
-                "Gestisci miniature, high-res e ottimizzazione locale. Il PDF resta secondario.",
+                (
+                    "Gestisci miniature, high-res e ottimizzazione locale. "
+                    "Le miniature della pagina visibile vengono create on-demand al primo accesso."
+                ),
                 cls="text-xs text-slate-500 dark:text-slate-400",
             ),
-            Div(
-                Span(
-                    (
-                        f"Pagine {thumb_total_pages} · File {int(scan_summary.get('files_count') or 0)} · "
-                        f"Locale {_bytes_label(int(scan_summary.get('bytes_total') or 0))} · "
-                        f"Media {_bytes_label(int(scan_summary.get('bytes_avg') or 0))} · "
-                        f"Max {_bytes_label(int(scan_summary.get('bytes_max') or 0))}"
-                    ),
-                    cls="text-xs font-mono text-slate-700 dark:text-slate-200",
-                ),
-                Span(
-                    f"Thumb page {thumb_page}/{thumb_page_count} · {thumb_page_size} per pagina",
-                    cls="text-[11px] text-slate-500 dark:text-slate-400",
-                ),
-                cls=(
-                    "flex flex-col gap-1 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 "
-                    "bg-white/80 dark:bg-slate-900/80"
-                ),
+            render_export_pages_summary(
+                scan_summary=scan_summary,
+                thumb_total_pages=thumb_total_pages,
+                thumb_page=thumb_page,
+                thumb_page_count=thumb_page_count,
+                thumb_page_size=thumb_page_size,
             ),
             cls="space-y-2",
         ),
@@ -509,13 +682,19 @@ def _render_export_pages_subtab(
                     cls="text-xs text-slate-500 dark:text-slate-400",
                 ),
             ),
-            cls=(
-                "space-y-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 "
-                "bg-white dark:bg-slate-900"
-            ),
+            cls=("space-y-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"),
         ),
         Div(
-            render_export_thumbnails_panel(
+            render_export_thumbnails_loading_shell(
+                doc_id=doc_id,
+                library=library,
+                thumb_page=thumb_page,
+                thumb_page_count=thumb_page_count,
+                total_pages=thumb_total_pages,
+                page_size=thumb_page_size,
+            )
+            if defer_thumbs_load
+            else render_export_thumbnails_panel(
                 doc_id=doc_id,
                 library=library,
                 thumbnails=thumbnails,
@@ -565,6 +744,7 @@ def render_studio_export_tab(
     scan_summary: dict | None = None,
     optimization_meta: dict | None = None,
     optimize_feedback: dict | None = None,
+    defer_thumbs_load: bool = False,
 ) -> Div:
     """Render the Studio Export tab content."""
     encoded_doc = quote(doc_id, safe="")
@@ -660,6 +840,7 @@ def render_studio_export_tab(
                         thumb_page_size=thumb_page_size,
                         thumb_page_size_options=thumb_page_size_options,
                         has_active_page_actions=has_active_page_actions,
+                        defer_thumbs_load=defer_thumbs_load,
                     )
                     if active_subtab == "pages"
                     else ""
@@ -730,16 +911,16 @@ def render_studio_export_tab(
                             id="studio-export-cleanup-temp-hidden",
                             value="1" if default_cleanup_temp else "0",
                         ),
+                        Div(
                             Div(
-                                Div(
-                                    H3(
-                                        "Selezione Pagine",
-                                        cls="text-sm font-semibold text-slate-900 dark:text-slate-100",
-                                    ),
-                                    P(
-                                        "Seleziona le pagine da includere nel PDF.",
-                                        cls="text-xs text-slate-500 dark:text-slate-400",
-                                    ),
+                                H3(
+                                    "Selezione Pagine",
+                                    cls="text-sm font-semibold text-slate-900 dark:text-slate-100",
+                                ),
+                                P(
+                                    "Seleziona le pagine da includere nel PDF.",
+                                    cls="text-xs text-slate-500 dark:text-slate-400",
+                                ),
                                 cls="space-y-1",
                             ),
                             Div(
@@ -809,11 +990,9 @@ def render_studio_export_tab(
                                     cls="flex flex-wrap items-center gap-2 mt-2",
                                 ),
                                 cls="space-y-2",
-                                ),
-                                cls=(
-                                    "space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700"
-                                ),
                             ),
+                            cls=("space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700"),
+                        ),
                         Div(
                             H3(
                                 "Template e Parametri Export",
@@ -1055,9 +1234,7 @@ def render_studio_export_tab(
                                 cls="grid grid-cols-1 md:grid-cols-2 gap-3",
                             ),
                             id="studio-export-overrides-panel",
-                            cls=(
-                                "hidden space-y-3 mt-1 pt-3 border-t border-slate-200 dark:border-slate-700"
-                            ),
+                            cls=("hidden space-y-3 mt-1 pt-3 border-t border-slate-200 dark:border-slate-700"),
                         ),
                         Div(
                             Div(
@@ -1110,9 +1287,8 @@ def render_studio_export_tab(
                             library=library,
                             polling=has_active_jobs,
                         ),
-                        cls="studio-export-build-files-block space-y-2" + (
-                            "" if active_build_subtab == "files" else " hidden"
-                        ),
+                        cls="studio-export-build-files-block space-y-2"
+                        + ("" if active_build_subtab == "files" else " hidden"),
                     ),
                     id="studio-export-subtab-build",
                     cls="space-y-3",

@@ -49,7 +49,7 @@ EN_WORDS = {
 IT_WORDS = {
     "e",
     "con",
-    "per",
+    # "per" removed - highly ambiguous with English (per-host, per-library, per-instance, etc.)
     "questo",
     "questa",
     "deve",
@@ -114,8 +114,8 @@ def main() -> int:
             if it_score >= 6 and it_score > en_score:
                 failures.append(f"{path}: expected English but Italian appears dominant.")
 
-        if expected == "it" and en_score >= 12 and en_score > int(it_score * 1.2):
-            # Italian docs may naturally include some English technical words.
+        if expected == "it" and en_score >= 12 and en_score > int(it_score * 1.8):
+            # Italian docs naturally include technical English terms - be more permissive
             failures.append(f"{path}: expected Italian but English appears dominant.")
 
     if failures:

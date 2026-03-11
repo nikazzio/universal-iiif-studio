@@ -1,7 +1,12 @@
+import pytest
+
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import discovery_handlers, discovery_helpers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark as slow (creates files, uses vault, mock downloads)
+pytestmark = pytest.mark.slow
 
 
 def test_add_to_library_persists_saved_entry(monkeypatch):
@@ -206,6 +211,50 @@ def test_download_manager_running_job_shows_pause_and_cancel():
     assert "Annulla" in text
 
 
+def test_download_manager_separates_studio_export_jobs_into_compact_section():
+    """Studio export page jobs should not render as full manager cards."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_STUDIO_PAGE_JOB", title="Doc Studio Page", library="Vaticana", status="saved")
+    vm.create_download_job(
+        "job_studio_page_compact",
+        "DOC_STUDIO_PAGE_JOB",
+        "Vaticana",
+        "https://example.org/manifest.json",
+        job_origin="studio_export_page",
+    )
+    vm.update_download_job("job_studio_page_compact", current=1, total=1, status="completed")
+
+    fragment = discovery_handlers.download_manager()
+    text = repr(fragment)
+    assert "Attività Immagini Studio" in text
+    assert "Doc Studio Page" in text
+    assert "🗑️ Rimuovi" in text
+    assert "Vai allo Studio" not in text
+    assert "⏸️ Pausa" not in text
+
+
+def test_download_manager_studio_export_active_job_shows_only_cancel():
+    """Active studio export jobs should expose a single cancel action in compact mode."""
+    vm = VaultManager()
+    vm.upsert_manuscript("DOC_STUDIO_PAGE_ACTIVE", title="Doc Studio Active", library="Gallica", status="saved")
+    vm.create_download_job(
+        "job_studio_page_active",
+        "DOC_STUDIO_PAGE_ACTIVE",
+        "Gallica",
+        "https://example.org/manifest.json",
+        job_origin="studio_export_page",
+    )
+    vm.update_download_job("job_studio_page_active", current=0, total=1, status="running")
+
+    fragment = discovery_handlers.download_manager()
+    text = repr(fragment)
+    assert "Attività Immagini Studio" in text
+    assert "Doc Studio Active" in text
+    assert "⛔ Annulla" in text
+    assert "⏸️ Pausa" not in text
+    assert "🗑️ Rimuovi" not in text
+
+
 def test_download_manager_paused_job_shows_resume_and_remove():
     """Paused jobs must expose resume and remove actions."""
     vm = VaultManager()
@@ -404,3 +453,113 @@ def test_start_downloader_thread_uses_requested_existing_job_id(monkeypatch):
     assert jid == "job_keep_1"
     assert captured["job_type"] == "download"
     assert captured["kwargs"]["db_job_id"] == "job_keep_1"
+
+
+def test_start_downloader_thread_marks_studio_export_page_origin(monkeypatch):
+    """Studio export page actions should persist a distinct job origin."""
+    captured = {}
+
+    def _fake_submit(task_func, kwargs=None, job_type="generic"):
+        captured["task_func"] = task_func
+        captured["kwargs"] = dict(kwargs or {})
+        captured["job_type"] = job_type
+        return "internal_job"
+
+    monkeypatch.setattr(discovery_helpers.job_manager, "submit_job", _fake_submit)
+
+    jid = discovery_helpers.start_downloader_thread(
+        "https://example.org/manifest.json",
+        "DOC_STUDIO_PAGE",
+        "Gallica",
+        job_origin="studio_export_page",
+    )
+
+    assert jid
+    assert captured["job_type"] == "download"
+    assert captured["kwargs"]["job_origin"] == "studio_export_page"
+
+
+def test_start_downloader_thread_does_not_reuse_active_job_from_other_origin(monkeypatch):
+    """Studio export page jobs must not reuse an active library download for the same item."""
+    vm = VaultManager()
+    vm.create_download_job(
+        "active_library_job",
+        "DOC_ACTIVE_SPLIT",
+        "Gallica",
+        "https://example.org/manifest.json",
+        job_origin="library_download",
+    )
+    vm.update_download_job("active_library_job", current=1, total=10, status="running")
+
+    captured = {"submit": 0}
+
+    def _fake_submit(task_func, kwargs=None, job_type="generic"):
+        captured["submit"] += 1
+        captured["kwargs"] = dict(kwargs or {})
+        return "internal_job"
+
+    monkeypatch.setattr(discovery_helpers.job_manager, "submit_job", _fake_submit)
+
+    jid = discovery_helpers.start_downloader_thread(
+        "https://example.org/manifest.json",
+        "DOC_ACTIVE_SPLIT",
+        "Gallica",
+        job_origin="studio_export_page",
+    )
+
+    assert jid != "active_library_job"
+    assert captured["submit"] == 1
+    assert captured["kwargs"]["job_origin"] == "studio_export_page"
+
+
+def test_start_downloader_thread_does_not_reuse_active_studio_page_job(monkeypatch):
+    """Studio page actions must not share one active job id across different pages/actions."""
+    vm = VaultManager()
+    vm.create_download_job(
+        "active_studio_page_job",
+        "DOC_STUDIO_PAGE_CONCURRENT",
+        "Gallica",
+        "https://example.org/manifest.json",
+        job_origin="studio_export_page",
+    )
+    vm.update_download_job("active_studio_page_job", current=0, total=1, status="running")
+
+    captured = {"submit": 0}
+
+    def _fake_submit(task_func, kwargs=None, job_type="generic"):
+        captured["submit"] += 1
+        captured["kwargs"] = dict(kwargs or {})
+        return "internal_job"
+
+    monkeypatch.setattr(discovery_helpers.job_manager, "submit_job", _fake_submit)
+
+    jid = discovery_helpers.start_downloader_thread(
+        "https://example.org/manifest.json",
+        "DOC_STUDIO_PAGE_CONCURRENT",
+        "Gallica",
+        target_pages={2},
+        job_origin="studio_export_page",
+    )
+
+    assert jid != "active_studio_page_job"
+    assert captured["submit"] == 1
+    assert captured["kwargs"]["job_origin"] == "studio_export_page"
+
+
+def test_download_job_origin_is_persisted_in_vault():
+    """Download jobs should expose a stable origin marker for future UI grouping."""
+    vm = VaultManager()
+    vm.create_download_job(
+        "job_origin_studio",
+        "DOC_ORIGIN_STUDIO",
+        "Gallica",
+        "https://example.org/manifest.json",
+        job_origin="studio_export_page",
+    )
+
+    row = vm.get_download_job("job_origin_studio") or {}
+    listed = [item for item in vm.list_download_jobs(limit=20) if item.get("job_id") == "job_origin_studio"]
+
+    assert row.get("job_origin") == "studio_export_page"
+    assert listed
+    assert listed[0].get("job_origin") == "studio_export_page"

@@ -7,9 +7,10 @@ from dataclasses import asdict, dataclass
 from io import BytesIO
 from typing import Any, Protocol
 
-import requests
 from PIL import Image
+from requests import RequestException
 
+from ...http_client import HTTPClient
 from ...logger import get_logger, summarize_for_debug
 
 logger = get_logger(__name__)
@@ -190,6 +191,11 @@ class GoogleVisionProvider:
     def __init__(self, api_key: str):
         """Store the API key used for Vision requests."""
         self.api_key = api_key
+        # Initialize HTTPClient for API calls
+        from ...config_manager import get_config_manager
+
+        network_policy = get_config_manager().data.get("settings", {}).get("network", {})
+        self.http_client = HTTPClient(network_policy=network_policy)
 
     def process(self, image: Image.Image, status_callback: Callable[[str], None] | None = None) -> OCRResult:
         """Send the image to Google Vision for OCR."""
@@ -207,9 +213,9 @@ class GoogleVisionProvider:
             payload = {"requests": [{"image": {"content": img_str}, "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]}
             if status_callback:
                 status_callback("Chiamata alle API di Google Vision...")
-            r = requests.post(url, json=payload, timeout=30)
-            r.raise_for_status()
-            data = r.json()
+            response = self.http_client.post(url, json=payload, timeout=(10, 30))
+            response.raise_for_status()
+            data = response.json()
 
             res = data.get("responses", [{}])[0]
             if "error" in res:
@@ -227,7 +233,7 @@ class GoogleVisionProvider:
                             lines.append(OCRLine(text, conf, box))
 
             return OCRResult(full_text, lines, "Google Vision")
-        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+        except (RequestException, json.JSONDecodeError, KeyError) as e:
             return OCRResult("", [], "Google Vision", error=str(e))
 
 
@@ -238,6 +244,11 @@ class HFInferenceProvider:
         """Initialize the provider with credentials and model_id."""
         self.token = token
         self.model_id = model_id
+        # Initialize HTTPClient for API calls
+        from ...config_manager import get_config_manager
+
+        network_policy = get_config_manager().data.get("settings", {}).get("network", {})
+        self.http_client = HTTPClient(network_policy=network_policy)
 
     def process(self, image: Image.Image, status_callback: Callable[[str], None] | None = None) -> OCRResult:
         """Submit the image to Hugging Face for OCR."""
@@ -254,7 +265,7 @@ class HFInferenceProvider:
 
         try:
             lines_data, full_text = self._process_with_kraken_lines(image)
-        except (requests.RequestException, json.JSONDecodeError) as e:
+        except (RequestException, json.JSONDecodeError) as e:
             return OCRResult("", [], "Hugging Face", error=str(e))
 
         if not lines_data:
@@ -298,12 +309,12 @@ class HFInferenceProvider:
 
         for _ in range(3):
             try:
-                r = requests.post(api_url, headers=headers, data=raw_bytes, timeout=30)
-                if r.status_code == 503:
+                response = self.http_client.post(api_url, headers=headers, data=raw_bytes, timeout=(10, 30))
+                if response.status_code == 503:
                     time.sleep(10)
                     continue
-                r.raise_for_status()
-                res = r.json()
+                response.raise_for_status()
+                res = response.json()
                 text = res[0].get("generated_text", "") if isinstance(res, list) else res.get("generated_text", "")
                 return {"text": text}
             except (ValueError, KeyError, TypeError) as e:
@@ -406,7 +417,7 @@ class OpenAIProvider:
             lines = [OCRLine(line_text.strip()) for line_text in text.split("\n") if line_text.strip()]
 
             return OCRResult(text, lines, f"OpenAI ({self.model})")
-        except (requests.RequestException, json.JSONDecodeError) as e:
+        except (RequestException, json.JSONDecodeError) as e:
             logger.exception("OpenAI OCR Error: %s", e)
             return OCRResult("", [], "OpenAI", error=str(e))
 
@@ -474,7 +485,7 @@ class AnthropicProvider:
             lines = [OCRLine(line_text.strip()) for line_text in text.split("\n") if line_text.strip()]
 
             return OCRResult(text, lines, f"Anthropic ({self.model})")
-        except (requests.RequestException, json.JSONDecodeError) as e:
+        except (RequestException, json.JSONDecodeError) as e:
             return OCRResult("", [], "Anthropic", error=str(e))
 
 

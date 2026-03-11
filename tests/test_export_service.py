@@ -14,6 +14,9 @@ from universal_iiif_core.services.export.service import (
     parse_page_selection,
 )
 
+# Mark as slow (creates images, generates ZIPs, file I/O)
+pytestmark = pytest.mark.slow
+
 
 def _seed_document(doc_id: str, library: str, pages: int = 3) -> Path:
     cm = get_config_manager()

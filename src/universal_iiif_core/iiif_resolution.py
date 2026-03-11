@@ -5,11 +5,10 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-import requests
 from PIL import Image
 
+from .http_client import HTTPClient
 from .logic.downloader import CanvasServiceLocator
-from .utils import DEFAULT_HEADERS
 
 
 def _manifest_canvases(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -42,19 +41,34 @@ def probe_remote_max_dimensions(
     manifest: dict[str, Any],
     page_num_1_based: int,
     *,
+    http_client: HTTPClient | None = None,
+    library_name: str | None = None,
     timeout_s: int = 12,
 ) -> tuple[int | None, int | None, str | None]:
-    """Return `(width, height, service_base)` from remote IIIF info.json for one page."""
+    """Return `(width, height, service_base)` from remote IIIF info.json for one page.
+
+    If http_client is not provided, creates a temporary one with default settings.
+    """
     base = _service_base_for_page(manifest, page_num_1_based)
     if not base:
         return None, None, None
 
     info_url = base.rstrip("/") + "/info.json"
+
+    # Create temporary client if none provided
+    if http_client is None:
+        from .config_manager import get_config_manager
+
+        cm = get_config_manager()
+        network_policy = cm.data.get("settings", {}).get("network", {})
+        http_client = HTTPClient(network_policy=network_policy)
+
     try:
-        response = requests.get(info_url, headers=DEFAULT_HEADERS, timeout=max(3, int(timeout_s)))
-        response.raise_for_status()
-        payload = response.json() if response.content else {}
-    except (requests.RequestException, OSError):
+        t = max(3, int(timeout_s))
+        payload = http_client.get_json(info_url, library_name=library_name, timeout=(t, t))
+        if not payload:
+            return None, None, base
+    except Exception:
         return None, None, base
 
     try:
@@ -75,10 +89,15 @@ def fetch_highres_page_image(
     page_num_1_based: int,
     out_path: Path,
     *,
+    http_client: HTTPClient | None = None,
+    library_name: str | None = None,
     iiif_quality: str = "default",
     timeout_s: int = 45,
 ) -> tuple[bool, str]:
-    """Download one page at `full/max` from IIIF and validate written image bytes."""
+    """Download one page at `full/max` from IIIF and validate written image bytes.
+
+    If http_client is not provided, creates a temporary one with default settings.
+    """
     base = _service_base_for_page(manifest, page_num_1_based)
     if not base:
         return False, "Servizio IIIF non disponibile per la pagina richiesta"
@@ -86,18 +105,30 @@ def fetch_highres_page_image(
     quality = str(iiif_quality or "default").strip() or "default"
     image_url = f"{base.rstrip('/')}/full/max/0/{quality}.jpg"
 
+    # Create temporary client if none provided
+    if http_client is None:
+        from .config_manager import get_config_manager
+
+        cm = get_config_manager()
+        network_policy = cm.data.get("settings", {}).get("network", {})
+        http_client = HTTPClient(network_policy=network_policy)
+
+    response = None
     try:
-        response = requests.get(
+        t = max(8, int(timeout_s))
+        response = http_client.get(
             image_url,
-            headers=DEFAULT_HEADERS,
-            timeout=max(8, int(timeout_s)),
+            library_name=library_name,
+            timeout=(t, t),
             stream=True,
         )
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}"
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("wb") as fh:
-            for chunk in response.iter_content(chunk_size=8192):
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     fh.write(chunk)
 
@@ -105,8 +136,11 @@ def fetch_highres_page_image(
             img.verify()
 
         return True, "ok"
-    except (requests.RequestException, json.JSONDecodeError) as exc:
+    except (json.JSONDecodeError, Exception) as exc:
         if out_path.exists():
             with suppress(OSError):
                 out_path.unlink()
         return False, str(exc)
+    finally:
+        if response is not None:
+            response.close()

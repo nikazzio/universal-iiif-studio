@@ -15,8 +15,11 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .._rate_limiter import get_host_limiter
 from ..config_manager import get_config_manager
+from ..http_client import HTTPClient
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
+from ..image_settings import normalize_stitch_mode, resolve_download_strategy
 from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
 from ..network_policy import resolve_library_network_policy
@@ -26,61 +29,6 @@ from ..utils import DEFAULT_HEADERS, ensure_dir, get_json, save_json
 from .download_helpers import derive_identifier
 
 SECURE_RANDOM = SystemRandom()
-_HOST_LIMITER_LOCK = threading.Lock()
-_HOST_LIMITERS: dict[str, HostRateLimiter] = {}
-
-
-class HostRateLimiter:
-    """Simple host-wide limiter shared across downloader instances."""
-
-    def __init__(self) -> None:
-        self._timestamps: deque[float] = deque()
-        self._cooldown_until = 0.0
-        self._lock = threading.Lock()
-
-    def wait_turn(
-        self,
-        *,
-        window_s: int,
-        max_requests: int,
-        should_cancel: Callable[[], bool] | None = None,
-    ) -> bool:
-        while True:
-            if should_cancel and should_cancel():
-                return False
-            wait_s = 0.0
-            now = time.time()
-            with self._lock:
-                if now < self._cooldown_until:
-                    wait_s = max(wait_s, self._cooldown_until - now)
-                cutoff = now - float(window_s)
-                while self._timestamps and self._timestamps[0] <= cutoff:
-                    self._timestamps.popleft()
-                if len(self._timestamps) < max_requests and wait_s <= 0:
-                    self._timestamps.append(now)
-                    return True
-                if self._timestamps:
-                    wait_s = max(wait_s, self._timestamps[0] + float(window_s) - now)
-                else:
-                    wait_s = max(wait_s, 0.05)
-            time.sleep(max(wait_s, 0.05))
-
-    def set_cooldown(self, cooldown_s: int) -> None:
-        if cooldown_s <= 0:
-            return
-        until = time.time() + float(cooldown_s)
-        with self._lock:
-            if until > self._cooldown_until:
-                self._cooldown_until = until
-
-
-def _get_host_limiter(host_key: str) -> HostRateLimiter:
-    with _HOST_LIMITER_LOCK:
-        limiter = _HOST_LIMITERS.get(host_key)
-        if limiter is None:
-            limiter = HostRateLimiter()
-            _HOST_LIMITERS[host_key] = limiter
-        return limiter
 
 
 class CanvasServiceLocator:
@@ -171,14 +119,23 @@ class PageDownloader:
         if should_cancel and should_cancel():
             return None
         iiif_q = str(self.cm.get_setting("images.iiif_quality", "default") or "default")
-        strategy = self._get_strategy()
-        urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
+        stitch_mode = self._get_stitch_mode()
+        if stitch_mode != "stitch_only":
+            strategy = self._get_strategy()
+            urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
+            downloaded = self.downloader._download_with_retries(
+                urls_to_try,
+                self.filename,
+                self.canvas,
+                self.index,
+                base_url,
+                should_cancel=should_cancel,
+            )
+            if downloaded:
+                return downloaded
 
-        downloaded = self.downloader._download_with_retries(
-            urls_to_try, self.filename, self.canvas, self.index, base_url, should_cancel=should_cancel
-        )
-        if downloaded:
-            return downloaded
+        if stitch_mode == "direct_only":
+            return None
 
         if should_cancel and should_cancel():
             return None
@@ -186,53 +143,23 @@ class PageDownloader:
             self.cm, self.filename, base_url, self.canvas, self.index, iiif_q, should_cancel=should_cancel
         )
 
+    def _get_stitch_mode(self) -> str:
+        return normalize_stitch_mode(
+            getattr(self.downloader, "stitch_mode", "")
+            or self.cm.get_setting("images.stitch_mode_default", "auto_fallback")
+            or "auto_fallback"
+        )
+
     def _get_strategy(self) -> list[str]:
-        if bool(getattr(self.downloader, "force_max_resolution", False)):
-            return ["max"]
-        mode = str(self.cm.get_setting("images.download_strategy_mode", "custom") or "custom").strip().lower()
-        preset_map = {
-            "balanced": ["3000", "1740", "max"],
-            "fast": ["1740", "1200", "max"],
-            "quality_first": ["max", "3000", "1740"],
-            "archival": ["max"],
+        images = {
+            "download_strategy_mode": self.cm.get_setting("images.download_strategy_mode", "balanced"),
+            "download_strategy_custom": self.cm.get_setting("images.download_strategy_custom", []),
+            "download_strategy": self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"]),
         }
-        if mode in preset_map:
-            return preset_map[mode]
-
-        custom_raw = self.cm.get_setting("images.download_strategy_custom", [])
-        custom_values = self._normalize_strategy_values(custom_raw)
-        if custom_values:
-            return custom_values
-
-        legacy_raw = self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"])
-        legacy_values = self._normalize_strategy_values(legacy_raw)
-        return legacy_values or ["3000", "1740", "max"]
-
-    @staticmethod
-    def _normalize_strategy_values(raw: Any) -> list[str]:
-        if isinstance(raw, str):
-            candidates = [token.strip() for token in raw.split(",") if token.strip()]
-        elif isinstance(raw, list):
-            candidates = [str(item).strip() for item in raw if str(item).strip()]
-        else:
-            candidates = []
-
-        out: list[str] = []
-        seen: set[str] = set()
-        for token in candidates:
-            norm = token.lower()
-            if norm == "max":
-                value = "max"
-            elif token.isdigit() and int(token) > 0:
-                value = token
-            else:
-                continue
-
-            if value in seen:
-                continue
-            out.append(value)
-            seen.add(value)
-        return out
+        return resolve_download_strategy(
+            images,
+            force_max_resolution=bool(getattr(self.downloader, "force_max_resolution", False)),
+        )
 
     @staticmethod
     def _format_dimension(value: str) -> str:
@@ -265,6 +192,7 @@ class PageDownloader:
                     "page_index": self.index,
                     "filename": candidate.name,
                     "original_url": f"{base_url} (cached)",
+                    "download_method": "cached",
                     "thumbnail_url": self.downloader._get_thumbnail_url(self.canvas),
                     "size_bytes": candidate.stat().st_size,
                     "width": width,
@@ -308,6 +236,7 @@ class IIIFDownloader:
         force_max_resolution: bool = False,
         force_redownload: bool = False,
         overwrite_existing_scans: bool = False,
+        stitch_mode: str = "",
     ):
         """Initialize the IIIFDownloader."""
         # basic configuration
@@ -322,6 +251,10 @@ class IIIFDownloader:
         self.force_max_resolution = bool(force_max_resolution)
         self.force_redownload = bool(force_redownload)
         self.overwrite_existing_scans = bool(overwrite_existing_scans)
+        normalized_stitch_mode = str(stitch_mode or "").strip().lower()
+        self.stitch_mode = (
+            normalized_stitch_mode if normalized_stitch_mode in {"auto_fallback", "direct_only", "stitch_only"} else ""
+        )
 
         # load manifest and derive human label (for display, NOT for storage)
         self.manifest: dict[str, Any] = get_json(manifest_url) or {}
@@ -333,6 +266,7 @@ class IIIFDownloader:
         cm = get_config_manager()
         self.cm = cm
         self.network_policy = resolve_library_network_policy(cm.data.get("settings", {}), library)
+        self.library_key = str(self.network_policy.get("library_key") or library or "unknown")
         if not bool(self.network_policy.get("enabled", True)):
             raise ValueError(f"Downloads disabled by policy for library '{library}'")
         configured_workers = int(self.network_policy.get("workers_per_job") or 1)
@@ -341,7 +275,7 @@ class IIIFDownloader:
         else:
             self.workers = max(1, min(int(workers), 8))
         self._host_key = str(urlparse(self.manifest_url).netloc or "unknown")
-        self._host_limiter = _get_host_limiter(self._host_key)
+        self._host_limiter = get_host_limiter(self._host_key)
         self._request_timeout = (
             int(self.network_policy.get("connect_timeout_s") or 10),
             int(self.network_policy.get("read_timeout_s") or 30),
@@ -369,6 +303,10 @@ class IIIFDownloader:
         self.vault = VaultManager()
         self._register_vault()
         self._init_session()
+
+        # HTTP client for standardized requests with retry/rate limiting
+        # Pass network_policy dict (settings.network) so HTTPClient can resolve library-specific config
+        self.http_client = HTTPClient(network_policy=cm.data.get("settings", {}).get("network", {}))
 
     def get_pdf_url(self):
         """Check the manifest for a native PDF URL in the rendering section."""
@@ -448,9 +386,12 @@ class IIIFDownloader:
                 self.logger.warning(f"Failed to register manuscript in DB: {e}")
 
     def _init_session(self):
+        """Initialize synchronization primitives and session for prewarm URLs."""
         self._lock = threading.Lock()
         self._tile_stitch_sem = threading.Semaphore(1)
-        self._backoff_until = 0
+
+        # Keep session for prewarm viewer URLs (Gallica, Vatican)
+        # All IIIF image downloads now use HTTPClient
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
         transport_retries = int(self.network_policy.get("transport_retries") or 0)
@@ -485,20 +426,6 @@ class IIIFDownloader:
                     self.session.headers.update({"Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
                 except (requests.RequestException, requests.Timeout):
                     self.logger.debug("Unable to pre-warm viewer session for %s", self.library, exc_info=True)
-
-    def _compute_backoff_wait(self, *, attempt: int, status_code: int, retry_after_header: str | None) -> float:
-        base_wait = float(self.network_policy.get("backoff_base_s") or 15.0) * (2**attempt)
-        capped_wait = min(base_wait, float(self.network_policy.get("backoff_cap_s") or 300.0))
-        retry_after_wait = 0.0
-        if bool(self.network_policy.get("respect_retry_after")) and retry_after_header:
-            with suppress(ValueError, TypeError):
-                retry_after_wait = max(float(retry_after_header), 0.0)
-        wait = max(capped_wait, retry_after_wait)
-        if status_code == 403:
-            self._host_limiter.set_cooldown(int(self.network_policy.get("cooldown_on_403_s") or 0))
-        elif status_code == 429:
-            self._host_limiter.set_cooldown(int(self.network_policy.get("cooldown_on_429_s") or 0))
-        return wait
 
     def _wait_rate_gate(self, should_cancel: Callable[[], bool] | None = None) -> bool:
         window_s = int(self.network_policy.get("burst_window_s") or 60)
@@ -574,25 +501,6 @@ class IIIFDownloader:
     def _stop_requested(should_cancel: Callable[[], bool] | None) -> bool:
         return bool(should_cancel and should_cancel())
 
-    def _wait_before_download_attempt(self, should_cancel: Callable[[], bool] | None = None) -> bool:
-        if self._stop_requested(should_cancel):
-            return False
-        now = time.time()
-        if now < self._backoff_until:
-            jitter = SECURE_RANDOM.uniform(0.1, 0.5)
-            time.sleep(self._backoff_until - now + jitter)
-        if self._stop_requested(should_cancel):
-            return False
-        if not self._wait_rate_gate(should_cancel=should_cancel):
-            return False
-        delay = SECURE_RANDOM.uniform(
-            float(self.network_policy.get("min_delay_s") or 0.1),
-            float(self.network_policy.get("max_delay_s") or 0.2),
-        )
-        if delay > 0:
-            time.sleep(delay)
-        return not self._stop_requested(should_cancel)
-
     def _save_download_response(
         self,
         response: requests.Response,
@@ -612,6 +520,7 @@ class IIIFDownloader:
             "page_index": index,
             "filename": filename.name,
             "original_url": url,
+            "download_method": "direct",
             "thumbnail_url": self._get_thumbnail_url(canvas),
             "size_bytes": len(response.content),
             "width": width,
@@ -619,17 +528,6 @@ class IIIFDownloader:
             "resolution_category": "High" if width > 2500 else "Medium",
         }
         return str(filename), stats
-
-    def _apply_backoff_for_status(self, status_code: int, retry_after_header: str | None, *, attempt: int) -> None:
-        if status_code not in {403, 429}:
-            return
-        wait = self._compute_backoff_wait(
-            attempt=attempt,
-            status_code=int(status_code),
-            retry_after_header=retry_after_header,
-        )
-        with self._lock:
-            self._backoff_until = time.time() + wait
 
     def _download_with_retries(
         self,
@@ -640,44 +538,62 @@ class IIIFDownloader:
         base_url: str,
         should_cancel: Callable[[], bool] | None = None,
     ):
-        retries = max(1, int(self.network_policy.get("retry_max_attempts") or 1))
-        for attempt in range(retries):
-            if not self._wait_before_download_attempt(should_cancel=should_cancel):
+        """Download canvas image with retries.
+
+        HTTPClient handles retries, backoff, and rate limiting automatically.
+        We just need to try each URL and save the first successful response.
+        """
+        # Check cancellation before starting
+        if self._stop_requested(should_cancel):
+            return None
+
+        for url in urls_to_try:
+            if self._stop_requested(should_cancel):
                 return None
 
-            for url in urls_to_try:
-                if self._stop_requested(should_cancel):
+            try:
+                # HTTPClient handles all retry logic, backoff, and rate limiting
+                # Pass should_cancel to enable prompt cancellation during backoff waits
+                response = self.http_client.get(
+                    url,
+                    library_name=self.library_key,
+                    timeout=self._request_timeout,
+                    should_cancel=should_cancel,
+                )
+
+                # Check if cancelled during HTTP operation
+                if response is None:
                     return None
-                try:
-                    response = self.session.get(url, timeout=self._request_timeout)
-                    saved = self._save_download_response(
-                        response,
-                        filename=filename,
-                        canvas=canvas,
-                        index=index,
-                        url=url,
+
+                # Try to save the response
+                saved = self._save_download_response(
+                    response,
+                    filename=filename,
+                    canvas=canvas,
+                    index=index,
+                    url=url,
+                )
+
+                if saved:
+                    return saved
+
+                # If save failed but status was OK, log and try next URL
+                if response.status_code != 200:
+                    self.logger.debug(
+                        "Canvas %s returned status %s for %s: %s",
+                        index,
+                        response.status_code,
+                        url,
+                        response.text[:200],
                     )
-                    if saved:
-                        return saved
-                    if response.status_code != 200:
-                        self.logger.debug(
-                            "Canvas %s returned status %s for %s: %s",
-                            index,
-                            response.status_code,
-                            url,
-                            response.text[:200],
-                        )
-                    self._apply_backoff_for_status(
-                        int(response.status_code),
-                        response.headers.get("Retry-After"),
-                        attempt=attempt,
-                    )
-                    if response.status_code in {403, 429}:
-                        break
-                except Exception as exc:
-                    self.logger.debug("Download attempt failed for %s: %s", url, exc, exc_info=True)
-                    continue
-        message = f"Failed to download canvas {index} after {retries} attempts; URLs tried: {urls_to_try}"
+
+            except Exception as exc:
+                self.logger.debug("Download attempt failed for %s: %s", url, exc, exc_info=True)
+                # Try next URL
+                continue
+
+        # All URLs failed
+        message = f"Failed to download canvas {index}; URLs tried: {urls_to_try}"
         self.logger.warning(message)
         self._mark_job_error(index, message)
         return None
@@ -732,9 +648,10 @@ class IIIFDownloader:
             max_ram_bytes = int(max_ram_gb * (1024**3))
 
             dims = stitch_iiif_tiles_to_jpeg(
-                self.session,
+                self.http_client,
                 base_url,
                 filename,
+                library_name=self.library_key,
                 iiif_quality=iiif_q,
                 jpeg_quality=90,
                 # Keep RAM usage under the configured cap.
@@ -747,6 +664,7 @@ class IIIFDownloader:
                     "page_index": index,
                     "filename": filename.name,
                     "original_url": f"{base_url} (tile-stitch)",
+                    "download_method": "tile_stitch",
                     "thumbnail_url": self._get_thumbnail_url(canvas),
                     "size_bytes": filename.stat().st_size if filename.exists() else None,
                     "width": width,

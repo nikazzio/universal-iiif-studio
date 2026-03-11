@@ -83,24 +83,43 @@ Notes:
 
 ## `settings.network.global`
 
+Global network settings used by the centralized `HTTPClient` for all HTTP operations.
+
 - `settings.network.global.max_concurrent_download_jobs` (`int`, default: `2`)
+  - Maximum number of download jobs (documents) running concurrently
 - `settings.network.global.connect_timeout_s` (`int`, default: `10`)
+  - Connection timeout for HTTP requests (used by HTTPClient)
 - `settings.network.global.read_timeout_s` (`int`, default: `30`)
+  - Read timeout for HTTP responses (used by HTTPClient)
 - `settings.network.global.transport_retries` (`int`, default: `3`)
+  - Transport-level retries for HTTP adapter
+
+**Note**: These settings apply to ALL libraries and cannot be overridden per-library. For per-library customization, use `settings.network.libraries.<library>.*` fields.
 
 ## `settings.network.download`
 
+Default download policies used when library-specific override is not enabled.
+
 - `settings.network.download.default_workers_per_job` (`int`, default: `2`)
+  - Number of concurrent workers per download job
 - `settings.network.download.default_min_delay_s` (`number`, default: `0.6`)
+  - Minimum delay between page requests (used for legacy download flow)
 - `settings.network.download.default_max_delay_s` (`number`, default: `1.6`)
+  - Maximum delay between page requests (used for legacy download flow)
 - `settings.network.download.default_retry_max_attempts` (`int`, default: `5`)
+  - Maximum retry attempts for failed requests
 - `settings.network.download.default_backoff_base_s` (`number`, default: `15.0`)
+  - Base wait time for exponential backoff (HTTPClient)
 - `settings.network.download.default_backoff_cap_s` (`number`, default: `300.0`)
+  - Maximum wait time cap for exponential backoff (HTTPClient)
 - `settings.network.download.respect_retry_after` (`bool`, default: `true`)
+  - Whether to respect `Retry-After` headers from servers (HTTPClient)
 
 ## `settings.network.libraries.<library>`
 
 Libraries supported: `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `unknown`.
+
+**HTTPClient Integration**: These settings are used by the centralized `HTTPClient` class for per-library network policies (rate limiting, retry, backoff, concurrency).
 
 Global-only fields (never overridden by library):
 - `settings.network.global.max_concurrent_download_jobs`
@@ -111,20 +130,38 @@ Global-only fields (never overridden by library):
 Library override fields (used only when `use_custom_policy=true`):
 - `enabled` (`bool`, default: `true`)
 - `use_custom_policy` (`bool`, default: `true` for `gallica`, otherwise `false`)
+  - When `true`, library-specific settings override global defaults
+  - When `false`, global defaults from `settings.network.download.*` are used
 - `workers_per_job` (`int`, `1..8`)
+  - Number of concurrent workers for this library's downloads
 - `min_delay_s` / `max_delay_s` (`number`)
+  - Delay range between page requests (legacy download flow)
 - `retry_max_attempts` (`int`)
+  - Maximum retry attempts (HTTPClient)
 - `backoff_base_s` / `backoff_cap_s` (`number`)
+  - Exponential backoff parameters (HTTPClient)
 - `cooldown_on_403_s` / `cooldown_on_429_s` (`int`)
+  - Cooldown period after receiving 403/429 errors (HTTPClient rate limiter)
 - `burst_window_s` / `burst_max_requests` (`int`)
+  - Sliding window rate limiting parameters (HTTPClient)
+  - Example: Gallica uses 60s window with 4 max requests (4 req/min)
+  - Example: Default uses 60s window with 20 max requests (20 req/min)
+- `per_host_concurrency` (`int`)
+  - Maximum concurrent requests per host (HTTPClient semaphore)
+  - Example: Gallica uses 2, others use 4 (default)
 - `respect_retry_after` (`bool`)
+  - Whether to honor `Retry-After` HTTP headers (HTTPClient)
 - `prewarm_viewer` (`bool`)
+  - Whether to prewarm viewer URLs (legacy Session usage)
 - `send_referer_header` (`bool`)
+  - Whether to send Referer header
 - `send_origin_header` (`bool`)
+  - Whether to send Origin header
 
 Behavior notes:
 - if `use_custom_policy=false`, library override values are ignored and runtime uses `settings.network.download.*`.
 - `connect_timeout_s` / `read_timeout_s` are global-only and must be set under `settings.network.global`.
+- **Gallica strictest example**: `burst_max_requests=4`, `burst_window_s=60`, `per_host_concurrency=2`, `backoff_base_s=20`, `cooldown_on_403_s=120`, `cooldown_on_429_s=300`.
 
 ## `settings.defaults`
 
@@ -163,18 +200,22 @@ Notes:
   - used only when `download_strategy_mode=custom`
 - `settings.images.download_strategy` (`string[]`, default: `['3000', '1740', 'max']`)
   - canonical resolved strategy used at runtime (materialized from mode/custom)
+- `settings.images.stitch_mode_default` (`string`, default: `auto_fallback`)
+  - allowed: `auto_fallback|direct_only|stitch_only`
 - `settings.images.iiif_quality` (`string`, default: `default`)
   - segment used in IIIF URLs: `/full/{size}/0/{quality}.jpg`
-- `settings.images.viewer_quality` (`int`, default: `95`)
 - `settings.images.probe_remote_max_resolution` (`bool`, default: `true`)
 - `settings.images.tile_stitch_max_ram_gb` (`number`, default: `2`)
 - `settings.images.local_optimize.max_long_edge_px` (`int`, default: `2600`, allowed range: `512..12000`)
 - `settings.images.local_optimize.jpeg_quality` (`int`, default: `82`, allowed range: `10..100`)
 
 Runtime notes:
-- `download_strategy_mode` defines ordered size attempts before tile stitching.
+- `download_strategy_mode` defines ordered direct size attempts before tile stitching.
+- The Studio `Std` button uses the same strategy as a normal volume download.
+- `download_strategy_custom` is an ordered attempt list (`3000`, `1740`, `max`), not a guarantee that `max` is larger than every explicit numeric attempt.
+- `stitch_mode_default` controls whether the standard volume strategy can fall back to stitching after direct attempts.
 - `iiif_quality` applies to normal page downloads and temporary remote high-res export fetches.
-- `probe_remote_max_resolution` enables `info.json` probing for Studio Export thumbnails.
+- `probe_remote_max_resolution` drives the Studio thumbnail “Remote” informational line by probing `info.json`; it does not change download behavior.
 - local optimize keys are used by `POST /api/studio/export/optimize_scans` (in-place lossy rewrite of `scans/`).
 
 ## `settings.ocr`
@@ -185,6 +226,7 @@ Runtime notes:
 ## `settings.pdf`
 
 - `settings.pdf.viewer_dpi` (`int`, default: `150`)
+- `settings.pdf.viewer_jpeg_quality` (`int`, default: `95`)
 - `settings.pdf.prefer_native_pdf` (`bool`, default: `true`)
 - `settings.pdf.create_pdf_from_images` (`bool`, default: `false`)
 
@@ -291,7 +333,12 @@ Runtime notes:
 ## `settings.viewer.mirador`
 
 - `settings.viewer.mirador.require_complete_local_images` (`bool`, default: `true`)
-  - gates local Studio viewer when local page availability is incomplete.
+  - Gates local Studio viewer when local page availability is incomplete.
+  - When `true`: Studio uses **Remote Mode** for incomplete downloads (Mirador loads original manifest from library server, fetches images on-demand).
+  - When `false`: Studio prefers **Local Mode** even for incomplete downloads (displays only available local pages).
+  - User can override with `?allow_remote_preview=true` URL parameter to force Remote Mode.
+  - **Remote Mode**: Shows ALL pages, requires internet, useful for preview during download.
+  - **Local Mode**: Shows only downloaded pages, works offline, default for complete downloads.
 
 ## `settings.viewer.source_policy`
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from ..utils import clean_dir, save_json
+from ..utils import clean_dir, load_json, save_json
 from .downloader import PageDownloader
 
 
@@ -79,7 +79,13 @@ def run(
         canvas_plan,
         progress_callback=cb,
         should_cancel=should_cancel,
-        total_for_progress=operation_total,
+        total_for_progress=total_pages,
+    )
+    _raise_if_selected_direct_refresh_failed(
+        self,
+        selected_pages=selected_pages,
+        page_stats=page_stats,
+        should_cancel=should_cancel,
     )
     self._store_page_stats(page_stats)
 
@@ -98,6 +104,39 @@ def run(
     self._sync_asset_state(total_pages)
 
 
+def _raise_if_selected_direct_refresh_failed(
+    self,
+    *,
+    selected_pages: set[int],
+    page_stats: list[dict[str, object]],
+    should_cancel: Callable[[], bool] | None,
+) -> None:
+    """Fail page-only direct refreshes when no selected page was actually replaced."""
+    if not selected_pages:
+        return
+    if not bool(getattr(self, "force_redownload", False)):
+        return
+    if not bool(getattr(self, "overwrite_existing_scans", False)):
+        return
+    if str(getattr(self, "stitch_mode", "") or "").strip().lower() != "direct_only":
+        return
+    if should_cancel and should_cancel():
+        return
+
+    refreshed_pages: set[int] = set()
+    for entry in page_stats:
+        try:
+            refreshed_pages.add(int(entry.get("page_index", -1)) + 1)
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+    missing = sorted(int(page) for page in selected_pages if int(page) not in refreshed_pages)
+    if missing:
+        raise RuntimeError(
+            "Refresh diretto high-res fallito per le pagine selezionate: " + ", ".join(str(page) for page in missing)
+        )
+
+
 def _download_canvases(
     self,
     canvas_plan: list[tuple[int, dict[str, object]]],
@@ -107,10 +146,18 @@ def _download_canvases(
 ):
     downloaded, page_stats, to_download = self._prescan_canvases(canvas_plan)
 
+    # Calculate pages completed OUTSIDE the current canvas_plan to avoid double-counting
+    # already_downloaded_count = all pages in scans/ + temp/
+    # completed_in_current_plan = pages in canvas_plan that were resumed from cache
+    # pages_outside_plan = pages not in current canvas_plan that are already done
+    all_downloaded = self._count_all_downloaded_pages()
+    completed_in_current_plan = sum(1 for f in downloaded if f)
+    pages_outside_plan = max(0, all_downloaded - completed_in_current_plan)
+
     if progress_callback:
         try:
-            completed = sum(1 for f in downloaded if f)
-            progress_callback(completed, total_for_progress or len(canvas_plan))
+            initial_completed = pages_outside_plan + completed_in_current_plan
+            progress_callback(initial_completed, total_for_progress or len(canvas_plan))
         except Exception:
             self.logger.debug("Initial progress callback failed", exc_info=True)
 
@@ -122,8 +169,17 @@ def _download_canvases(
         progress_callback,
         should_cancel,
         total_for_progress or len(canvas_plan),
+        pages_outside_plan,  # Pass pages outside plan, not total
     )
     return downloaded, page_stats
+
+
+def _count_all_downloaded_pages(self) -> int:
+    """Count all downloaded pages (scans + temp) regardless of canvas_plan."""
+    scans_pages = _page_numbers_in_dir(self.scans_dir)
+    temp_pages = _page_numbers_in_dir(self.temp_dir)
+    known_pages = scans_pages | temp_pages
+    return len(known_pages)
 
 
 def _prescan_canvases(self, canvas_plan: list[tuple[int, dict[str, object]]]):
@@ -152,8 +208,21 @@ def _download_missing_canvases(
     progress_callback: Callable[[int, int], None] | None,
     should_cancel: Callable[[], bool] | None,
     total_canvases: int,
+    pages_outside_plan: int = 0,
 ):
-    """Download missing pages using ThreadPoolExecutor and update progress and stats."""
+    """Download missing pages using ThreadPoolExecutor and update progress and stats.
+
+    Args:
+        self: Downloader instance
+        to_download: List of (local_idx, canvas_idx, canvas) tuples to download
+        downloaded: List tracking downloaded filenames (None if not yet downloaded)
+        page_stats: List to accumulate page statistics
+        progress_callback: Optional callback for progress updates (completed, total)
+        should_cancel: Optional callable that returns True when download should stop
+        total_canvases: Total number of canvases in the manuscript
+        pages_outside_plan: Count of pages completed in previous runs that are NOT in current canvas_plan.
+                           This is used to offset progress updates without double-counting resumed pages.
+    """
     if not to_download:
         return downloaded, page_stats
 
@@ -165,7 +234,7 @@ def _download_missing_canvases(
         for future in self._iter_download_futures(future_to_index, len(to_download)):
             idx = future_to_index[future]
             _consume_download_future(future, idx, downloaded, page_stats)
-            _emit_canvas_progress(self, downloaded, total_canvases, progress_callback)
+            _emit_canvas_progress(self, downloaded, total_canvases, progress_callback, pages_outside_plan)
 
             if should_cancel and should_cancel():
                 # Final state (paused vs cancelled) is determined by JobManager
@@ -199,12 +268,25 @@ def _emit_canvas_progress(
     downloaded: list[str | None],
     total_canvases: int,
     progress_callback: Callable[[int, int], None] | None,
+    pages_outside_plan: int = 0,
 ) -> None:
+    """Emit progress update without double-counting.
+
+    Args:
+        self: Downloader instance
+        downloaded: List of filenames for current canvas_plan (None if not yet downloaded)
+        total_canvases: Total pages in the full manuscript
+        progress_callback: Callback to report (completed, total)
+        pages_outside_plan: Pages already completed that are NOT in current canvas_plan
+    """
     if not progress_callback:
         return
-    completed = sum(1 for f in downloaded if f)
+    # Count completed in current canvas_plan
+    completed_in_plan = sum(1 for f in downloaded if f)
+    # Total = pages outside plan + pages completed in plan (no double-counting)
+    total_completed = pages_outside_plan + completed_in_plan
     try:
-        progress_callback(completed, total_canvases)
+        progress_callback(total_completed, total_canvases)
     except Exception:
         self.logger.debug("Progress callback raised an exception", exc_info=True)
 
@@ -226,8 +308,20 @@ def _iter_download_futures(self, future_to_index: dict, total_to_download: int):
 
 def _store_page_stats(self, page_stats):
     if page_stats:
-        page_stats.sort(key=lambda x: x.get("page_index", 0))
-        save_json(self.stats_path, {"doc_id": self.ms_id, "pages": page_stats})
+        existing_pages = load_json(self.stats_path) or {}
+        existing_by_page = {
+            int(page.get("page_index")): dict(page)
+            for page in (existing_pages.get("pages") or [])
+            if isinstance(page, dict) and isinstance(page.get("page_index"), (int, float))
+        }
+        for page in page_stats:
+            try:
+                page_index = int(page.get("page_index", 0))
+            except (TypeError, ValueError):
+                continue
+            existing_by_page[page_index] = dict(page)
+        merged_pages = sorted(existing_by_page.values(), key=lambda x: x.get("page_index", 0))
+        save_json(self.stats_path, {"doc_id": self.ms_id, "pages": merged_pages})
 
 
 def _finalize_downloads(self, valid):
@@ -236,9 +330,10 @@ def _finalize_downloads(self, valid):
     total_expected = int(getattr(self, "expected_total_canvases", 0) or getattr(self, "total_canvases", 0) or 0)
     known_pages = _page_numbers_in_dir(self.scans_dir) | validated_pages
     expected_pages = set(range(1, total_expected + 1)) if total_expected > 0 else set()
+    allow_partial_overwrite = bool(getattr(self, "overwrite_existing_scans", False) and validated_pages)
 
     # Keep staged files in temp until the full manuscript is available.
-    if total_expected > 0 and not expected_pages.issubset(known_pages):
+    if total_expected > 0 and not expected_pages.issubset(known_pages) and not allow_partial_overwrite:
         return []
 
     for staged_file in sorted(set(validated_staged)):
@@ -409,6 +504,7 @@ def attach_runtime_methods(cls) -> None:
     cls._maybe_run_native_pdf = _maybe_run_native_pdf
     cls.run = run
     cls._download_canvases = _download_canvases
+    cls._count_all_downloaded_pages = _count_all_downloaded_pages
     cls._prescan_canvases = _prescan_canvases
     cls._download_missing_canvases = _download_missing_canvases
     cls._iter_download_futures = _iter_download_futures

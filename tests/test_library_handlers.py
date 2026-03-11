@@ -1,10 +1,14 @@
 from pathlib import Path
 
+import pytest
 from fasthtml.common import Div
 
 from studio_ui.routes import library_handlers
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+# Mark as slow (file I/O, vault operations, mock downloads)
+pytestmark = pytest.mark.slow
 
 
 def test_library_start_download_uses_manifest(monkeypatch):

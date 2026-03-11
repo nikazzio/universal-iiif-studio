@@ -68,11 +68,11 @@ Goal: avoid misleading configuration controls in the current product while keepi
   - UX: centralized profile catalog in `Settings > PDF Export`.
 
 - Per-page resolution transparency in Studio Export
-  - UI: `Locale` vs `Online max` comparison in thumbnail cards.
+  - UI: `Locale` vs `Remote` comparison in thumbnail cards, with verified-direct indicator on `Locale`.
   - Goal: enable informed decisions on local balanced workflow vs targeted high-resolution fetches.
 
 - On-demand high-resolution fetch for export
-  - UI: per-page `High-Res` action.
+  - UI: per-page `Hi` action plus `Std` to rerun the normal volume strategy.
   - Runtime: `remote_highres_temp` temporary staging with optional post-export cleanup.
 
 ## Recommended Evolution Backlog

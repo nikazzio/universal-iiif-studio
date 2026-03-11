@@ -37,19 +37,21 @@ def test_search_institut_extracts_results_and_manifest_metadata(monkeypatch):
     def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
         if "records/default" in url:
             return _Resp(text=html)
+        raise AssertionError(f"Unexpected URL for requests.get: {url}")
+
+    def fake_get_json(url, **_kwargs):  # noqa: ARG001
         if "/iiif/17837/manifest" in url:
-            return _Resp(
-                json_data={
-                    "label": "Oeuvres de Brantôme",
-                    "metadata": [{"label": "creator", "value": "Pierre de Bourdeille"}],
-                    "thumbnail": {"@id": "https://bibnum.institutdefrance.fr/thumb/17837.jpg"},
-                }
-            )
+            return {
+                "label": "Oeuvres de Brantôme",
+                "metadata": [{"label": "creator", "value": "Pierre de Bourdeille"}],
+                "thumbnail": {"@id": "https://bibnum.institutdefrance.fr/thumb/17837.jpg"},
+            }
         if "/iiif/18000/manifest" in url:
-            return _Resp(status_code=404)
-        raise AssertionError(f"Unexpected URL: {url}")
+            return None  # get_json returns None on error
+        raise AssertionError(f"Unexpected URL for get_json: {url}")
 
     monkeypatch.setattr(discovery.requests, "get", fake_get)
+    monkeypatch.setattr(discovery, "get_json", fake_get_json)
 
     results = discovery.search_institut("brantome", max_results=5)
 

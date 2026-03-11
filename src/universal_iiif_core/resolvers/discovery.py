@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 import xml.etree.ElementTree
@@ -11,6 +10,7 @@ import requests
 
 from ..exceptions import ResolverError
 from ..logger import get_logger
+from ..utils import get_json
 from .gallica import GallicaResolver
 from .institut import InstitutResolver
 from .models import SearchResult
@@ -303,10 +303,10 @@ def _fetch_institut_manifest_result(
         return None
 
     try:
-        response = requests.get(manifest_url, headers=REAL_BROWSER_HEADERS, timeout=TIMEOUT_SECONDS)
-        response.raise_for_status()
-        manifest = response.json()
-    except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
+        manifest = get_json(manifest_url)
+        if not manifest:
+            raise ValueError("Empty manifest")
+    except (ValueError, Exception) as exc:
         logger.debug("Institut manifest fetch failed for %s: %s", doc_id, exc, exc_info=True)
         return _fallback_institut_result(doc_id, fallback_title, manifest_url)
 
@@ -355,15 +355,14 @@ def get_manifest_details(manifest_url: str) -> SearchResult | None:
         return None
 
     try:
-        # FIX HEADERS: Anche qui servono headers reali per scaricare il JSON
-        resp = requests.get(url, headers=REAL_BROWSER_HEADERS, timeout=TIMEOUT_SECONDS)
-        resp.raise_for_status()
-        manifest = resp.json()
+        manifest = get_json(url)
+        if not manifest:
+            raise ValueError("Empty manifest")
 
         # Attempt to find a document id from manifest or fallback to URL
         doc_id = manifest.get("id") if isinstance(manifest, dict) else None
         return IIIFManifestParser.parse_manifest(manifest, url, doc_id=doc_id)
-    except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
+    except (ValueError, Exception) as exc:
         logger.error("Failed to fetch/parse manifest %r: %s", url, exc, exc_info=True)
         return None
 
@@ -455,12 +454,9 @@ def _build_vatican_manifest_url(ms_id: str) -> str:
 def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchResult | None:
     """Verify a Vatican manifest exists and return SearchResult if valid."""
     try:
-        # Vatican doesn't support HEAD, use GET with short timeout
-        resp = requests.get(manifest_url, headers=REAL_BROWSER_HEADERS, timeout=8)
-        if resp.status_code != 200:
+        manifest = get_json(manifest_url)
+        if not manifest:
             return None
-
-        manifest = resp.json()
 
         # Parse metadata
         label = manifest.get("label", ms_id)
