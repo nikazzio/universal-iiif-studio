@@ -10,7 +10,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from ..utils import clean_dir, save_json
+from ..utils import clean_dir, load_json, save_json
 from .downloader import PageDownloader
 
 
@@ -81,6 +81,12 @@ def run(
         should_cancel=should_cancel,
         total_for_progress=total_pages,
     )
+    _raise_if_selected_direct_refresh_failed(
+        self,
+        selected_pages=selected_pages,
+        page_stats=page_stats,
+        should_cancel=should_cancel,
+    )
     self._store_page_stats(page_stats)
 
     valid = [f for f in downloaded if f]
@@ -98,6 +104,39 @@ def run(
     self._sync_asset_state(total_pages)
 
 
+def _raise_if_selected_direct_refresh_failed(
+    self,
+    *,
+    selected_pages: set[int],
+    page_stats: list[dict[str, object]],
+    should_cancel: Callable[[], bool] | None,
+) -> None:
+    """Fail page-only direct refreshes when no selected page was actually replaced."""
+    if not selected_pages:
+        return
+    if not bool(getattr(self, "force_redownload", False)):
+        return
+    if not bool(getattr(self, "overwrite_existing_scans", False)):
+        return
+    if str(getattr(self, "stitch_mode", "") or "").strip().lower() != "direct_only":
+        return
+    if should_cancel and should_cancel():
+        return
+
+    refreshed_pages: set[int] = set()
+    for entry in page_stats:
+        try:
+            refreshed_pages.add(int(entry.get("page_index", -1)) + 1)
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+    missing = sorted(int(page) for page in selected_pages if int(page) not in refreshed_pages)
+    if missing:
+        raise RuntimeError(
+            "Refresh diretto high-res fallito per le pagine selezionate: " + ", ".join(str(page) for page in missing)
+        )
+
+
 def _download_canvases(
     self,
     canvas_plan: list[tuple[int, dict[str, object]]],
@@ -113,12 +152,12 @@ def _download_canvases(
     # pages_outside_plan = pages not in current canvas_plan that are already done
     all_downloaded = self._count_all_downloaded_pages()
     completed_in_current_plan = sum(1 for f in downloaded if f)
-    pages_outside_plan = all_downloaded - completed_in_current_plan
+    pages_outside_plan = max(0, all_downloaded - completed_in_current_plan)
 
     if progress_callback:
         try:
-            # Initial progress = pages outside plan (from previous runs)
-            progress_callback(pages_outside_plan, total_for_progress or len(canvas_plan))
+            initial_completed = pages_outside_plan + completed_in_current_plan
+            progress_callback(initial_completed, total_for_progress or len(canvas_plan))
         except Exception:
             self.logger.debug("Initial progress callback failed", exc_info=True)
 
@@ -269,8 +308,20 @@ def _iter_download_futures(self, future_to_index: dict, total_to_download: int):
 
 def _store_page_stats(self, page_stats):
     if page_stats:
-        page_stats.sort(key=lambda x: x.get("page_index", 0))
-        save_json(self.stats_path, {"doc_id": self.ms_id, "pages": page_stats})
+        existing_pages = load_json(self.stats_path) or {}
+        existing_by_page = {
+            int(page.get("page_index")): dict(page)
+            for page in (existing_pages.get("pages") or [])
+            if isinstance(page, dict) and isinstance(page.get("page_index"), (int, float))
+        }
+        for page in page_stats:
+            try:
+                page_index = int(page.get("page_index", 0))
+            except (TypeError, ValueError):
+                continue
+            existing_by_page[page_index] = dict(page)
+        merged_pages = sorted(existing_by_page.values(), key=lambda x: x.get("page_index", 0))
+        save_json(self.stats_path, {"doc_id": self.ms_id, "pages": merged_pages})
 
 
 def _finalize_downloads(self, valid):
@@ -279,9 +330,10 @@ def _finalize_downloads(self, valid):
     total_expected = int(getattr(self, "expected_total_canvases", 0) or getattr(self, "total_canvases", 0) or 0)
     known_pages = _page_numbers_in_dir(self.scans_dir) | validated_pages
     expected_pages = set(range(1, total_expected + 1)) if total_expected > 0 else set()
+    allow_partial_overwrite = bool(getattr(self, "overwrite_existing_scans", False) and validated_pages)
 
     # Keep staged files in temp until the full manuscript is available.
-    if total_expected > 0 and not expected_pages.issubset(known_pages):
+    if total_expected > 0 and not expected_pages.issubset(known_pages) and not allow_partial_overwrite:
         return []
 
     for staged_file in sorted(set(validated_staged)):

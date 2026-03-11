@@ -75,8 +75,8 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "download_strategy_mode": "balanced",
             "download_strategy_custom": ["3000", "1740", "max"],
             "download_strategy": ["3000", "1740", "max"],
+            "stitch_mode_default": "auto_fallback",
             "iiif_quality": "default",
-            "viewer_quality": 95,
             "probe_remote_max_resolution": True,
             "tile_stitch_max_ram_gb": 2,
             "local_optimize": {
@@ -90,6 +90,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         },
         "pdf": {
             "viewer_dpi": 150,
+            "viewer_jpeg_quality": 95,
             "prefer_native_pdf": True,
             "create_pdf_from_images": False,
             "export": {

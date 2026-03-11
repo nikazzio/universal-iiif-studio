@@ -19,6 +19,7 @@ from .._rate_limiter import get_host_limiter
 from ..config_manager import get_config_manager
 from ..http_client import HTTPClient
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
+from ..image_settings import normalize_stitch_mode, resolve_download_strategy
 from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
 from ..network_policy import resolve_library_network_policy
@@ -118,14 +119,23 @@ class PageDownloader:
         if should_cancel and should_cancel():
             return None
         iiif_q = str(self.cm.get_setting("images.iiif_quality", "default") or "default")
-        strategy = self._get_strategy()
-        urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
+        stitch_mode = self._get_stitch_mode()
+        if stitch_mode != "stitch_only":
+            strategy = self._get_strategy()
+            urls_to_try = [f"{base_url}/full/{self._format_dimension(s)}/0/{iiif_q}.jpg" for s in strategy]
+            downloaded = self.downloader._download_with_retries(
+                urls_to_try,
+                self.filename,
+                self.canvas,
+                self.index,
+                base_url,
+                should_cancel=should_cancel,
+            )
+            if downloaded:
+                return downloaded
 
-        downloaded = self.downloader._download_with_retries(
-            urls_to_try, self.filename, self.canvas, self.index, base_url, should_cancel=should_cancel
-        )
-        if downloaded:
-            return downloaded
+        if stitch_mode == "direct_only":
+            return None
 
         if should_cancel and should_cancel():
             return None
@@ -133,53 +143,23 @@ class PageDownloader:
             self.cm, self.filename, base_url, self.canvas, self.index, iiif_q, should_cancel=should_cancel
         )
 
+    def _get_stitch_mode(self) -> str:
+        return normalize_stitch_mode(
+            getattr(self.downloader, "stitch_mode", "")
+            or self.cm.get_setting("images.stitch_mode_default", "auto_fallback")
+            or "auto_fallback"
+        )
+
     def _get_strategy(self) -> list[str]:
-        if bool(getattr(self.downloader, "force_max_resolution", False)):
-            return ["max"]
-        mode = str(self.cm.get_setting("images.download_strategy_mode", "custom") or "custom").strip().lower()
-        preset_map = {
-            "balanced": ["3000", "1740", "max"],
-            "fast": ["1740", "1200", "max"],
-            "quality_first": ["max", "3000", "1740"],
-            "archival": ["max"],
+        images = {
+            "download_strategy_mode": self.cm.get_setting("images.download_strategy_mode", "balanced"),
+            "download_strategy_custom": self.cm.get_setting("images.download_strategy_custom", []),
+            "download_strategy": self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"]),
         }
-        if mode in preset_map:
-            return preset_map[mode]
-
-        custom_raw = self.cm.get_setting("images.download_strategy_custom", [])
-        custom_values = self._normalize_strategy_values(custom_raw)
-        if custom_values:
-            return custom_values
-
-        legacy_raw = self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"])
-        legacy_values = self._normalize_strategy_values(legacy_raw)
-        return legacy_values or ["3000", "1740", "max"]
-
-    @staticmethod
-    def _normalize_strategy_values(raw: Any) -> list[str]:
-        if isinstance(raw, str):
-            candidates = [token.strip() for token in raw.split(",") if token.strip()]
-        elif isinstance(raw, list):
-            candidates = [str(item).strip() for item in raw if str(item).strip()]
-        else:
-            candidates = []
-
-        out: list[str] = []
-        seen: set[str] = set()
-        for token in candidates:
-            norm = token.lower()
-            if norm == "max":
-                value = "max"
-            elif token.isdigit() and int(token) > 0:
-                value = token
-            else:
-                continue
-
-            if value in seen:
-                continue
-            out.append(value)
-            seen.add(value)
-        return out
+        return resolve_download_strategy(
+            images,
+            force_max_resolution=bool(getattr(self.downloader, "force_max_resolution", False)),
+        )
 
     @staticmethod
     def _format_dimension(value: str) -> str:
@@ -212,6 +192,7 @@ class PageDownloader:
                     "page_index": self.index,
                     "filename": candidate.name,
                     "original_url": f"{base_url} (cached)",
+                    "download_method": "cached",
                     "thumbnail_url": self.downloader._get_thumbnail_url(self.canvas),
                     "size_bytes": candidate.stat().st_size,
                     "width": width,
@@ -255,6 +236,7 @@ class IIIFDownloader:
         force_max_resolution: bool = False,
         force_redownload: bool = False,
         overwrite_existing_scans: bool = False,
+        stitch_mode: str = "",
     ):
         """Initialize the IIIFDownloader."""
         # basic configuration
@@ -269,6 +251,10 @@ class IIIFDownloader:
         self.force_max_resolution = bool(force_max_resolution)
         self.force_redownload = bool(force_redownload)
         self.overwrite_existing_scans = bool(overwrite_existing_scans)
+        normalized_stitch_mode = str(stitch_mode or "").strip().lower()
+        self.stitch_mode = (
+            normalized_stitch_mode if normalized_stitch_mode in {"auto_fallback", "direct_only", "stitch_only"} else ""
+        )
 
         # load manifest and derive human label (for display, NOT for storage)
         self.manifest: dict[str, Any] = get_json(manifest_url) or {}
@@ -280,6 +266,7 @@ class IIIFDownloader:
         cm = get_config_manager()
         self.cm = cm
         self.network_policy = resolve_library_network_policy(cm.data.get("settings", {}), library)
+        self.library_key = str(self.network_policy.get("library_key") or library or "unknown")
         if not bool(self.network_policy.get("enabled", True)):
             raise ValueError(f"Downloads disabled by policy for library '{library}'")
         configured_workers = int(self.network_policy.get("workers_per_job") or 1)
@@ -533,6 +520,7 @@ class IIIFDownloader:
             "page_index": index,
             "filename": filename.name,
             "original_url": url,
+            "download_method": "direct",
             "thumbnail_url": self._get_thumbnail_url(canvas),
             "size_bytes": len(response.content),
             "width": width,
@@ -568,7 +556,7 @@ class IIIFDownloader:
                 # Pass should_cancel to enable prompt cancellation during backoff waits
                 response = self.http_client.get(
                     url,
-                    library_name=self.network_policy.get("library_key", self.library),
+                    library_name=self.library_key,
                     timeout=self._request_timeout,
                     should_cancel=should_cancel,
                 )
@@ -663,7 +651,7 @@ class IIIFDownloader:
                 self.http_client,
                 base_url,
                 filename,
-                library_name=self.library,
+                library_name=self.library_key,
                 iiif_quality=iiif_q,
                 jpeg_quality=90,
                 # Keep RAM usage under the configured cap.
@@ -676,6 +664,7 @@ class IIIFDownloader:
                     "page_index": index,
                     "filename": filename.name,
                     "original_url": f"{base_url} (tile-stitch)",
+                    "download_method": "tile_stitch",
                     "thumbnail_url": self._get_thumbnail_url(canvas),
                     "size_bytes": filename.stat().st_size if filename.exists() else None,
                     "width": width,

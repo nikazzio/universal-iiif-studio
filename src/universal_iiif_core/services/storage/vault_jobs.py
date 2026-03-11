@@ -16,9 +16,7 @@ def _status_and_error_updates(status: str, error: str | None) -> tuple[list[str]
     terminal_statuses = {"paused", "cancelled", "completed", "error"}
     if status in transitional_statuses:
         updates = [
-            "status = CASE "
-            "WHEN status IN ('paused', 'cancelled', 'completed', 'error') THEN status "
-            "ELSE ? END",
+            "status = CASE WHEN status IN ('paused', 'cancelled', 'completed', 'error') THEN status ELSE ? END",
             "error_message = CASE "
             "WHEN status IN ('paused', 'cancelled', 'completed', 'error') THEN error_message "
             "ELSE ? END",
@@ -49,7 +47,14 @@ def _append_lifecycle_updates(updates: list[str], status: str, terminal_statuses
         updates.append("finished_at = CURRENT_TIMESTAMP")
 
 
-def create_download_job(self, job_id: str, doc_id: str, library: str, manifest_url: str):
+def create_download_job(
+    self,
+    job_id: str,
+    doc_id: str,
+    library: str,
+    manifest_url: str,
+    job_origin: str = "library_download",
+):
     """Crea traccia del download nel DB."""
     conn = self._get_conn()
     try:
@@ -61,18 +66,19 @@ def create_download_job(self, job_id: str, doc_id: str, library: str, manifest_u
                 manifest_url TEXT, status TEXT, current_page INTEGER,
                 total_pages INTEGER, queue_position INTEGER DEFAULT 0,
                 priority INTEGER DEFAULT 0, error_message TEXT, started_at TIMESTAMP,
-                finished_at TIMESTAMP, updated_at TIMESTAMP
+                finished_at TIMESTAMP, updated_at TIMESTAMP,
+                job_origin TEXT DEFAULT 'library_download'
             )
         """)
         cursor.execute(
             """
             INSERT OR REPLACE INTO download_jobs (
                 job_id, doc_id, library, manifest_url, status,
-                current_page, total_pages, queue_position, priority, started_at, finished_at, updated_at
+                current_page, total_pages, queue_position, priority, started_at, finished_at, updated_at, job_origin
             )
-            VALUES (?, ?, ?, ?, 'queued', 0, 0, 0, 0, NULL, NULL, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, 'queued', 0, 0, 0, 0, NULL, NULL, CURRENT_TIMESTAMP, ?)
         """,
-            (job_id, doc_id, library, manifest_url),
+            (job_id, doc_id, library, manifest_url, str(job_origin or "library_download").strip().lower()),
         )
         conn.commit()
     finally:
@@ -148,6 +154,7 @@ def get_active_download(self):
 
     cursor.execute("""
         SELECT job_id, doc_id, library, status, current_page, total_pages, error_message
+               , COALESCE(job_origin, 'library_download')
         FROM download_jobs
         WHERE status IN ('running', 'queued')
         ORDER BY priority DESC, queue_position ASC, updated_at DESC LIMIT 1
@@ -162,6 +169,7 @@ def get_active_download(self):
             "current": row[4],
             "total": row[5],
             "error": row[6],
+            "job_origin": row[7],
         }
     return None
 
@@ -179,7 +187,8 @@ def get_active_downloads(self):
 
     cursor.execute(
         """
-        SELECT job_id, doc_id, library, status, current_page, total_pages, error_message, queue_position, priority
+        SELECT job_id, doc_id, library, status, current_page, total_pages, error_message, queue_position, priority,
+               COALESCE(job_origin, 'library_download')
         FROM download_jobs
         WHERE status IN ('running', 'queued', 'cancelling', 'pausing')
         ORDER BY CASE
@@ -205,6 +214,7 @@ def get_active_downloads(self):
                 "error": row[6],
                 "queue_position": row[7],
                 "priority": row[8],
+                "job_origin": row[9],
             }
         )
     return results
@@ -221,7 +231,8 @@ def get_download_job(self, job_id: str):
     cursor.execute(
         """
         SELECT job_id, doc_id, library, manifest_url, status, current_page, total_pages,
-               error_message, queue_position, priority, started_at, finished_at, updated_at
+               error_message, queue_position, priority, started_at, finished_at, updated_at,
+               COALESCE(job_origin, 'library_download')
         FROM download_jobs
         WHERE job_id = ?
     """,
@@ -245,6 +256,7 @@ def get_download_job(self, job_id: str):
         "started_at": row[10],
         "finished_at": row[11],
         "updated_at": row[12],
+        "job_origin": row[13],
     }
 
 
@@ -260,7 +272,8 @@ def list_download_jobs(self, limit: int = 50):
                    current_page AS current, total_pages AS total,
                    dj.queue_position, dj.priority, dj.error_message AS error,
                    dj.updated_at, dj.created_at, dj.started_at, dj.finished_at,
-                   m.display_title, m.catalog_title, m.shelfmark
+                   m.display_title, m.catalog_title, m.shelfmark,
+                   COALESCE(dj.job_origin, 'library_download') AS job_origin
             FROM download_jobs dj
             LEFT JOIN manuscripts m
                 ON m.id = dj.doc_id AND COALESCE(m.library, '') = COALESCE(dj.library, '')

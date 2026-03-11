@@ -472,20 +472,14 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
 
     panel_images = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1, tab="images")
     rendered_images = repr(panel_images)
-    assert 'class="studio-export-page-card' in rendered_images
     assert "studio-export-page-checkbox" not in rendered_images
     assert 'data-thumbs-endpoint="/api/studio/export/thumbs' in rendered_images
     assert 'id="studio-export-thumbs-slot"' in rendered_images
-    assert 'id="studio-export-thumb-size-select"' in rendered_images
-    assert 'name="page_size"' in rendered_images
-    assert 'hx-trigger="change"' in rendered_images
+    assert 'hx-trigger="load"' in rendered_images
+    assert "Sto preparando le miniature della pagina visibile" in rendered_images
     assert 'id="studio-export-subtab-pages"' in rendered_images
     assert 'id="studio-export-open-build"' in rendered_images
-    assert "studio-thumb-meta" in rendered_images
-    assert "studio-thumb-highres-btn" in rendered_images
     assert 'id="studio-export-optimize-btn"' in rendered_images
-    assert 'id="studio-export-live-state-poller"' in rendered_images
-    assert 'hx-target="#studio-export-thumbs-slot"' in rendered_images
     assert "/api/studio/export/thumbs?doc_id=" in rendered_images
 
     panel_output = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1, tab="output")
@@ -586,7 +580,7 @@ def test_studio_optimize_scans_rejects_path_traversal(tmp_path):
 
 
 def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
-    """High-res button should include panel state and indicator hooks."""
+    """Thumbs endpoint should expose per-page action buttons once the lazy loader completes."""
     cm = get_config_manager()
     old_downloads = cm.get_downloads_dir()
     try:
@@ -610,13 +604,17 @@ def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
             status="saved",
             asset_state="saved",
         )
-        panel = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1)
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
     finally:
         cm.set_downloads_dir(str(old_downloads))
     rendered = repr(panel)
     assert "studio-thumb-highres-btn" in rendered
+    assert "studio-thumb-stitch-btn" in rendered
     assert "studio-thumb-progress-" in rendered
-    assert 'hx-include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size"' in rendered
+    assert 'hx-target="#studio-thumb-card-1"' in rendered
+    assert "/api/studio/export/page_stitch" in rendered
+    assert "/api/studio/export/page_optimize" in rendered
+    assert "studio-thumb-progress htmx-indicator" not in rendered
 
 
 def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_path):
@@ -698,17 +696,80 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
             status="saved",
             asset_state="saved",
         )
-        monkeypatch.setattr(studio_handlers, "start_downloader_thread", lambda **_kwargs: "job_highres_test")
+        captured = {}
+
+        def _fake_start(**kwargs):
+            captured.update(kwargs)
+            return "job_highres_test"
+
+        monkeypatch.setattr(studio_handlers, "start_downloader_thread", _fake_start)
 
         result = studio_handlers.download_highres_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
         rendered = repr(result)
         assert "⬇ Hi" in rendered
+        assert "🧩 St" in rendered
         assert "studio-thumb-progress-active" in rendered
-        assert not isinstance(result, list)
+        assert isinstance(result, list)
+        assert 'hx-swap-oob="outerHTML:#studio-export-live-state-poller"' in rendered
 
         pref = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_highres_jobs", {})
         assert isinstance(pref, dict)
         assert str((pref.get("1") or {}).get("job_id") or "") == "job_highres_test"
+        assert captured["job_origin"] == "studio_export_page"
+        assert captured["force_max_resolution"] is True
+        assert captured["stitch_mode"] == "direct_only"
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_stitch_queue_persists_page_job_without_toast(tmp_path, monkeypatch):
+    """Queuing stitch should persist per-page job state and render inline feedback only."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_STITCH_QUEUE_STATE"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        VaultManager().upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            manifest_url="https://example.org/manifest.json",
+            status="saved",
+            asset_state="saved",
+        )
+        captured = {}
+
+        def _fake_start(**kwargs):
+            captured.update(kwargs)
+            return "job_stitch_test"
+
+        monkeypatch.setattr(studio_handlers, "start_downloader_thread", _fake_start)
+
+        result = studio_handlers.download_stitch_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
+        rendered = repr(result)
+        assert "🧩 St" in rendered
+        assert "studio-thumb-progress-active" in rendered
+        assert isinstance(result, list)
+        assert 'hx-swap-oob="outerHTML:#studio-export-live-state-poller"' in rendered
+
+        pref = VaultManager().get_manuscript_ui_pref(doc_id, "studio_export_stitch_jobs", {})
+        assert isinstance(pref, dict)
+        assert str((pref.get("1") or {}).get("job_id") or "") == "job_stitch_test"
+        assert captured["job_origin"] == "studio_export_page"
+        assert "stitch_mode" not in captured
+        assert "force_max_resolution" not in captured
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
@@ -752,6 +813,49 @@ def test_studio_highres_completed_updates_page_source_pref(tmp_path):
         source_pref = vm.get_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
         assert isinstance(source_pref, dict)
         assert str((source_pref.get("1") or {}).get("source") or "") == "highres"
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_studio_stitch_completed_updates_page_source_pref(tmp_path):
+    """Resolving completed stitch job should persist page source as stitched."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_STITCH_SOURCE_PREF"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        vm = VaultManager()
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+        vm.create_download_job("job_stitch_done_source", doc_id, library, "https://example.org/manifest.json")
+        vm.update_download_job("job_stitch_done_source", current=1, total=1, status="completed")
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_stitch_jobs",
+            {"1": {"job_id": "job_stitch_done_source", "state": "completed"}},
+        )
+
+        _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        source_pref = vm.get_manuscript_ui_pref(doc_id, "studio_export_page_sources", {})
+        assert isinstance(source_pref, dict)
+        assert str((source_pref.get("1") or {}).get("source") or "") == "stitched"
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
@@ -831,6 +935,7 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
         rendered = repr(panel)
         assert "Pag. 3" in rendered
         assert "⬇ Hi" in rendered
+        assert "🧩 St" in rendered
         assert "⚙ Opt" in rendered
         assert "studio-thumb-progress-active" in rendered
         assert "studio-thumb-progress-done" in rendered
@@ -937,7 +1042,9 @@ def test_export_thumbs_poller_disables_when_no_active_page_jobs(tmp_path):
         )
         active_rendered = repr(active_panel)
         assert 'id="studio-export-live-state-poller"' in active_rendered
-        assert 'hx-trigger="load, every 12s"' in active_rendered
+        assert 'hx-trigger="load, every 2s"' in active_rendered
+        assert "/api/studio/export/thumbs/live?doc_id=" in active_rendered
+        assert 'hx-swap="none"' in active_rendered
 
         vm.set_manuscript_ui_pref(
             doc_id,
@@ -952,7 +1059,109 @@ def test_export_thumbs_poller_disables_when_no_active_page_jobs(tmp_path):
         )
         idle_rendered = repr(idle_panel)
         assert 'id="studio-export-live-state-poller"' in idle_rendered
-        assert 'hx-trigger="load, every 12s"' not in idle_rendered
+        assert 'hx-trigger="load, every 2s"' not in idle_rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_thumbs_live_returns_oob_card_updates_only(tmp_path, monkeypatch):
+    """Live thumbs poller should refresh visible cards via OOB swaps instead of replacing the whole slot."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+
+        vm = VaultManager()
+        doc_id = "DOC_THUMBS_LIVE_OOB"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        for idx in range(2):
+            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}, {"id": "https://example.org/canvas/2"}]}),
+            encoding="utf-8",
+        )
+        vm.upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+        vm.create_download_job("job_live_oob", doc_id, library, "https://example.org/manifest.json")
+        vm.update_download_job("job_live_oob", current=1, total=2, status="running")
+        vm.set_manuscript_ui_pref(
+            doc_id,
+            "studio_export_highres_jobs",
+            {"1": {"job_id": "job_live_oob", "state": "queued", "source_ts": ""}},
+        )
+
+        monkeypatch.setattr(
+            studio_handlers,
+            "probe_remote_max_dimensions",
+            lambda _manifest_json, _page_num: (3200, 2400, "https://example.org/iiif/page"),
+        )
+
+        result = studio_handlers.get_studio_export_thumbs_live(
+            doc_id=doc_id,
+            library=library,
+            thumb_page=1,
+            page_size=24,
+        )
+        rendered = repr(result)
+        assert 'hx-swap-oob="outerHTML:#studio-thumb-card-1"' in rendered
+        assert 'hx-swap-oob="outerHTML:#studio-thumb-card-2"' in rendered
+        assert 'hx-swap-oob="outerHTML:#studio-export-pages-summary"' in rendered
+        assert 'hx-swap-oob="outerHTML:#studio-export-live-state-poller"' in rendered
+        assert 'id="studio-export-thumbs-slot"' not in rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))
+
+
+def test_export_tab_does_not_show_stitch_badge_when_stats_mark_tile_stitch(tmp_path):
+    """Thumbnail cards should rely on the progress indicator instead of a stale stitch badge."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_STITCH_BADGE"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1200, 1600), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        (data_dir / "image_stats.json").write_text(
+            json.dumps(
+                {
+                    "doc_id": doc_id,
+                    "pages": [{"page_index": 0, "download_method": "tile_stitch", "original_url": "stub"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        VaultManager().upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        rendered = repr(panel)
+        assert ">STITCH<" not in rendered
     finally:
         cm.set_downloads_dir(str(old_downloads))
 
@@ -1173,4 +1382,65 @@ def test_export_thumb_page_size_preference_is_persisted_per_item():
     assert 'name="page_size" value="24" id="studio-export-page-size"' in rendered_output
     panel_images = studio_handlers.get_export_tab(doc_id=doc_id, library=library, page=1, page_size=0, tab="images")
     rendered_images = repr(panel_images)
-    assert 'id="studio-export-thumb-size-select"' in rendered_images
+    assert 'name="page_size" value="24" id="studio-export-page-size"' in rendered_images
+    assert 'data-page-size="24"' in rendered_images
+
+
+def test_export_thumbs_show_iiif_and_verified_dimensions_separately(tmp_path, monkeypatch):
+    """Studio cards should distinguish IIIF-declared dimensions from verified direct download dimensions."""
+    cm = get_config_manager()
+    old_downloads = cm.get_downloads_dir()
+    try:
+        tmp_downloads = tmp_path / "downloads"
+        cm.set_downloads_dir(str(tmp_downloads))
+        doc_id = "DOC_VERIFIED_DIRECT_DIMS"
+        library = "Vaticana"
+        doc_root = Path(tmp_downloads) / library / doc_id
+        scans_dir = doc_root / "scans"
+        data_dir = doc_root / "data"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (3000, 3931), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
+            encoding="utf-8",
+        )
+        (data_dir / "image_stats.json").write_text(
+            json.dumps(
+                {
+                    "doc_id": doc_id,
+                    "pages": [
+                        {
+                            "page_index": 0,
+                            "download_method": "direct",
+                            "original_url": "https://example.org/full/3000,/0/default.jpg",
+                            "width": 3000,
+                            "height": 3931,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        VaultManager().upsert_manuscript(
+            doc_id,
+            library=library,
+            local_path=str(doc_root),
+            status="saved",
+            asset_state="saved",
+        )
+
+        monkeypatch.setattr(
+            studio_handlers,
+            "probe_remote_max_dimensions",
+            lambda _manifest_json, _page_num: (1447, 1896, "https://example.org/iiif/page-1"),
+        )
+
+        panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
+        rendered = repr(panel)
+        assert "Locale 3000x3931" in rendered
+        assert "Remote 1447x1896" in rendered
+        assert "Dimensione verificata via download diretto: 3000x3931" in rendered
+    finally:
+        cm.set_downloads_dir(str(old_downloads))

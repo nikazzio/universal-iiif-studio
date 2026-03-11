@@ -374,11 +374,15 @@ class HTTPClient:
         should_cancel: Callable[[], bool] | None = None,
     ) -> bool:
         """Sleep before a retry unless the caller requested cancellation."""
-        if should_cancel and should_cancel():
-            self.logger.info(f"Request cancelled during backoff for {url}")
-            return False
-        time.sleep(wait)
-        return True
+        deadline = time.time() + max(float(wait), 0.0)
+        while True:
+            if should_cancel and should_cancel():
+                self.logger.info(f"Request cancelled during backoff for {url}")
+                return False
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return True
+            time.sleep(min(remaining, 0.25))
 
     def _retry_response_or_raise(
         self,

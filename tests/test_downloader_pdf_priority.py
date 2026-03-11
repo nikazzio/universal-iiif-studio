@@ -256,7 +256,7 @@ def test_extract_pages_from_pdf_uses_viewer_dpi(monkeypatch, tmp_path: Path):
     def _fake_get_setting(key, default=None):
         if key == "pdf.viewer_dpi":
             return 222
-        if key == "images.viewer_quality":
+        if key == "pdf.viewer_jpeg_quality":
             return 88
         return default
 

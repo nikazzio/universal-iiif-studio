@@ -1,5 +1,8 @@
 """Tests for http_client module - skeleton and policy resolution."""
 
+import threading
+import time
+
 import pytest
 import requests
 
@@ -403,6 +406,29 @@ class TestRetryLogic:
         # Non-retriable
         assert client._is_retriable_error(None, requests.HTTPError()) is False
         assert client._is_retriable_error(None, ValueError()) is False
+
+    def test_sleep_before_retry_honors_cancel_during_wait(self, mock_network_policy):
+        """Backoff sleep should stop promptly when cancellation is requested mid-wait."""
+        client = HTTPClient(mock_network_policy)
+        cancel_flag = threading.Event()
+        result: list[bool] = []
+
+        def _run():
+            result.append(
+                client._sleep_before_retry(
+                    1.0,
+                    url="https://example.com/resource",
+                    should_cancel=cancel_flag.is_set,
+                )
+            )
+
+        thread = threading.Thread(target=_run)
+        thread.start()
+        time.sleep(0.1)
+        cancel_flag.set()
+        thread.join(timeout=2)
+
+        assert result == [False]
 
 
 class TestGetMethod:

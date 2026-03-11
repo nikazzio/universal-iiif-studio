@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from PIL import Image as PILImage
@@ -83,3 +84,36 @@ def test_ensure_thumbnail_regenerates_when_size_changes(tmp_path: Path) -> None:
     with PILImage.open(str(thumb_big)) as img:
         assert max(img.size) <= 640
         assert max(img.size) > 320
+
+
+def test_ensure_thumbnail_regenerates_when_source_scan_changes(tmp_path: Path) -> None:
+    """Thumbnail cache should invalidate when the source scan is newer even at the same target size."""
+    scans = tmp_path / "scans"
+    thumbs = tmp_path / "data" / "thumbnails"
+    scans.mkdir(parents=True)
+
+    scan_path = scans / "pag_0000.jpg"
+    PILImage.new("RGB", (1200, 900), color=(0, 255, 0)).save(scan_path)
+
+    thumb_path = ensure_thumbnail(
+        scans_dir=scans,
+        thumbnails_dir=thumbs,
+        page_num_1_based=1,
+        max_long_edge_px=320,
+        jpeg_quality=70,
+    )
+    assert thumb_path is not None
+    first_mtime = thumb_path.stat().st_mtime_ns
+
+    time.sleep(0.01)
+    PILImage.new("RGB", (1200, 900), color=(255, 0, 0)).save(scan_path)
+
+    refreshed = ensure_thumbnail(
+        scans_dir=scans,
+        thumbnails_dir=thumbs,
+        page_num_1_based=1,
+        max_long_edge_px=320,
+        jpeg_quality=70,
+    )
+    assert refreshed == thumb_path
+    assert refreshed.stat().st_mtime_ns > first_mtime

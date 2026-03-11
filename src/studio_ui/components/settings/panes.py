@@ -4,6 +4,7 @@ from fasthtml.common import H3, H4, Button, Div, Input, Label, Option, P, Script
 
 from studio_ui.library_options import library_options, normalize_library_value
 from studio_ui.theme import preset_options, resolve_ui_theme
+from universal_iiif_core.image_settings import IMAGE_STRATEGY_PRESETS
 from universal_iiif_core.network_policy import DEFAULT_NETWORK_SETTINGS
 
 from .controls import (
@@ -721,6 +722,18 @@ def _build_processing_pane(cm, s):
                 max_val=600,
                 step_val=1,
             ),
+            setting_range(
+                "PDF Raster JPEG Quality",
+                "settings.pdf.viewer_jpeg_quality",
+                pdf.get("viewer_jpeg_quality", 95),
+                help_text=(
+                    "Qualita JPEG usata solo quando un PDF nativo viene convertito in scans JPG. "
+                    "Non influisce sui download IIIF normali."
+                ),
+                min_val=10,
+                max_val=100,
+                step_val=1.0,
+            ),
             setting_toggle(
                 "Prefer Native PDF",
                 "settings.pdf.prefer_native_pdf",
@@ -1173,82 +1186,134 @@ def _build_images_pane(cm, s):
 
     images_section = Div(
         Div(
-            setting_select(
-                "Download Strategy Mode",
-                "settings.images.download_strategy_mode",
-                str(images.get("download_strategy_mode") or "balanced"),
-                [
-                    ("balanced", "Balanced (3000 -> 1740 -> max)"),
-                    ("quality_first", "Quality First (max -> 3000 -> 1740)"),
-                    ("fast", "Fast (1740 -> 1200 -> max)"),
-                    ("archival", "Archival (solo max)"),
-                    ("custom", "Custom"),
-                ],
-                help_text="Strategia globale tentativi `size` IIIF usata da tutte le biblioteche.",
+            H4("Download Pagine", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
+            P(
+                "Queste opzioni governano il download standard del volume e il pulsante Std nello Studio Export.",
+                cls="text-xs text-slate-600 dark:text-slate-300",
             ),
-            setting_input(
-                "Custom Download Strategy",
-                "settings.images.download_strategy_custom",
-                ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
-                help_text="Valida solo con mode=custom. Esempio: 3000,1740,max",
+            Div(
+                setting_select(
+                    "Preset download",
+                    "settings.images.download_strategy_mode",
+                    str(images.get("download_strategy_mode") or "balanced"),
+                    [
+                        ("balanced", "Standard"),
+                        ("quality_first", "Massima qualità"),
+                        ("fast", "Veloce"),
+                        ("archival", "Solo full/max"),
+                        ("custom", "Personalizzata"),
+                    ],
+                    help_text="Definisce l'ordine dei tentativi diretti prima dell'eventuale fallback.",
+                ),
+                setting_input(
+                    "Sequenza tentativi diretti",
+                    "settings.images.download_strategy_custom",
+                    ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
+                    help_text=(
+                        "Usata solo con Personalizzata. `3000` e `1740` sono tentativi espliciti; "
+                        "`max` prova `full/max`."
+                    ),
+                ),
+                setting_select(
+                    "Fallback immagini",
+                    "settings.images.stitch_mode_default",
+                    str(images.get("stitch_mode_default") or "auto_fallback"),
+                    [
+                        ("auto_fallback", "Automatico (diretto -> stitch)"),
+                        ("direct_only", "Solo diretto"),
+                        ("stitch_only", "Solo stitch"),
+                    ],
+                    help_text=(
+                        "Decide se il download standard puo passare allo stitch quando i tentativi diretti falliscono."
+                    ),
+                ),
+                Div(
+                    H4("Preset correnti", cls="text-xs font-semibold text-slate-700 dark:text-slate-200"),
+                    Span(
+                        f"Standard: {' -> '.join(IMAGE_STRATEGY_PRESETS['balanced'])}",
+                        cls="block text-xs text-slate-500 dark:text-slate-400",
+                    ),
+                    Span(
+                        f"Massima qualità: {' -> '.join(IMAGE_STRATEGY_PRESETS['quality_first'])}",
+                        cls="block text-xs text-slate-500 dark:text-slate-400",
+                    ),
+                    Span(
+                        f"Veloce: {' -> '.join(IMAGE_STRATEGY_PRESETS['fast'])}",
+                        cls="block text-xs text-slate-500 dark:text-slate-400",
+                    ),
+                    Span(
+                        f"Solo full/max: {' -> '.join(IMAGE_STRATEGY_PRESETS['archival'])}",
+                        cls="block text-xs text-slate-500 dark:text-slate-400",
+                    ),
+                    cls="space-y-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2",
+                ),
+                cls="grid grid-cols-1 md:grid-cols-2 gap-4",
             ),
-            setting_select(
-                "IIIF Quality",
-                "settings.images.iiif_quality",
-                images.get("iiif_quality", "default"),
-                [
-                    ("default", "default"),
-                    ("color", "color"),
-                    ("gray", "gray"),
-                    ("bitonal", "bitonal"),
-                    ("native", "native"),
-                ],
-                help_text="Parametro `quality` usato nelle URL IIIF.",
-            ),
-            setting_toggle(
-                "Probe Remote Max Resolution",
-                "settings.images.probe_remote_max_resolution",
-                images.get("probe_remote_max_resolution", True),
-                help_text="Mostra in Export la risoluzione massima disponibile online.",
-            ),
-            setting_range(
-                "Viewer JPEG Quality",
-                "settings.images.viewer_quality",
-                images.get("viewer_quality", 95),
-                help_text="Qualita JPEG per rendering locale.",
-                min_val=10,
-                max_val=100,
-                step_val=1.0,
-            ),
-            setting_range(
-                "Tile Stitch Max RAM (GB)",
-                "settings.images.tile_stitch_max_ram_gb",
-                images.get("tile_stitch_max_ram_gb", 2),
-                help_text="Tetto RAM per stitching tile su pagine molto grandi.",
-                min_val=0.1,
-                max_val=64,
-                step_val=0.1,
-            ),
-            setting_number(
-                "Local Optimize Max Edge (px)",
-                "settings.images.local_optimize.max_long_edge_px",
-                ((images.get("local_optimize") or {}).get("max_long_edge_px", 2600)),
-                min_val=512,
-                max_val=12000,
-                step_val=1,
-                help_text="Lato lungo massimo usato dall'ottimizzazione scans locali in-place.",
-            ),
-            setting_range(
-                "Local Optimize JPEG Quality",
-                "settings.images.local_optimize.jpeg_quality",
-                ((images.get("local_optimize") or {}).get("jpeg_quality", 82)),
-                help_text="Qualita JPEG usata dall'ottimizzazione scans locali in-place.",
-                min_val=10,
-                max_val=100,
-                step_val=1.0,
-            ),
-            cls="grid grid-cols-1 md:grid-cols-2 gap-4",
+            cls="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3",
         ),
+        Div(
+            H4("Ottimizzazione Locale", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
+            P(
+                "Queste opzioni sono usate dal pulsante Opt. Non cambiano il download iniziale della pagina.",
+                cls="text-xs text-slate-600 dark:text-slate-300",
+            ),
+            Div(
+                setting_number(
+                    "Lato lungo max (px)",
+                    "settings.images.local_optimize.max_long_edge_px",
+                    ((images.get("local_optimize") or {}).get("max_long_edge_px", 2600)),
+                    min_val=512,
+                    max_val=12000,
+                    step_val=1,
+                    help_text="Riduce il file locale fino al lato lungo massimo scelto.",
+                ),
+                setting_range(
+                    "Qualità JPEG locale",
+                    "settings.images.local_optimize.jpeg_quality",
+                    ((images.get("local_optimize") or {}).get("jpeg_quality", 82)),
+                    help_text="Compressione JPEG usata durante l'ottimizzazione locale.",
+                    min_val=10,
+                    max_val=100,
+                    step_val=1.0,
+                ),
+                cls="grid grid-cols-1 md:grid-cols-2 gap-4",
+            ),
+            cls="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3",
+        ),
+        Div(
+            H4("Avanzate IIIF", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
+            P(
+                "Controlli tecnici per servizi IIIF e stitching. In genere conviene lasciare i default.",
+                cls="text-xs text-slate-600 dark:text-slate-300",
+            ),
+            Div(
+                setting_select(
+                    "IIIF Quality",
+                    "settings.images.iiif_quality",
+                    images.get("iiif_quality", "default"),
+                    [
+                        ("default", "default"),
+                        ("color", "color"),
+                        ("gray", "gray"),
+                        ("bitonal", "bitonal"),
+                        ("native", "native"),
+                    ],
+                    help_text="Parametro `quality` delle URL IIIF. Non decide la risoluzione dell'immagine.",
+                ),
+                setting_range(
+                    "Tile Stitch Max RAM (GB)",
+                    "settings.images.tile_stitch_max_ram_gb",
+                    images.get("tile_stitch_max_ram_gb", 2),
+                    help_text="Tetto RAM usato quando il sistema deve comporre tile molto grandi.",
+                    min_val=0.1,
+                    max_val=64,
+                    step_val=0.1,
+                ),
+                cls="grid grid-cols-1 md:grid-cols-2 gap-4",
+            ),
+            cls="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3",
+        ),
+        cls="space-y-4",
         **{"data-images-tab-pane": "images"},
     )
 

@@ -658,8 +658,7 @@ def _style_tag():
         "padding: 0.45rem 0.65rem; background: rgba(var(--app-primary-rgb), 0.08); }\n",
         ".studio-tablist { display: flex; gap: 0.35rem; flex-wrap: nowrap; min-width: max-content; }\n",
         ".studio-tablist-shell .app-btn { flex: 0 0 auto; }\n",
-        ".dark .studio-tablist-shell { border-color: rgba(71, 85, 105, 0.64); "
-        "background: rgba(15, 23, 42, 0.62); }\n",
+        ".dark .studio-tablist-shell { border-color: rgba(71, 85, 105, 0.64); background: rgba(15, 23, 42, 0.62); }\n",
         ".studio-tabpanes { border: 1px solid rgba(148, 163, 184, 0.34); border-top: 0; "
         "border-radius: 0 0 0.9rem 0.9rem; background: rgba(255, 255, 255, 0.88); }\n",
         ".dark .studio-tabpanes { border-color: rgba(71, 85, 105, 0.64); background: rgba(2, 6, 23, 0.72); }\n",
@@ -723,11 +722,13 @@ def _style_tag():
         "monospace; text-align: right; }\n",
         ".dark .studio-thumb-dims-label { color: #94a3b8; }\n",
         ".dark .studio-thumb-dims-value { color: #e2e8f0; }\n",
-        ".studio-thumb-action { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }\n",
+        ".studio-thumb-action { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }\n",
         ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
-        "padding: 0.34rem 0.54rem !important; flex: 1 1 auto; min-width: 0; }\n",
+        "padding: 0.34rem 0.5rem !important; flex: 1 1 auto; min-width: 0; }\n",
+        ".studio-thumb-stitch-btn { white-space: nowrap; font-size: 0.72rem !important; "
+        "padding: 0.34rem 0.5rem !important; flex: 1 1 auto; min-width: 0; }\n",
         ".studio-thumb-opt-btn { white-space: nowrap; font-size: 0.72rem !important; "
-        "padding: 0.34rem 0.54rem !important; flex: 1 1 auto; min-width: 0; }\n",
+        "padding: 0.34rem 0.5rem !important; flex: 1 1 auto; min-width: 0; }\n",
         ".studio-thumb-progress { --progress: 0%; width: 0.88rem; height: 0.88rem; border-radius: 999px; "
         "flex: 0 0 0.88rem; display: inline-block; transform-origin: 50% 50%; will-change: transform; "
         "background: conic-gradient(var(--app-accent) var(--progress), rgba(148, 163, 184, 0.28) 0); "

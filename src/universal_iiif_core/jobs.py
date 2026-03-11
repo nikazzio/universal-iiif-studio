@@ -499,11 +499,14 @@ class JobManager:
             doc_id = str(kwargs.get("doc_id") or "-") if isinstance(kwargs, dict) else "-"
             library = str(kwargs.get("library") or "-") if isinstance(kwargs, dict) else "-"
             manifest_url = str(kwargs.get("manifest_url") or "") if isinstance(kwargs, dict) else ""
+            job_origin = (
+                str(kwargs.get("job_origin") or "library_download") if isinstance(kwargs, dict) else "library_download"
+            )
             target = db_job_id or job_id
             previous = vault.get_download_job(target) or {}
             prev_current = int(previous.get("current", 0) or 0)
             prev_total = int(previous.get("total", 0) or 0)
-            vault.create_download_job(target, doc_id, library, manifest_url)
+            vault.create_download_job(target, doc_id, library, manifest_url, job_origin=job_origin)
             if prev_current > 0 or prev_total > 0:
                 vault.update_download_job(target, current=prev_current, total=prev_total, status="queued", error=None)
         except DatabaseError:

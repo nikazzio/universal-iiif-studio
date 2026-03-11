@@ -30,6 +30,7 @@ DEPRECATED_KEYS: tuple[str, ...] = (
     "settings.system.ocr_concurrency",
     "settings.defaults.auto_generate_pdf",
     "settings.images.ocr_quality",
+    "settings.images.viewer_quality",
     "settings.pdf.ocr_dpi",
     "settings.thumbnails.columns",
     "settings.thumbnails.paginate_enabled",
@@ -281,10 +282,10 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
     _validate_int_range(data, issues, "settings.ui.studio_recent_max_items", 1, 20)
     _validate_int_range(data, issues, "settings.ui.polling.download_manager_interval_seconds", 1, 30)
     _validate_int_range(data, issues, "settings.ui.polling.download_status_interval_seconds", 1, 30)
-    _validate_int_range(data, issues, "settings.images.viewer_quality", 10, 100)
     _validate_float_range(data, issues, "settings.images.tile_stitch_max_ram_gb", 0.1, 64.0)
     _validate_int_range(data, issues, "settings.images.local_optimize.max_long_edge_px", 512, 12000)
     _validate_int_range(data, issues, "settings.images.local_optimize.jpeg_quality", 10, 100)
+    _validate_int_range(data, issues, "settings.pdf.viewer_jpeg_quality", 10, 100)
     _validate_int_range(data, issues, "settings.thumbnails.page_size", 1, 120)
     _validate_int_range(data, issues, "settings.thumbnails.max_long_edge_px", 64, 2000)
     _validate_int_range(data, issues, "settings.thumbnails.jpeg_quality", 10, 100)
@@ -324,6 +325,12 @@ def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue
         issues,
         "settings.images.download_strategy_mode",
         {"balanced", "quality_first", "fast", "archival", "custom"},
+    )
+    _validate_enum(
+        data,
+        issues,
+        "settings.images.stitch_mode_default",
+        {"auto_fallback", "direct_only", "stitch_only"},
     )
     _validate_enum(
         data,

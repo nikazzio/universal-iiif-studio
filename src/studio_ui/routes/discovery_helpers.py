@@ -23,6 +23,13 @@ from universal_iiif_core.utils import generate_job_id, get_json
 logger = get_logger(__name__)
 
 
+def _normalize_download_job_origin(job_origin: str) -> str:
+    origin = str(job_origin or "").strip().lower()
+    if origin in {"library_download", "studio_export_page"}:
+        return origin
+    return "library_download"
+
+
 def analyze_manifest(manifest_url: str) -> dict[str, Any]:
     """Download and extract simple preview data from a manifest URL.
 
@@ -96,6 +103,8 @@ def start_downloader_thread(
     force_max_resolution: bool = False,
     force_redownload: bool = False,
     overwrite_existing_scans: bool = False,
+    stitch_mode: str = "",
+    job_origin: str = "library_download",
 ) -> str:
     """Start a background IIIF download and persist progress into the DB.
 
@@ -105,19 +114,27 @@ def start_downloader_thread(
     manifest_url = unquote(manifest_url)
     doc_id = unquote(doc_id)
     library = unquote(library)
+    normalized_job_origin = _normalize_download_job_origin(job_origin)
 
     requested_job_id = str(existing_job_id or "").strip()
 
     # Prevent duplicate concurrent jobs for the same manuscript/library pair.
-    try:
-        for active in VaultManager().get_active_downloads():
-            if str(active.get("doc_id") or "") == doc_id and str(active.get("library") or "") == library:
-                active_job_id = str(active.get("job_id") or "").strip()
-                if active_job_id:
-                    logger.info("Download already active for %s (%s): reusing job %s", doc_id, library, active_job_id)
-                    return active_job_id
-    except Exception:
-        logger.debug("Failed to check active downloads before enqueue", exc_info=True)
+    # Page-level Studio Export actions can run concurrently on different pages,
+    # so they must never reuse another active studio_export_page job id.
+    if normalized_job_origin != "studio_export_page":
+        try:
+            for active in VaultManager().get_active_downloads():
+                if str(active.get("doc_id") or "") == doc_id and str(active.get("library") or "") == library:
+                    if _normalize_download_job_origin(str(active.get("job_origin") or "")) != normalized_job_origin:
+                        continue
+                    active_job_id = str(active.get("job_id") or "").strip()
+                    if active_job_id:
+                        logger.info(
+                            "Download already active for %s (%s): reusing job %s", doc_id, library, active_job_id
+                        )
+                        return active_job_id
+        except Exception:
+            logger.debug("Failed to check active downloads before enqueue", exc_info=True)
 
     # Reuse a persisted download id when resuming/retrying from Download Manager.
     if requested_job_id:
@@ -146,6 +163,8 @@ def start_downloader_thread(
             "force_max_resolution": bool(force_max_resolution),
             "force_redownload": bool(force_redownload),
             "overwrite_existing_scans": bool(overwrite_existing_scans),
+            "stitch_mode": str(stitch_mode or "").strip().lower(),
+            "job_origin": normalized_job_origin,
         },
         job_type="download",
     )
@@ -164,13 +183,15 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
     force_max_resolution = bool(kwargs.get("force_max_resolution", False))
     force_redownload = bool(kwargs.get("force_redownload", False))
     overwrite_existing_scans = bool(kwargs.get("overwrite_existing_scans", False))
+    stitch_mode = str(kwargs.get("stitch_mode") or "").strip().lower()
+    job_origin = _normalize_download_job_origin(str(kwargs.get("job_origin") or ""))
 
     # Thread-local DB manager for safety
     vault = VaultManager()
 
     # Register the job in DB only when no external job manager callback exists.
     if progress_callback is None:
-        vault.create_download_job(db_job_id, doc_id, library, manifest_url)
+        vault.create_download_job(db_job_id, doc_id, library, manifest_url, job_origin=job_origin)
 
     # Track last seen values for more informative error reporting
     last = {"current": 0, "total": 0}
@@ -207,6 +228,7 @@ def _download_task(progress_callback=None, should_cancel=None, **kwargs):
             force_max_resolution=force_max_resolution,
             force_redownload=force_redownload,
             overwrite_existing_scans=overwrite_existing_scans,
+            stitch_mode=stitch_mode,
         )
 
         # Pass DB hook and cancellation checker to the runtime `run` call
