@@ -5,6 +5,9 @@ import requests
 
 from universal_iiif_core.http_client import HTTPClient, HTTPMetrics
 
+# Mark as slow (38 tests, extensive policy/retry/metrics testing)
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture
 def mock_network_policy():

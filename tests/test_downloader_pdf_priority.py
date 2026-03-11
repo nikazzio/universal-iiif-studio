@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import universal_iiif_core.logic.downloader as downloader_module
 from universal_iiif_core.logic.downloader import IIIFDownloader
+
+# Mark as slow (creates downloader instances, file checks)
+pytestmark = pytest.mark.slow
 
 
 class _DummyLogger:

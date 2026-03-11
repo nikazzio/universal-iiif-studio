@@ -1,5 +1,6 @@
 """Tests for _rate_limiter module."""
 
+import pytest
 import threading
 import time
 
@@ -9,6 +10,9 @@ from universal_iiif_core._rate_limiter import (
     get_host_limiter,
     reset_all_limiter_stats,
 )
+
+# Mark as slow (uses time.sleep and threading)
+pytestmark = pytest.mark.slow
 
 
 class TestHostRateLimiter:
