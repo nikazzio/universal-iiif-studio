@@ -323,6 +323,91 @@ def test_studio_saved_remote_first_bypasses_local_gate():
         cm.set_setting("viewer.source_policy.saved_mode", old_policy)
 
 
+def test_studio_saved_remote_first_renders_degraded_remote_when_manifest_unavailable():
+    """Saved remote items should still open Studio when remote manifest fetch fails."""
+    doc_id = "MSS_REMOTE_DEGRADED"
+    library = "Vaticana"
+    cm = get_config_manager()
+    old_gate = cm.get_setting("viewer.mirador.require_complete_local_images", True)
+    old_policy = cm.get_setting("viewer.source_policy.saved_mode", "remote_first")
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "metadata.json").write_text(json.dumps({"label": "Remote degraded"}), encoding="utf-8")
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        manifest_url="https://example.org/unavailable-remote-manifest.json",
+        status="saved",
+        asset_state="saved",
+        total_canvases=120,
+        downloaded_canvases=0,
+        manifest_local_available=0,
+    )
+
+    try:
+        cm.set_setting("viewer.mirador.require_complete_local_images", True)
+        cm.set_setting("viewer.source_policy.saved_mode", "remote_first")
+        original_get_json = studio_handlers.get_json
+        studio_handlers.get_json = lambda _url, retries=2: None
+        response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
+        rendered = str(response)
+        assert "mirador-viewer" in rendered
+        assert "versione online del documento" in rendered
+        assert "Manifesto non trovato." not in rendered
+    finally:
+        studio_handlers.get_json = original_get_json
+        cm.set_setting("viewer.mirador.require_complete_local_images", old_gate)
+        cm.set_setting("viewer.source_policy.saved_mode", old_policy)
+
+
+def test_studio_remote_first_uses_local_manifest_context_when_remote_fetch_fails():
+    """Remote-first should keep Studio usable by falling back to cached local manifest context."""
+    doc_id = "MSS_REMOTE_LOCAL_FALLBACK"
+    library = "Vaticana"
+    cm = get_config_manager()
+    old_policy = cm.get_setting("viewer.source_policy.saved_mode", "remote_first")
+    doc_root = Path(cm.get_downloads_dir()) / library / doc_id
+    scans_dir = doc_root / "scans"
+    data_dir = doc_root / "data"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"items": [{"id": "https://example.org/canvas/1"}, {"id": "https://example.org/canvas/2"}]}),
+        encoding="utf-8",
+    )
+    (data_dir / "metadata.json").write_text(json.dumps({"label": "Remote local fallback"}), encoding="utf-8")
+
+    VaultManager().upsert_manuscript(
+        doc_id,
+        library=library,
+        local_path=str(doc_root),
+        manifest_url="https://example.org/remote-manifest-missing.json",
+        status="saved",
+        asset_state="saved",
+        total_canvases=2,
+        downloaded_canvases=0,
+        manifest_local_available=1,
+    )
+
+    try:
+        cm.set_setting("viewer.source_policy.saved_mode", "remote_first")
+        original_get_json = studio_handlers.get_json
+        studio_handlers.get_json = lambda _url, retries=2: None
+        response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
+        rendered = str(response)
+        assert "mirador-viewer" in rendered
+        assert "Pagine attese (manifest)" in rendered
+        assert "2" in rendered
+    finally:
+        studio_handlers.get_json = original_get_json
+        cm.set_setting("viewer.source_policy.saved_mode", old_policy)
+
+
 def test_studio_uses_library_title_and_shows_full_title_in_info():
     """Studio header should use truncated library title while Info keeps full value."""
     doc_id = "MSS_Urb.lat.1888"

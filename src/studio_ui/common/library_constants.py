@@ -61,30 +61,26 @@ LIBRARY_FILTER_KEYS = [
 
 CATEGORY_SELECT_TONE = {
     "manoscritto": (
-        "bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-500/20 "
-        "dark:border-indigo-500/45 dark:text-indigo-200"
+        "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/30 dark:border-indigo-800/70"
     ),
     "libro a stampa": (
-        "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/20 "
-        "dark:border-emerald-500/45 dark:text-emerald-200"
+        "bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-800/70"
     ),
     "incunabolo": (
-        "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/45 dark:text-amber-200"
+        "bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-800/70"
     ),
-    "periodico": ("bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-500/20 dark:border-sky-500/45 dark:text-sky-200"),
+    "periodico": ("bg-sky-50 border-sky-300 dark:bg-sky-950/30 dark:border-sky-800/70"),
     "musica/spartito": (
-        "bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-500/20 "
-        "dark:border-fuchsia-500/45 dark:text-fuchsia-200"
+        "bg-fuchsia-50 border-fuchsia-300 dark:bg-fuchsia-950/30 dark:border-fuchsia-800/70"
     ),
     "mappa/atlante": (
-        "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-500/20 dark:border-teal-500/45 dark:text-teal-200"
+        "bg-teal-50 border-teal-300 dark:bg-teal-950/30 dark:border-teal-800/70"
     ),
     "miscellanea": (
-        "bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-500/20 "
-        "dark:border-violet-500/45 dark:text-violet-200"
+        "bg-violet-50 border-violet-300 dark:bg-violet-950/30 dark:border-violet-800/70"
     ),
     "non classificato": (
-        "bg-slate-100 border-slate-300 text-slate-700 dark:bg-slate-700/35 dark:border-slate-600 dark:text-slate-200"
+        "bg-slate-100 border-slate-300 dark:bg-slate-800/70 dark:border-slate-600"
     ),
 }
 

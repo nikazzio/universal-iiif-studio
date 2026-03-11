@@ -32,6 +32,8 @@ def studio_layout(
     mirador_enabled: bool = True,
     mirador_override_url: str = "",
     active_tab: str = "transcription",
+    source_notice_text: str = "",
+    source_notice_tone: str = "info",
 ):
     """Render the main Studio split-view layout."""
     status_value = (asset_status or "unknown").strip().lower()
@@ -49,6 +51,15 @@ def studio_layout(
     local_count = int(local_pages_count or 0)
     manifest_count = int(manifest_total_pages or 0)
     local_progress = f"{local_count}/{manifest_count}" if manifest_count > 0 else str(local_count)
+    notice_text = str(source_notice_text or "").strip()
+    notice_palette = {
+        "info": "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-100",
+        "warning": (
+            "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800/70 "
+            "dark:bg-amber-950/30 dark:text-amber-100"
+        ),
+    }
+    notice_cls = notice_palette.get(source_notice_tone, notice_palette["info"])
     if mirador_enabled:
         viewer_block = Div(
             *mirador_viewer(manifest_url, "mirador-viewer", canvas_id=initial_canvas),
@@ -103,7 +114,11 @@ def studio_layout(
                     Div(
                         Div(
                             Div(
-                                H2(title, cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-3"),
+                                H2(
+                                    title,
+                                    title=title,
+                                    cls="text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-3",
+                                ),
                                 technical_status_panel(
                                     doc_id=doc_id,
                                     library=library,
@@ -113,6 +128,15 @@ def studio_layout(
                                     staging_pages=str(staging_count),
                                     pdf_source=pdf_source_value,
                                     pdf_local=pdf_local_value,
+                                ),
+                                (
+                                    Div(
+                                        notice_text,
+                                        cls=f"mt-3 rounded-lg border px-3 py-2 text-sm font-medium {notice_cls}",
+                                        data_studio_source_notice=source_mode,
+                                    )
+                                    if notice_text
+                                    else ""
                                 ),
                                 cls="flex-1 min-w-0",
                             ),

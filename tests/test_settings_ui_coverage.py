@@ -74,3 +74,5 @@ def test_settings_page_exposes_critical_runtime_config_keys():
     assert "Gallica Safe" not in rendered
     assert "Other Libraries" not in rendered
     assert 'data-tab="network"' in rendered
+    assert 'data-images-custom-strategy="true"' in rendered
+    assert "syncCustomStrategyVisibility" in rendered

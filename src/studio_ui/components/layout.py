@@ -417,10 +417,19 @@ def _sidebar(active_page: str = "") -> Nav:
                 const root = document.documentElement;
                 setSidebarCollapse(!root.classList.contains('sidebar-collapsed'));
             }
+            function normalizeNavPath(target) {
+                try {
+                    return new URL(target || '', window.location.origin).pathname || '/';
+                } catch (_e) {
+                    return String(target || '').split('?')[0] || '/';
+                }
+            }
             function syncActiveNav(pathname) {
+                const currentPath = normalizeNavPath(pathname || window.location.pathname);
                 const links = document.querySelectorAll('[data-nav-link]');
                 links.forEach((link) => {
-                    const isActive = link.getAttribute('href') === pathname;
+                    const hrefPath = normalizeNavPath(link.getAttribute('href') || '');
+                    const isActive = hrefPath === currentPath;
                     if (isActive) {
                         link.setAttribute('aria-current', 'page');
                     } else {

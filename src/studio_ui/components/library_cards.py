@@ -117,7 +117,7 @@ def _kpi_strip(docs: list[dict]) -> Div:
 
 def _category_select_cls(item_type: str) -> str:
     tone = _CATEGORY_SELECT_TONE.get(item_type, _CATEGORY_SELECT_TONE["non classificato"])
-    return f"app-field min-w-[180px] px-2.5 py-1.5 text-sm font-medium {tone}"
+    return f"app-field min-w-[180px] px-2.5 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 {tone}"
 
 
 def _card_action_flags(doc: dict) -> dict[str, bool]:
@@ -423,7 +423,7 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
     open_studio_action = A(
         "📖 Apri Studio",
         href=studio_href,
-        cls="app-btn app-btn-primary w-full md:w-auto",
+        cls="app-btn app-btn-primary w-full text-center",
     )
     item_action_buttons = [
         _action_button(
@@ -449,7 +449,7 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         ),
     ]
 
-    info_inline = Div(
+    metadata_links = Div(
         Button(
             "🧾 Metadati",
             type="button",
@@ -474,7 +474,8 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
             if source_detail_url
             else Span("🔗 Scheda catalogo non disponibile", cls="text-xs text-slate-400 dark:text-slate-500")
         ),
-        cls="flex flex-wrap items-center gap-3",
+        cls="flex flex-col gap-2 pt-3 border-t border-slate-200 dark:border-slate-700",
+        data_library_meta_links="1",
     )
 
     actions_block = Div(
@@ -491,12 +492,12 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
                 "Azioni documento",
                 cls="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400",
             ),
-            Div(*item_action_buttons, cls="flex flex-wrap items-center gap-1.5 mt-1"),
+            Div(*item_action_buttons, cls="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 mt-1"),
             cls="space-y-1",
         ),
         Div(
             _delete_action(doc, enabled=action_flags["delete_doc"]),
-            cls="flex justify-end border-t border-slate-200 dark:border-slate-700 pt-2 mt-1",
+            cls="flex justify-start border-t border-slate-200 dark:border-slate-700 pt-2 mt-1",
         ),
         cls="mt-auto flex flex-col gap-2.5 pt-2",
     )
@@ -517,10 +518,11 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
         thumbnail_block,
         media_badges,
         technical_rows,
+        metadata_links,
         cls="w-full md:w-44 shrink-0",
     )
 
-    card_title = truncate_title(title, max_len=70, suffix="[...]")
+    card_title = truncate_title(title, max_len=96, suffix="[...]")
 
     # Build headline with author and publisher info
     headline_children = [
@@ -530,7 +532,7 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
                 href=studio_href,
                 cls=(
                     "text-slate-900 dark:text-slate-100 hover:text-slate-700 "
-                    "dark:hover:text-slate-200 hover:underline underline-offset-2"
+                    "dark:hover:text-slate-200 hover:underline underline-offset-2 break-words"
                 ),
             ),
             title=title,
@@ -561,7 +563,6 @@ def _doc_card(doc: dict, *, compact: bool = False) -> Div:
                 title=publisher,
             )
         )
-    headline_children.append(info_inline)
     headline = Div(*headline_children, cls="space-y-1 min-w-0")
 
     # Optional description preview (max 2 lines)

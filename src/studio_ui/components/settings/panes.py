@@ -1126,6 +1126,20 @@ def _images_subtabs_script() -> Script:
     return Script(
         """
         (function() {
+            function syncCustomStrategyVisibility(pane) {
+                const modeField = pane.querySelector('[name="settings.images.download_strategy_mode"]');
+                const customWrap = pane.querySelector('[data-images-custom-strategy]');
+                if (!modeField || !customWrap) return;
+                const isCustom = String(modeField.value || '').trim() === 'custom';
+                customWrap.classList.toggle('hidden', !isCustom);
+                customWrap.setAttribute('aria-hidden', isCustom ? 'false' : 'true');
+                customWrap.querySelectorAll('input,select,textarea').forEach((field) => {
+                    if (field.name === 'settings.images.download_strategy_custom') {
+                        field.disabled = !isCustom;
+                    }
+                });
+            }
+
             function activate(pane, tabName) {
                 const target = (tabName || 'images').trim();
                 pane.dataset.imagesActiveTab = target;
@@ -1159,8 +1173,13 @@ def _images_subtabs_script() -> Script:
                     pane.querySelectorAll('[data-images-tab-btn]').forEach((btn) => {
                         btn.addEventListener('click', () => activate(pane, btn.dataset.imagesTabBtn || 'images'));
                     });
+                    const modeField = pane.querySelector('[name="settings.images.download_strategy_mode"]');
+                    if (modeField) {
+                        modeField.addEventListener('change', () => syncCustomStrategyVisibility(pane));
+                    }
                 }
                 activate(pane, pane.dataset.imagesActiveTab || 'images');
+                syncCustomStrategyVisibility(pane);
             }
 
             if (!window.__settingsImagesTabsBound) {
@@ -1205,14 +1224,17 @@ def _build_images_pane(cm, s):
                     ],
                     help_text="Definisce l'ordine dei tentativi diretti prima dell'eventuale fallback.",
                 ),
-                setting_input(
-                    "Sequenza tentativi diretti",
-                    "settings.images.download_strategy_custom",
-                    ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
-                    help_text=(
-                        "Usata solo con Personalizzata. `3000` e `1740` sono tentativi espliciti; "
-                        "`max` prova `full/max`."
+                Div(
+                    setting_input(
+                        "Sequenza tentativi diretti",
+                        "settings.images.download_strategy_custom",
+                        ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
+                        help_text=(
+                            "Usata solo con Personalizzata. `3000` e `1740` sono tentativi espliciti; "
+                            "`max` prova `full/max`."
+                        ),
                     ),
+                    **{"data-images-custom-strategy": "true"},
                 ),
                 setting_select(
                     "Fallback immagini",

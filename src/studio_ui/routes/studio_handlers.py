@@ -1583,6 +1583,19 @@ def _manifest_missing_response(is_hx: bool):
     return panel
 
 
+def _build_source_notice(*, read_source_mode: str, degraded_remote_manifest: bool) -> tuple[str, str]:
+    mode = str(read_source_mode or "").strip().lower()
+    if mode != "remote":
+        return "", "info"
+    if degraded_remote_manifest:
+        return (
+            "Stai leggendo la versione online del documento. Il manifest remoto non e disponibile lato server in "
+            "questo momento, quindi alcuni metadati e contatori potrebbero essere incompleti.",
+            "warning",
+        )
+    return ("Stai leggendo la versione online/remota del documento.", "info")
+
+
 def _build_workspace_base_context(
     request: Request,
     doc_id: str,
@@ -1634,9 +1647,7 @@ def _resolve_workspace_manifest_context(
         remote_manifest_url=remote_manifest_url,
         page=requested_page,
     )
-    if not manifest_json:
-        return None
-    resolved_manifest_pages = _manifest_total_pages(manifest_json, ms_row)
+    resolved_manifest_pages = _manifest_total_pages(manifest_json or {}, ms_row)
     require_complete_local = bool(
         get_config_manager().get_setting("viewer.mirador.require_complete_local_images", True)
     )
@@ -1669,12 +1680,19 @@ def _resolve_workspace_manifest_context(
         fallback_manifest=manifest_json,
         fallback_canvas=initial_canvas,
     )
+    degraded_remote_manifest = False
     if not manifest_json:
-        return None
+        if read_source_mode != "remote" or not remote_manifest_url:
+            return None
+        degraded_remote_manifest = True
     manifest_pages = _manifest_total_pages(manifest_json, ms_row)
     safe_page = requested_page if manifest_pages <= 0 else max(1, min(requested_page, manifest_pages))
-    if safe_page != requested_page:
+    if manifest_json and safe_page != requested_page:
         initial_canvas = _resolve_initial_canvas(manifest_json, safe_page)
+    source_notice_text, source_notice_tone = _build_source_notice(
+        read_source_mode=read_source_mode,
+        degraded_remote_manifest=degraded_remote_manifest,
+    )
     meta = {
         **workspace["meta"],
         "full_display_title": workspace["full_title"],
@@ -1706,6 +1724,8 @@ def _resolve_workspace_manifest_context(
         "should_gate_mirador": should_gate_mirador,
         "mirador_override_url": mirador_override_url,
         "meta": meta,
+        "source_notice_text": source_notice_text,
+        "source_notice_tone": source_notice_tone,
     }
 
 
@@ -1767,6 +1787,8 @@ def studio_page(
             mirador_enabled=not bool(resolved["should_gate_mirador"]),
             mirador_override_url=str(resolved["mirador_override_url"]),
             active_tab=active_tab,
+            source_notice_text=str(resolved.get("source_notice_text") or ""),
+            source_notice_tone=str(resolved.get("source_notice_tone") or "info"),
         )
         _save_studio_context_best_effort(
             doc_id=doc_id,
