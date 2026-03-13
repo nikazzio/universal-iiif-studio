@@ -6,6 +6,7 @@ import xml.etree.ElementTree
 from dataclasses import dataclass, field
 from html import unescape
 from typing import Any, Final
+from urllib.parse import quote
 
 import requests
 
@@ -13,6 +14,7 @@ from ..exceptions import ResolverError
 from ..logger import get_logger
 from ..providers import IIIFProvider, get_provider
 from ..utils import get_json
+from .archive_org import ArchiveOrgResolver
 from .gallica import GallicaResolver
 from .institut import InstitutResolver
 from .models import SearchResult
@@ -24,6 +26,7 @@ logger = get_logger(__name__)
 # Constants
 TIMEOUT_SECONDS: Final = 20
 GALLICA_BASE_URL: Final = "https://gallica.bnf.fr/SRU"
+ARCHIVE_ADVANCEDSEARCH_URL: Final = "https://archive.org/advancedsearch.php"
 INSTITUT_SEARCH_URL: Final = "https://bibnum.institutdefrance.fr/records/default"
 INSTITUT_VIEWER_URL: Final = "https://bibnum.institutdefrance.fr/viewer/{doc_id}"
 
@@ -151,13 +154,10 @@ def _search_with_provider(
         return []
 
     payload = dict(filters or {})
-    if provider.search_strategy == "gallica":
-        return smart_search(text, gallica_type_filter=str(payload.get("gallica_type") or "all"))
-    if provider.search_strategy == "vatican":
-        return search_vatican(text, max_results=5)
-    if provider.search_strategy == "institut":
-        return search_institut(text, max_results=10)
-    return []
+    handler = _SEARCH_STRATEGY_HANDLERS.get(provider.search_strategy or "")
+    if not handler:
+        return []
+    return handler(text, payload)
 
 
 def resolve_provider_input(
@@ -342,6 +342,77 @@ def search_institut(query: str, max_results: int = 12) -> list[SearchResult]:
     return results
 
 
+def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
+    """Search Internet Archive advancedsearch and return IIIF-ready results."""
+    if not (q := (query or "").strip()):
+        return []
+
+    clean_q = q.replace('"', " ")
+    requested_results = max(1, min(max_results, 20))
+    params = {
+        "q": f"({clean_q}) AND mediatype:texts",
+        "fl[]": ["identifier", "title", "creator", "date", "mediatype"],
+        "rows": str(requested_results),
+        "page": "1",
+        "output": "json",
+    }
+
+    try:
+        logger.debug("Searching Archive.org advancedsearch: %s", clean_q)
+        response = requests.get(
+            ARCHIVE_ADVANCEDSEARCH_URL,
+            params=params,
+            headers=HTML_BROWSER_HEADERS,
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.error("Archive.org search failed for query '%s': %s", clean_q, exc, exc_info=True)
+        return []
+
+    docs = payload.get("response", {}).get("docs", [])
+    resolver = ArchiveOrgResolver()
+    results: list[SearchResult] = []
+
+    for doc in docs:
+        if not isinstance(doc, dict):
+            continue
+        identifier = str(doc.get("identifier") or "").strip()
+        if not identifier:
+            continue
+
+        manifest_url, doc_id = resolver.get_manifest_url(identifier)
+        if not manifest_url or not doc_id:
+            continue
+
+        title = _archive_scalar(doc.get("title")) or identifier
+        author = _archive_scalar(doc.get("creator")) or "Autore sconosciuto"
+        date = _archive_scalar(doc.get("date"))
+        mediatype = _archive_scalar(doc.get("mediatype")) or "texts"
+        thumb = _archive_thumbnail_url(doc_id)
+
+        result: SearchResult = {
+            "id": doc_id,
+            "title": title[:200],
+            "author": author[:100],
+            "manifest": manifest_url,
+            "thumbnail": thumb,
+            "thumb": thumb,
+            "library": "Archive.org",
+            "publisher": "Internet Archive",
+            "raw": {
+                "viewer_url": f"https://archive.org/details/{doc_id}",
+                "mediatype": mediatype,
+            },
+        }
+        if date:
+            result["date"] = date[:100]
+        results.append(result)
+
+    return results[:requested_results]
+
+
 def _extract_institut_candidates(html: str, max_results: int) -> list[tuple[str, str]]:
     """Extract unique `(doc_id, title)` candidates from Institut HTML search page."""
     candidates: list[tuple[str, str]] = []
@@ -409,6 +480,17 @@ def _fallback_institut_result(doc_id: str, title: str, manifest_url: str) -> Sea
 def _clean_html_text(value: str) -> str:
     no_tags = _HTML_TAG_RE.sub(" ", value or "")
     return _SPACE_RE.sub(" ", unescape(no_tags)).strip()
+
+
+def _archive_scalar(value: Any) -> str:
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return str(value or "").strip()
+
+
+def _archive_thumbnail_url(identifier: str) -> str:
+    encoded = quote(f"{identifier}/__ia_thumb.jpg", safe="")
+    return f"https://iiif.archive.org/image/iiif/2/{encoded}/full/180,/0/default.jpg"
 
 
 def get_manifest_details(manifest_url: str) -> SearchResult | None:
@@ -568,6 +650,30 @@ def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchR
         return None
 
 
+def _search_gallica_provider(query: str, payload: dict[str, Any]) -> list[SearchResult]:
+    return smart_search(query, gallica_type_filter=str(payload.get("gallica_type") or "all"))
+
+
+def _search_vatican_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
+    return search_vatican(query, max_results=5)
+
+
+def _search_institut_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
+    return search_institut(query, max_results=10)
+
+
+def _search_archive_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
+    return search_archive_org(query, max_results=10)
+
+
+_SEARCH_STRATEGY_HANDLERS: Final[dict[str, Any]] = {
+    "archive_org": _search_archive_provider,
+    "gallica": _search_gallica_provider,
+    "institut": _search_institut_provider,
+    "vatican": _search_vatican_provider,
+}
+
+
 __all__ = [
     "ProviderResolution",
     "resolve_provider_input",
@@ -577,6 +683,7 @@ __all__ = [
     "search_institut",
     "search_vatican",
     "get_manifest_details",
+    "search_archive_org",
     "smart_search",
     "TIMEOUT_SECONDS",
 ]

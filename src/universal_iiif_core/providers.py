@@ -174,6 +174,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         label="Internet Archive",
         aliases=("archive.org", "internet archive", "archive"),
         resolver_cls=ArchiveOrgResolver,
+        search_strategy="archive_org",
         not_found_hint="Incolla un URL archive.org/details/... o un manifest iiif.archive.org valido.",
         placeholder="es. https://archive.org/details/b29000427_0001",
         sort_order=95,

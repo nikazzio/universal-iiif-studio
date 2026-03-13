@@ -207,3 +207,29 @@ def test_resolve_manifest_institut_page_count_from_manifest_items(monkeypatch):
     result_str = repr(result)
     assert "Oeuvres de Brantôme" in result_str
     assert "4 pagine" in result_str
+
+
+def test_resolve_manifest_archive_search_results_list(monkeypatch):
+    """Archive.org free-text search should render a results list, not force preview."""
+    monkeypatch.setattr(
+        discovery_handlers,
+        "resolve_provider_input",
+        lambda _library, _query, filters=None: ProviderResolution(
+            provider=get_provider("Archive.org"),
+            status="results",
+            results=[
+                {
+                    "id": "b29000427_0001",
+                    "title": "Subject-index of the London Library",
+                    "manifest": "https://iiif.archive.org/iiif/b29000427_0001/manifest.json",
+                    "thumbnail": "https://iiif.archive.org/image/iiif/2/b29000427_0001%2F__ia_thumb.jpg/full/180,/0/default.jpg",
+                    "raw": {"viewer_url": "https://archive.org/details/b29000427_0001"},
+                }
+            ],
+        ),
+    )
+
+    result = discovery_handlers.resolve_manifest("Archive.org", "london library")
+    result_str = repr(result)
+    assert "Trovati 1 risultati" in result_str
+    assert "Subject-index of the London Library" in result_str
