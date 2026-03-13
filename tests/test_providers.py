@@ -19,6 +19,13 @@ def test_provider_library_options_exposes_new_direct_providers():
     assert options["Internet Archive"] == "Archive.org"
 
 
+def test_provider_search_capabilities_cover_bodleian_and_ecodices():
+    """Provider registry should expose search where a stable public flow exists."""
+    assert get_provider("Bodleian").supports_search() is True
+    assert get_provider("e-codices").supports_search() is True
+    assert get_provider("Cambridge").supports_search() is False
+
+
 def test_resolve_with_provider_uses_shared_registry_for_new_resolvers():
     """CLI/web shared registry must resolve new providers consistently."""
     manifest_url, doc_id, provider = resolve_with_provider("https://digi.ub.uni-heidelberg.de/diglit/cpg123")

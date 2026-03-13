@@ -5,6 +5,7 @@ import unicodedata
 import xml.etree.ElementTree
 from dataclasses import dataclass, field
 from html import unescape
+from json import JSONDecodeError
 from typing import Any, Final
 from urllib.parse import quote
 
@@ -15,9 +16,11 @@ from ..logger import get_logger
 from ..providers import IIIFProvider, get_provider
 from ..utils import get_json
 from .archive_org import ArchiveOrgResolver
+from .ecodices import EcodicesResolver
 from .gallica import GallicaResolver
 from .institut import InstitutResolver
 from .models import SearchResult
+from .oxford import OxfordResolver
 from .parsers import GallicaXMLParser, IIIFManifestParser
 from .registry import resolve_shelfmark as registry_resolve
 
@@ -29,6 +32,8 @@ GALLICA_BASE_URL: Final = "https://gallica.bnf.fr/SRU"
 ARCHIVE_ADVANCEDSEARCH_URL: Final = "https://archive.org/advancedsearch.php"
 INSTITUT_SEARCH_URL: Final = "https://bibnum.institutdefrance.fr/records/default"
 INSTITUT_VIEWER_URL: Final = "https://bibnum.institutdefrance.fr/viewer/{doc_id}"
+BODLEIAN_SEARCH_URL: Final = "https://digital.bodleian.ox.ac.uk/search/"
+ECODICES_SEARCH_URL: Final = "https://www.e-codices.unifr.ch/en/search/all"
 
 # HEADER REALI PER EVITARE IL BAN (Errore 500/403)
 # Gallica blocca le richieste se non sembrano provenire da un browser.
@@ -51,8 +56,35 @@ _INSTITUT_RECORD_LINK_RE: Final = re.compile(
     r"<a[^>]+href=[\"'](?P<href>/records/item/(?P<id>\d+)[^\"']*)[\"'][^>]*>(?P<title>.*?)</a>",
     flags=re.IGNORECASE | re.DOTALL,
 )
+_ECODICES_RESULT_SPLIT_RE: Final = re.compile(r'<div class="search-result">', flags=re.IGNORECASE)
+_ECODICES_FACSIMILE_RE: Final = re.compile(
+    r'<a href="(?P<href>https://www\.e-codices\.unifr\.ch/en/[a-z0-9]+/[a-z0-9._-]+)">Facsimile</a>',
+    flags=re.IGNORECASE,
+)
+_ECODICES_COLLECTION_RE: Final = re.compile(
+    r'<div class="collection-shelfmark">\s*(?P<value>.*?)\s*</div>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_ECODICES_TITLE_RE: Final = re.compile(
+    r'<div class="document-headline">\s*(?P<value>.*?)\s*</div>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_ECODICES_MS_TITLE_RE: Final = re.compile(
+    r'<div class="document-ms-title">\s*(?P<value>.*?)\s*</div>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_ECODICES_SUMMARY_RE: Final = re.compile(
+    r'<p class="document-summary-search">\s*(?P<value>.*?)(?:<span class="summary-author"|</p>)',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_ECODICES_IMAGE_RE: Final = re.compile(
+    r'image-server-base-url="(?P<base>[^"]+)"\s+image-file-path="(?P<path>[^"]+)"',
+    flags=re.IGNORECASE,
+)
 _HTML_TAG_RE: Final = re.compile(r"<[^>]+>")
 _SPACE_RE: Final = re.compile(r"\s+")
+_SPACE_BEFORE_PUNCT_RE: Final = re.compile(r"\s+([,;:!?])")
+_SPACE_BEFORE_SINGLE_PERIOD_RE: Final = re.compile(r"(?<!\.)\s+\.(?!\.)")
 
 _VATICAN_NUMERIC_COLLECTIONS: Final[list[str]] = [
     "Urb.lat",
@@ -413,6 +445,79 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
     return results[:requested_results]
 
 
+def search_bodleian(query: str, max_results: int = 12) -> list[SearchResult]:
+    """Search Digital Bodleian using its JSON-LD search representation."""
+    if not (q := (query or "").strip()):
+        return []
+
+    requested_results = max(1, min(max_results, 20))
+    try:
+        logger.debug("Searching Bodleian JSON-LD search surface: %s", q)
+        response = requests.get(
+            BODLEIAN_SEARCH_URL,
+            params={"q": q},
+            headers={**HTML_BROWSER_HEADERS, "Accept": "application/ld+json"},
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, JSONDecodeError, ValueError) as exc:
+        logger.error("Bodleian search failed for query '%s': %s", q, exc, exc_info=True)
+        return []
+
+    members = payload.get("member", [])
+    resolver = OxfordResolver()
+    results: list[SearchResult] = []
+
+    for member in members:
+        if not isinstance(member, dict):
+            continue
+        if result := _build_bodleian_result(member, resolver):
+            results.append(result)
+        if len(results) >= requested_results:
+            break
+
+    return results
+
+
+def search_ecodices(query: str, max_results: int = 12) -> list[SearchResult]:
+    """Search e-codices HTML results and map them to IIIF manifests."""
+    if not (q := (query or "").strip()):
+        return []
+
+    requested_results = max(1, min(max_results, 20))
+    try:
+        logger.debug("Searching e-codices HTML search surface: %s", q)
+        response = requests.get(
+            ECODICES_SEARCH_URL,
+            params={
+                "sQueryString": q,
+                "sSearchField": "fullText",
+                "iResultsPerPage": str(requested_results),
+                "sSortField": "score",
+                "aSelectedFacets": "",
+            },
+            headers=HTML_BROWSER_HEADERS,
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except (requests.RequestException, requests.Timeout) as exc:
+        logger.error("e-codices search failed for query '%s': %s", q, exc, exc_info=True)
+        return []
+
+    resolver = EcodicesResolver()
+    results: list[SearchResult] = []
+    for chunk in _ECODICES_RESULT_SPLIT_RE.split(response.text):
+        if not chunk.strip():
+            continue
+        if result := _build_ecodices_result(chunk, resolver):
+            results.append(result)
+        if len(results) >= requested_results:
+            break
+
+    return results
+
+
 def _extract_institut_candidates(html: str, max_results: int) -> list[tuple[str, str]]:
     """Extract unique `(doc_id, title)` candidates from Institut HTML search page."""
     candidates: list[tuple[str, str]] = []
@@ -479,7 +584,9 @@ def _fallback_institut_result(doc_id: str, title: str, manifest_url: str) -> Sea
 
 def _clean_html_text(value: str) -> str:
     no_tags = _HTML_TAG_RE.sub(" ", value or "")
-    return _SPACE_RE.sub(" ", unescape(no_tags)).strip()
+    compact = _SPACE_RE.sub(" ", unescape(no_tags)).strip()
+    compact = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", compact)
+    return _SPACE_BEFORE_SINGLE_PERIOD_RE.sub(".", compact)
 
 
 def _archive_scalar(value: Any) -> str:
@@ -491,6 +598,109 @@ def _archive_scalar(value: Any) -> str:
 def _archive_thumbnail_url(identifier: str) -> str:
     encoded = quote(f"{identifier}/__ia_thumb.jpg", safe="")
     return f"https://iiif.archive.org/image/iiif/2/{encoded}/full/180,/0/default.jpg"
+
+
+def _first_text(values: Any) -> str:
+    if isinstance(values, list):
+        for value in values:
+            clean = _clean_html_text(str(value or ""))
+            if clean:
+                return clean
+        return ""
+    return _clean_html_text(str(values or ""))
+
+
+def _build_bodleian_result(member: dict[str, Any], resolver: OxfordResolver) -> SearchResult | None:
+    viewer_url = str(member.get("id") or "").strip()
+    manifest_url = str(member.get("manifest", {}).get("id") or "").strip()
+    _, doc_id = resolver.get_manifest_url(viewer_url)
+    if not manifest_url or not doc_id:
+        return None
+
+    display_fields = member.get("displayFields", {})
+    if not isinstance(display_fields, dict):
+        display_fields = {}
+
+    title = _first_text(display_fields.get("title")) or _first_text(member.get("shelfmark")) or doc_id
+    author = _first_text(display_fields.get("people")) or "Autore sconosciuto"
+    date = _first_text(display_fields.get("dateStatement"))
+    description = _first_text(display_fields.get("snippet"))
+    if not description:
+        surface_count = int(member.get("surfaceCount") or 0)
+        if surface_count > 0:
+            description = f"{surface_count} pagine"
+
+    thumbnail = _first_bodleian_thumbnail(member.get("thumbnail"))
+    result: SearchResult = {
+        "id": doc_id,
+        "title": title[:200],
+        "author": author[:150],
+        "description": description[:400],
+        "publisher": "Bodleian Libraries",
+        "manifest": manifest_url,
+        "thumbnail": thumbnail,
+        "thumb": thumbnail,
+        "library": "Bodleian",
+        "raw": {"viewer_url": viewer_url},
+    }
+    if date:
+        result["date"] = date[:100]
+    return result
+
+
+def _first_bodleian_thumbnail(value: Any) -> str:
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict) and item.get("id"):
+                return str(item["id"]).strip()
+    if isinstance(value, dict) and value.get("id"):
+        return str(value["id"]).strip()
+    return ""
+
+
+def _build_ecodices_result(chunk: str, resolver: EcodicesResolver) -> SearchResult | None:
+    facsimile_match = _ECODICES_FACSIMILE_RE.search(chunk)
+    if not facsimile_match:
+        return None
+
+    viewer_url = facsimile_match.group("href")
+    manifest_url, doc_id = resolver.get_manifest_url(viewer_url)
+    if not manifest_url or not doc_id:
+        return None
+
+    title = _regex_group_text(_ECODICES_MS_TITLE_RE, chunk) or _regex_group_text(_ECODICES_TITLE_RE, chunk) or doc_id
+    collection = _regex_group_text(_ECODICES_COLLECTION_RE, chunk)
+    description = _regex_group_text(_ECODICES_SUMMARY_RE, chunk)
+    thumbnail = _build_ecodices_thumbnail(chunk)
+
+    return {
+        "id": doc_id,
+        "title": title[:200],
+        "author": "Autore sconosciuto",
+        "description": description[:500],
+        "publisher": collection[:200],
+        "manifest": manifest_url,
+        "thumbnail": thumbnail,
+        "thumb": thumbnail,
+        "library": "e-codices",
+        "raw": {"viewer_url": viewer_url},
+    }
+
+
+def _regex_group_text(pattern: re.Pattern[str], chunk: str) -> str:
+    if not (match := pattern.search(chunk)):
+        return ""
+    return _clean_html_text(match.group("value"))
+
+
+def _build_ecodices_thumbnail(chunk: str) -> str:
+    if not (match := _ECODICES_IMAGE_RE.search(chunk)):
+        return ""
+    base = str(match.group("base") or "").strip().rstrip("/")
+    path = str(match.group("path") or "").strip().lstrip("/")
+    if not base or not path:
+        return ""
+    return f"{base}/{path}/full/180,/0/default.jpg"
 
 
 def get_manifest_details(manifest_url: str) -> SearchResult | None:
@@ -666,8 +876,18 @@ def _search_archive_provider(query: str, _payload: dict[str, Any]) -> list[Searc
     return search_archive_org(query, max_results=10)
 
 
+def _search_bodleian_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
+    return search_bodleian(query, max_results=10)
+
+
+def _search_ecodices_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
+    return search_ecodices(query, max_results=10)
+
+
 _SEARCH_STRATEGY_HANDLERS: Final[dict[str, Any]] = {
     "archive_org": _search_archive_provider,
+    "bodleian": _search_bodleian_provider,
+    "ecodices": _search_ecodices_provider,
     "gallica": _search_gallica_provider,
     "institut": _search_institut_provider,
     "vatican": _search_vatican_provider,
@@ -684,6 +904,8 @@ __all__ = [
     "search_vatican",
     "get_manifest_details",
     "search_archive_org",
+    "search_bodleian",
+    "search_ecodices",
     "smart_search",
     "TIMEOUT_SECONDS",
 ]
