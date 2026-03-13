@@ -34,17 +34,13 @@ All notable changes to this project are documented in this file.
 
 ### Bug Fixes
 
-- Restore semantic release changelog sync
-  ([`4d174d5`](https://github.com/nikazzio/universal-iiif-studio/commit/4d174d55fa3dd5945be0a052c61b1a0ba49fe566))
+- Restore semantic release changelog sync ([`4d174d5`](https://github.com/nikazzio/universal-iiif-studio/commit/4d174d55fa3dd5945be0a052c61b1a0ba49fe566))
 
 ### Documentation
 
-- Backfill historical changelog releases
-  ([`b128ea9`](https://github.com/nikazzio/universal-iiif-studio/commit/b128ea9c70fd68064c57000d8885c078a8fda0c8))
+- Backfill historical changelog releases ([`b128ea9`](https://github.com/nikazzio/universal-iiif-studio/commit/b128ea9c70fd68064c57000d8885c078a8fda0c8))
 
-- Fix changelog markdownlint regressions
-  ([`0efb088`](https://github.com/nikazzio/universal-iiif-studio/commit/0efb088221b7f75744127afd0f1f4c63f2392dce))
-
+- Fix changelog markdownlint regressions ([`0efb088`](https://github.com/nikazzio/universal-iiif-studio/commit/0efb088221b7f75744127afd0f1f4c63f2392dce))
 
 ## v0.22.3 (2026-03-11)
 
