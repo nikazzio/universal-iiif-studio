@@ -42,9 +42,11 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
     }
 
     def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
-        assert "advancedsearch.php" in url
-        assert "mediatype:texts" in str((params or {}).get("q") or "")
-        return _Resp(json_data=payload)
+        if "advancedsearch.php" in url:
+            assert "mediatype:texts" in str((params or {}).get("q") or "")
+            return _Resp(json_data=payload)
+        assert url == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
+        return _Resp(json_data={"type": "Manifest", "items": [{}]})
 
     monkeypatch.setattr(discovery.requests, "get", fake_get)
 
@@ -60,6 +62,45 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
     assert "Subject-index" in first["title"]
     assert "archive.org/details/b29000427_0001" in first["raw"]["viewer_url"]
     assert first["thumbnail"].startswith("https://iiif.archive.org/image/iiif/2/")
+
+
+def test_search_archive_org_skips_broken_manifests(monkeypatch):
+    """Archive search should drop results whose IIIF manifest probe fails."""
+    payload = {
+        "response": {
+            "docs": [
+                {
+                    "identifier": "broken_item_0001",
+                    "title": "Broken item",
+                    "creator": ["Archive Bot"],
+                    "date": "1901",
+                    "mediatype": "texts",
+                },
+                {
+                    "identifier": "working_item_0002",
+                    "title": "Working item",
+                    "creator": ["Archive Bot"],
+                    "date": "1902",
+                    "mediatype": "texts",
+                },
+            ]
+        }
+    }
+
+    def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
+        if "advancedsearch.php" in url:
+            return _Resp(json_data=payload)
+        if url.endswith("/broken_item_0001/manifest.json"):
+            raise requests.HTTPError("HTTP 500")
+        if url.endswith("/working_item_0002/manifest.json"):
+            return _Resp(json_data={"type": "Manifest", "items": [{}]})
+        raise AssertionError(f"Unexpected URL {url}")
+
+    monkeypatch.setattr(discovery.requests, "get", fake_get)
+
+    results = discovery.search_archive_org("archive bot", max_results=2)
+    assert len(results) == 1
+    assert results[0]["id"] == "working_item_0002"
 
 
 def test_archive_org_resolver_rejects_ambiguous_free_text():

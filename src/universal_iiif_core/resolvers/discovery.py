@@ -390,10 +390,11 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
 
     clean_q = q.replace('"', " ")
     requested_results = max(1, min(max_results, 20))
+    fetch_rows = min(max(requested_results * 3, requested_results), 50)
     params = {
         "q": f"({clean_q}) AND mediatype:texts",
         "fl[]": ["identifier", "title", "creator", "date", "mediatype"],
-        "rows": str(requested_results),
+        "rows": str(fetch_rows),
         "page": "1",
         "output": "json",
     }
@@ -426,6 +427,9 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
         manifest_url, doc_id = resolver.get_manifest_url(identifier)
         if not manifest_url or not doc_id:
             continue
+        if not _archive_manifest_is_usable(manifest_url):
+            logger.debug("Skipping Archive.org result with unusable manifest: %s", manifest_url)
+            continue
 
         title = _archive_scalar(doc.get("title")) or identifier
         author = _archive_scalar(doc.get("creator")) or "Autore sconosciuto"
@@ -450,6 +454,8 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
         if date:
             result["date"] = date[:100]
         results.append(result)
+        if len(results) >= requested_results:
+            break
 
     return results[:requested_results]
 
@@ -607,6 +613,27 @@ def _archive_scalar(value: Any) -> str:
 def _archive_thumbnail_url(identifier: str) -> str:
     encoded = quote(f"{identifier}/__ia_thumb.jpg", safe="")
     return f"https://iiif.archive.org/image/iiif/2/{encoded}/full/180,/0/default.jpg"
+
+
+def _archive_manifest_is_usable(manifest_url: str) -> bool:
+    """Quickly validate Archive.org manifests before exposing them in search results."""
+    try:
+        response = requests.get(
+            manifest_url,
+            headers={**HTML_BROWSER_HEADERS, "Accept": "application/json"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.debug("Archive.org manifest probe failed for %s: %s", manifest_url, exc)
+        return False
+
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("type") == "Manifest" or payload.get("@type") == "sc:Manifest":
+        return True
+    return "items" in payload or "sequences" in payload
 
 
 def _first_text(values: Any) -> str:
