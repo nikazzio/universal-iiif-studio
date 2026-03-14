@@ -21,8 +21,11 @@ class ArchiveOrgResolver(BaseResolver):
         text = (url_or_id or "").strip()
         if not text:
             return False
-        lowered = text.lower()
-        return "archive.org/" in lowered or "iiif.archive.org/" in lowered or self._looks_like_bare_identifier(text)
+        if self._looks_like_bare_identifier(text):
+            return True
+        parsed = urlparse(text)
+        hostname = (parsed.netloc or "").lower()
+        return hostname == "archive.org" or hostname.endswith(".archive.org")
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
         """Build the canonical Archive.org IIIF manifest URL."""

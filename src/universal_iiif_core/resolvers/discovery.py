@@ -6,7 +6,7 @@ import xml.etree.ElementTree
 from html import unescape
 from json import JSONDecodeError
 from typing import Any, Final
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import requests
 
@@ -38,6 +38,7 @@ BODLEIAN_SEARCH_URL: Final = "https://digital.bodleian.ox.ac.uk/search/"
 ECODICES_SEARCH_URL: Final = "https://www.e-codices.unifr.ch/en/search/all"
 VATICAN_HOME_URL: Final = "https://digi.vatlib.it/mss/"
 VATICAN_SEARCH_URL: Final = "https://digi.vatlib.it/mss/search"
+ARCHIVE_MANIFEST_PROBE_LIMIT: Final = 15
 
 # Browser-like headers are required for several catalog/search surfaces that reject
 # generic scripted requests with 403/500 responses.
@@ -384,7 +385,7 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
 
     clean_q = q.replace('"', " ")
     requested_results = max(1, min(max_results, 20))
-    fetch_rows = min(max(requested_results * 3, requested_results), 50)
+    fetch_rows = min(max(requested_results * 3, requested_results), 30)
     params = {
         "q": f"({clean_q}) AND mediatype:texts",
         "fl[]": ["identifier", "title", "creator", "date", "mediatype"],
@@ -393,61 +394,32 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
         "output": "json",
     }
 
-    try:
-        logger.debug("Searching Archive.org advancedsearch: %s", clean_q)
-        response = requests.get(
-            ARCHIVE_ADVANCEDSEARCH_URL,
-            params=params,
-            headers=HTML_BROWSER_HEADERS,
-            timeout=TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except (requests.RequestException, ValueError) as exc:
-        logger.error("Archive.org search failed for query '%s': %s", clean_q, exc, exc_info=True)
+    logger.debug("Searching Archive.org advancedsearch: %s", clean_q)
+    payload = get_json(
+        _build_archive_search_url(params),
+        headers=HTML_BROWSER_HEADERS,
+        retries=2,
+    )
+    if not isinstance(payload, dict):
+        logger.error("Archive.org search failed for query '%s': empty/invalid payload", clean_q)
         return []
 
     docs = payload.get("response", {}).get("docs", [])
     resolver = ArchiveOrgResolver()
     results: list[SearchResult] = []
+    manifest_probes = 0
 
     for doc in docs:
-        if not isinstance(doc, dict):
+        manifest_url, doc_id, manifest_probes, should_stop = _resolve_archive_candidate(
+            doc,
+            resolver,
+            manifest_probes,
+        )
+        if should_stop:
+            break
+        if not manifest_url or not doc_id or not isinstance(doc, dict):
             continue
-        identifier = str(doc.get("identifier") or "").strip()
-        if not identifier:
-            continue
-
-        manifest_url, doc_id = resolver.get_manifest_url(identifier)
-        if not manifest_url or not doc_id:
-            continue
-        if not _archive_manifest_is_usable(manifest_url):
-            logger.debug("Skipping Archive.org result with unusable manifest: %s", manifest_url)
-            continue
-
-        title = _archive_scalar(doc.get("title")) or identifier
-        author = _archive_scalar(doc.get("creator")) or "Autore sconosciuto"
-        date = _archive_scalar(doc.get("date"))
-        mediatype = _archive_scalar(doc.get("mediatype")) or "texts"
-        thumb = _archive_thumbnail_url(doc_id)
-
-        result: SearchResult = {
-            "id": doc_id,
-            "title": title[:200],
-            "author": author[:100],
-            "manifest": manifest_url,
-            "thumbnail": thumb,
-            "thumb": thumb,
-            "viewer_url": f"https://archive.org/details/{doc_id}",
-            "library": "Archive.org",
-            "publisher": "Internet Archive",
-            "raw": {
-                "viewer_url": f"https://archive.org/details/{doc_id}",
-                "mediatype": mediatype,
-            },
-        }
-        if date:
-            result["date"] = date[:100]
+        result = _build_archive_result(doc, doc_id=doc_id, manifest_url=manifest_url)
         results.append(result)
         if len(results) >= requested_results:
             break
@@ -614,16 +586,13 @@ def _archive_thumbnail_url(identifier: str) -> str:
 
 def _archive_manifest_is_usable(manifest_url: str) -> bool:
     """Quickly validate Archive.org manifests before exposing them in search results."""
-    try:
-        response = requests.get(
-            manifest_url,
-            headers={**HTML_BROWSER_HEADERS, "Accept": "application/json"},
-            timeout=10,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except (requests.RequestException, ValueError) as exc:
-        logger.debug("Archive.org manifest probe failed for %s: %s", manifest_url, exc)
+    payload = get_json(
+        manifest_url,
+        headers={**HTML_BROWSER_HEADERS, "Accept": "application/json"},
+        retries=1,
+    )
+    if payload is None:
+        logger.debug("Archive.org manifest probe failed for %s: empty payload", manifest_url)
         return False
 
     if not isinstance(payload, dict):
@@ -631,6 +600,62 @@ def _archive_manifest_is_usable(manifest_url: str) -> bool:
     if payload.get("type") == "Manifest" or payload.get("@type") == "sc:Manifest":
         return True
     return "items" in payload or "sequences" in payload
+
+
+def _build_archive_search_url(params: dict[str, Any]) -> str:
+    query = urlencode(params, doseq=True)
+    return f"{ARCHIVE_ADVANCEDSEARCH_URL}?{query}"
+
+
+def _resolve_archive_candidate(
+    doc: Any,
+    resolver: ArchiveOrgResolver,
+    manifest_probes: int,
+) -> tuple[str | None, str | None, int, bool]:
+    if not isinstance(doc, dict):
+        return None, None, manifest_probes, False
+    identifier = str(doc.get("identifier") or "").strip()
+    if not identifier:
+        return None, None, manifest_probes, False
+
+    manifest_url, doc_id = resolver.get_manifest_url(identifier)
+    if not manifest_url or not doc_id:
+        return None, None, manifest_probes, False
+    if manifest_probes >= ARCHIVE_MANIFEST_PROBE_LIMIT:
+        logger.debug("Archive.org manifest probe limit reached (%s)", ARCHIVE_MANIFEST_PROBE_LIMIT)
+        return None, None, manifest_probes, True
+    manifest_probes += 1
+    if not _archive_manifest_is_usable(manifest_url):
+        logger.debug("Skipping Archive.org result with unusable manifest: %s", manifest_url)
+        return None, None, manifest_probes, False
+    return manifest_url, doc_id, manifest_probes, False
+
+
+def _build_archive_result(doc: dict[str, Any], *, doc_id: str, manifest_url: str) -> SearchResult:
+    title = _archive_scalar(doc.get("title")) or doc_id
+    author = _archive_scalar(doc.get("creator")) or "Autore sconosciuto"
+    date = _archive_scalar(doc.get("date"))
+    mediatype = _archive_scalar(doc.get("mediatype")) or "texts"
+    thumb = _archive_thumbnail_url(doc_id)
+
+    result: SearchResult = {
+        "id": doc_id,
+        "title": title[:200],
+        "author": author[:100],
+        "manifest": manifest_url,
+        "thumbnail": thumb,
+        "thumb": thumb,
+        "viewer_url": f"https://archive.org/details/{doc_id}",
+        "library": "Archive.org",
+        "publisher": "Internet Archive",
+        "raw": {
+            "viewer_url": f"https://archive.org/details/{doc_id}",
+            "mediatype": mediatype,
+        },
+    }
+    if date:
+        result["date"] = date[:100]
+    return result
 
 
 def _first_text(values: Any) -> str:

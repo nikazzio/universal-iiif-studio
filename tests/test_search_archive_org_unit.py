@@ -1,23 +1,8 @@
 from __future__ import annotations
 
-import requests
-
 from universal_iiif_core.providers import get_provider
 from universal_iiif_core.resolvers import discovery
 from universal_iiif_core.resolvers.archive_org import ArchiveOrgResolver
-
-
-class _Resp:
-    def __init__(self, *, json_data: dict | None = None, status_code: int = 200):
-        self._json_data = json_data or {}
-        self.status_code = status_code
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise requests.HTTPError(f"HTTP {self.status_code}")
-
-    def json(self):
-        return self._json_data
 
 
 def test_search_archive_org_blank_input_returns_empty():
@@ -41,14 +26,14 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
         }
     }
 
-    def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
+    def fake_get_json(url, headers=None, retries=3):  # noqa: ARG001
         if "advancedsearch.php" in url:
-            assert "mediatype:texts" in str((params or {}).get("q") or "")
-            return _Resp(json_data=payload)
+            assert "mediatype%3Atexts" in url
+            return payload
         assert url == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
-        return _Resp(json_data={"type": "Manifest", "items": [{}]})
+        return {"type": "Manifest", "items": [{}]}
 
-    monkeypatch.setattr(discovery.requests, "get", fake_get)
+    monkeypatch.setattr(discovery, "get_json", fake_get_json)
 
     results = discovery.search_archive_org("london library", max_results=5)
     assert len(results) == 1
@@ -88,16 +73,16 @@ def test_search_archive_org_skips_broken_manifests(monkeypatch):
         }
     }
 
-    def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
+    def fake_get_json(url, headers=None, retries=3):  # noqa: ARG001
         if "advancedsearch.php" in url:
-            return _Resp(json_data=payload)
+            return payload
         if url.endswith("/broken_item_0001/manifest.json"):
-            raise requests.HTTPError("HTTP 500")
+            return None
         if url.endswith("/working_item_0002/manifest.json"):
-            return _Resp(json_data={"type": "Manifest", "items": [{}]})
+            return {"type": "Manifest", "items": [{}]}
         raise AssertionError(f"Unexpected URL {url}")
 
-    monkeypatch.setattr(discovery.requests, "get", fake_get)
+    monkeypatch.setattr(discovery, "get_json", fake_get_json)
 
     results = discovery.search_archive_org("archive bot", max_results=2)
     assert len(results) == 1

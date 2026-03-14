@@ -10,6 +10,10 @@ _MANIFEST_RE = re.compile(
     r"/metadata/iiif/(?P<compound>[a-z0-9._-]+-[a-z0-9._-]+)/manifest\.json$",
     flags=re.IGNORECASE,
 )
+_DIRECT_COMPOUND_ID_RE = re.compile(
+    r"^(?:[a-z0-9._-]+-)?[a-z0-9._-]+-\d{3,}$",
+    flags=re.IGNORECASE,
+)
 
 
 class EcodicesResolver(BaseResolver):
@@ -25,7 +29,7 @@ class EcodicesResolver(BaseResolver):
         lowered = text.lower()
         if "e-codices.unifr.ch" in lowered or "e-codices.ch" in lowered:
             return True
-        return bool(re.fullmatch(r"[a-z0-9._-]+-[a-z0-9._-]+", text, flags=re.IGNORECASE))
+        return bool(_DIRECT_COMPOUND_ID_RE.fullmatch(text))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
         """Build the canonical e-codices manifest URL."""
@@ -41,9 +45,9 @@ class EcodicesResolver(BaseResolver):
 
     @staticmethod
     def _extract_compound_id(value: str) -> str | None:
-        direct = re.fullmatch(r"([a-z0-9._-]+-[a-z0-9._-]+)", value, flags=re.IGNORECASE)
+        direct = _DIRECT_COMPOUND_ID_RE.fullmatch(value)
         if direct:
-            return direct.group(1).lower()
+            return direct.group(0).lower()
 
         parsed = urlparse(value)
         path = parsed.path or ""

@@ -83,6 +83,7 @@ def test_heidelberg_resolver_id_and_viewer_url():
 
     assert resolver.can_resolve("cpg123")
     assert not resolver.can_resolve("abc123")
+    assert resolver.get_manifest_url("prefix cpg123 suffix") == (None, None)
 
 
 def test_cambridge_resolver_id_and_viewer_url():
@@ -110,6 +111,7 @@ def test_ecodices_resolver_compound_id_and_page_url():
     manifest_url2, doc_id2 = resolver.get_manifest_url("https://www.e-codices.unifr.ch/en/csg/0001")
     assert manifest_url2 == "https://www.e-codices.unifr.ch/metadata/iiif/csg-0001/manifest.json"
     assert doc_id2 == "csg-0001"
+    assert resolver.can_resolve("foo-bar") is False
 
 
 def test_harvard_resolver_extracts_drs_id():
@@ -129,6 +131,7 @@ def test_loc_resolver_strips_span_suffix():
     assert manifest_url == "https://www.loc.gov/item/2021668145/manifest.json"
     assert doc_id == "2021668145"
     assert not resolver.can_resolve("https://example.org/item/2021668145/")
+    assert not resolver.can_resolve("https://notloc.gov/item/2021668145/")
 
 
 def test_archive_org_resolver_identifier_details_and_manifest_url():
@@ -146,3 +149,4 @@ def test_archive_org_resolver_identifier_details_and_manifest_url():
     manifest_url3, doc_id3 = resolver.get_manifest_url("https://iiif.archive.org/iiif/b29000427_0001/manifest.json")
     assert manifest_url3 == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
     assert doc_id3 == "b29000427_0001"
+    assert not resolver.can_resolve("https://notarchive.org/details/b29000427_0001")

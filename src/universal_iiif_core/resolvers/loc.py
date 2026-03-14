@@ -20,7 +20,8 @@ class LOCResolver(BaseResolver):
             return False
         parsed = urlparse(text)
         hostname = (parsed.netloc or "").lower()
-        return hostname.endswith("loc.gov") and bool(_PATH_RE.search(parsed.path or ""))
+        is_loc_host = hostname == "loc.gov" or hostname.endswith(".loc.gov")
+        return is_loc_host and bool(_PATH_RE.search(parsed.path or ""))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
         """Build the canonical Library of Congress manifest URL."""

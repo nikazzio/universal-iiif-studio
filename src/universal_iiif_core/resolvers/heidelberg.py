@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from .base import BaseResolver
 
@@ -33,8 +34,13 @@ class HeidelbergResolver(BaseResolver):
 
     @staticmethod
     def _extract_id(value: str) -> str | None:
-        if match := _DIRECT_ID_RE.fullmatch(value.strip()):
+        clean = value.strip()
+        if match := _DIRECT_ID_RE.fullmatch(clean):
             return match.group(1).lower()
-        if match := _DIRECT_ID_RE.search(value):
+        parsed = urlparse(clean)
+        hostname = (parsed.netloc or "").lower()
+        if hostname != "digi.ub.uni-heidelberg.de":
+            return None
+        if match := _DIRECT_ID_RE.search(parsed.path or ""):
             return match.group(1).lower()
         return None
