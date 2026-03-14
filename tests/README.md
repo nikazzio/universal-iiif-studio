@@ -14,6 +14,9 @@ The test suite is `pytest`-first and covers both the shared IIIF core and the Fa
 - `test_discovery_handlers_resolve_manifest.py`
   - end-to-end discovery route behavior
   - search-result rendering vs manifest-preview rendering
+- `test_discovery_orchestrator.py`, `test_discovery_search_adapters.py`
+  - orchestrator policy contract (`manifest|results|not_found`)
+  - provider search-adapter dispatch and payload forwarding (e.g. Gallica filter)
 - `test_live.py`
   - optional live smoke checks against real remote providers
 - downloader / export / library tests

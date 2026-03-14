@@ -35,6 +35,7 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - **Centralized HTTP client** with automatic retry, exponential backoff, and per-host rate limiting
 - Discovery with shared provider registry for web + CLI
 - Discovery with free-text search plus provider-specific filters (currently Gallica type filter with labels `Tutti i materiali`, `Solo manoscritti`, `Solo libri a stampa`)
+- Discovery internals split into typed orchestrator/search adapters (`universal_iiif_core.discovery`) and modular UI components (`studio_ui.components.discovery_*`)
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio

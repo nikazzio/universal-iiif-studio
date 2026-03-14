@@ -14,7 +14,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards, professional status panel).
 * **Routes**:
   * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations. Implements Mirador local/remote mode selection.
-  * `discovery_handlers.py`: Orchestrates search, add-to-library, and download manager actions.
+  * `discovery_handlers.py`: Route entrypoints for search/add/download flows, delegating persistence helpers to `discovery_persistence.py`.
   * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
   * `library_query.py`: Shared filtering/query/view-model helpers for Library routes.
 * **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
@@ -24,6 +24,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 
 * **Discovery Module**:
   * **Provider Registry**: A shared provider catalog drives web Discovery, settings options, and CLI direct resolution from the same metadata source.
+  * **Orchestrator package**: `universal_iiif_core.discovery` now owns typed contracts and orchestration policy (`contracts.py`, `orchestrator.py`) plus search strategy adapter mapping (`search_adapters.py`).
   * **Resolvers**: Direct resolution still ends in provider-specific resolver classes, but registration happens through the provider registry rather than UI/CLI hardcoding.
   * **Search Modes**: Each provider declares `search_mode` (`direct`, `fallback`, `search_first`) plus an optional `search_strategy`. This keeps the UX consistent while allowing provider-specific search adapters.
   * **Search Coverage**: Current searchable providers are `Gallica`, `Vaticana`, `Institut de France`, `Internet Archive`, `Bodleian`, and `e-codices`. The remaining providers are currently direct-resolution only.
@@ -128,7 +129,7 @@ Studio supports **two distinct viewing modes** for the Mirador viewer, automatic
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
 5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.
 6. **Centralized HTTP Client (Issue #71, 2026-03-09)**: Eliminated ~200+ lines of duplicate retry/backoff logic by introducing `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics. All IIIF core modules now use this centralized client.
-7. **Current Discovery Refactor Boundary (2026-03-14)**: The provider registry is shared and stable, but `universal_iiif_core.resolvers.discovery` still mixes orchestration with provider-specific adapters/parsers, and `studio_ui.components.discovery` remains a large renderer. Further file-splitting should happen in a dedicated refactor, not opportunistically inside feature PRs.
+7. **Current Discovery Refactor Boundary (2026-03-14)**: discovery orchestration and search adapter dispatch are now extracted in `universal_iiif_core.discovery`, and UI rendering is split into dedicated modules (`discovery_form`, `discovery_results`, `discovery_download_panel`, `discovery_page`) with a compatibility aggregator. Remaining technical debt is mostly inside provider-specific parser/search code still hosted in `universal_iiif_core.resolvers.discovery`.
 
 ## Local Data & Cleanup
 

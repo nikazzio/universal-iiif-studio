@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import unicodedata
 import xml.etree.ElementTree
-from dataclasses import dataclass, field
 from html import unescape
 from json import JSONDecodeError
 from typing import Any, Final
@@ -11,9 +10,12 @@ from urllib.parse import quote
 
 import requests
 
+from ..discovery.contracts import ProviderResolution
+from ..discovery.orchestrator import resolve_provider_input as resolve_provider_input_orchestrated
+from ..discovery.search_adapters import build_search_strategy_handlers
 from ..exceptions import ResolverError
 from ..logger import get_logger
-from ..providers import IIIFProvider, get_provider
+from ..providers import IIIFProvider
 from ..utils import get_json
 from .archive_org import ArchiveOrgResolver
 from .ecodices import EcodicesResolver
@@ -120,18 +122,6 @@ _VATICAN_NUMERIC_COLLECTIONS: Final[list[str]] = [
 _VATICAN_TEXT_PREFIXES: Final[list[str]] = ["Urb.lat.", "Vat.lat.", "Pal.lat.", "Reg.lat.", "Barb.lat."]
 
 
-@dataclass
-class ProviderResolution:
-    """Normalized discovery outcome for a selected provider."""
-
-    provider: IIIFProvider
-    status: str
-    manifest_url: str | None = None
-    doc_id: str | None = None
-    results: list[SearchResult] = field(default_factory=list)
-    not_found_hint: str = ""
-
-
 def smart_search(input_text: str, *, gallica_type_filter: str = "all") -> list[SearchResult]:
     """PUNTO DI INGRESSO PRINCIPALE (Logica Ibrida).
 
@@ -200,7 +190,6 @@ def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | N
 def _search_with_provider(
     provider: IIIFProvider,
     query: str,
-    *,
     filters: dict[str, Any] | None = None,
 ) -> list[SearchResult]:
     text = (query or "").strip()
@@ -215,11 +204,6 @@ def _search_with_provider(
 
 
 def _try_provider_direct_resolution(provider: IIIFProvider, text: str) -> tuple[str | None, str | None]:
-    """Attempt direct resolution only when the provider explicitly claims the input.
-
-    This guard is important for providers with free-text search support: we only want to
-    bypass search when the input is a plausible direct identifier or provider URL.
-    """
     resolver = provider.resolver()
     if not resolver.can_resolve(text):
         return None, None
@@ -232,38 +216,15 @@ def resolve_provider_input(
     *,
     filters: dict[str, Any] | None = None,
 ) -> ProviderResolution:
-    """Resolve a discovery request through the provider registry."""
-    text = (user_input or "").strip()
-    provider = get_provider(library, fallback="Unknown")
-    filter_payload = dict(filters or {})
-
-    if not text:
-        return ProviderResolution(provider=provider, status="not_found", not_found_hint=provider.not_found_hint)
-
-    if provider.search_mode == "search_first" and provider.supports_search():
-        results = _search_with_provider(provider, text, filters=filter_payload)
-        if results:
-            return ProviderResolution(provider=provider, status="results", results=results)
-        manifest_url, doc_id = _try_provider_direct_resolution(provider, text)
-        if manifest_url:
-            return ProviderResolution(
-                provider=provider,
-                status="manifest",
-                manifest_url=manifest_url,
-                doc_id=doc_id,
-            )
-        return ProviderResolution(provider=provider, status="not_found", not_found_hint=provider.not_found_hint)
-
-    manifest_url, doc_id = _try_provider_direct_resolution(provider, text)
-    if manifest_url:
-        return ProviderResolution(provider=provider, status="manifest", manifest_url=manifest_url, doc_id=doc_id)
-
-    if provider.supports_search():
-        results = _search_with_provider(provider, text, filters=filter_payload)
-        if results:
-            return ProviderResolution(provider=provider, status="results", results=results)
-
-    return ProviderResolution(provider=provider, status="not_found", not_found_hint=provider.not_found_hint)
+    """Resolve discovery input via the shared orchestrator module."""
+    return resolve_provider_input_orchestrated(
+        library,
+        user_input,
+        filters=filters,
+        search_handlers=_SEARCH_STRATEGY_HANDLERS,
+        resolve_shelfmark_fn=resolve_shelfmark,
+        search_with_provider_fn=_search_with_provider,
+    )
 
 
 def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
@@ -1024,38 +985,14 @@ def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchR
         return None
 
 
-def _search_gallica_provider(query: str, payload: dict[str, Any]) -> list[SearchResult]:
-    return smart_search(query, gallica_type_filter=str(payload.get("gallica_type") or "all"))
-
-
-def _search_vatican_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
-    return search_vatican(query, max_results=5)
-
-
-def _search_institut_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
-    return search_institut(query, max_results=10)
-
-
-def _search_archive_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
-    return search_archive_org(query, max_results=10)
-
-
-def _search_bodleian_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
-    return search_bodleian(query, max_results=10)
-
-
-def _search_ecodices_provider(query: str, _payload: dict[str, Any]) -> list[SearchResult]:
-    return search_ecodices(query, max_results=10)
-
-
-_SEARCH_STRATEGY_HANDLERS: Final[dict[str, Any]] = {
-    "archive_org": _search_archive_provider,
-    "bodleian": _search_bodleian_provider,
-    "ecodices": _search_ecodices_provider,
-    "gallica": _search_gallica_provider,
-    "institut": _search_institut_provider,
-    "vatican": _search_vatican_provider,
-}
+_SEARCH_STRATEGY_HANDLERS: Final[dict[str, Any]] = build_search_strategy_handlers(
+    smart_search_fn=smart_search,
+    search_vatican_fn=search_vatican,
+    search_institut_fn=search_institut,
+    search_archive_org_fn=search_archive_org,
+    search_bodleian_fn=search_bodleian,
+    search_ecodices_fn=search_ecodices,
+)
 
 
 __all__ = [
