@@ -1,75 +1,76 @@
-# Test Directory
+# Test Suite Guide
 
-This directory contains test scripts and fixtures for the Universal IIIF project.
+The test suite is `pytest`-first and covers both the shared IIIF core and the FastHTML/HTMX UI surface.
 
-## Structure
+## Main Areas
 
-```
-tests/
-├── README.md                      # This file
-├── fixtures/                      # Test data and sample files
-│   └── gallica_sample.xml        # Sample Gallica SRU API response
-├── test_discovery_resolvers.py   # Tests for library resolvers (Gallica, Oxford, Vaticana)
-├── test_search_apis.py           # Tests for search APIs (Gallica SRU, Oxford)
-├── test_oxford_api.py            # Legacy test for deprecated Oxford API
-├── test_live.py                  # Live download tests
-└── out/                          # Output directory for test downloads
-```
+- `test_providers.py`, `test_discovery_resolvers*.py`
+  - provider registry normalization
+  - shared CLI/web direct resolution
+  - regression coverage for provider autodetection order
+- `test_search_*_unit.py`
+  - provider-specific search adapters
+  - result parsing and normalization into canonical `SearchResult` payloads
+- `test_discovery_handlers_resolve_manifest.py`
+  - end-to-end discovery route behavior
+  - search-result rendering vs manifest-preview rendering
+- `test_discovery_orchestrator.py`, `test_discovery_search_adapters.py`
+  - orchestrator policy contract (`manifest|results|not_found`)
+  - provider search-adapter dispatch and payload forwarding (e.g. Gallica filter)
+- `test_live.py`
+  - optional live smoke checks against real remote providers
+- downloader / export / library tests
+  - runtime staging
+  - PDF behavior
+  - vault state
+  - UI handler responses
+
+## Current Search Adapter Coverage
+
+- `Gallica`
+- `Vaticana`
+- `Institut de France`
+- `Archive.org`
+- `Bodleian`
+- `e-codices`
+- `Cambridge`
+- `Heidelberg`
+- `Harvard`
+- `Library of Congress`
+
+Direct-only providers currently covered through resolver/provider tests:
+
+- generic direct manifest URLs
 
 ## Running Tests
 
-All test scripts should be run from the project root directory:
-
-### Discovery Resolvers Test
-Tests the `resolve_shelfmark()` function for all three libraries:
+From the project root:
 
 ```bash
-python -m tests.test_discovery_resolvers
+.venv/bin/pytest tests/
 ```
 
-### Search APIs Test
-Tests the search functionality for Gallica and Oxford:
+Targeted examples:
 
 ```bash
-python -m tests.test_search_apis
-```
-
-**Note**: Oxford API test will fail as the API is deprecated (returns 404).
-
-### Oxford API Test (Legacy)
-Direct test of the Oxford API endpoint:
-
-```bash
-python -m tests.test_oxford_api
-```
-
-This test is kept for historical reference but will fail as the API is no longer available.
-
-### Live Download Test
-Full end-to-end test with actual downloads:
-
-```bash
-python -m tests.test_live
+.venv/bin/pytest tests/test_providers.py -q
+.venv/bin/pytest tests/test_search_archive_org_unit.py tests/test_search_vatican_unit.py -q
+.venv/bin/pytest tests/test_discovery_handlers_resolve_manifest.py -q
 ```
 
 ## Fixtures
 
-The `fixtures/` directory contains sample API responses and test data:
-
-- **`gallica_sample.xml`**: Sample XML response from Gallica's SRU API, useful for offline testing and understanding the response structure.
+- `fixtures/gallica_sample.xml`
+  - sample Gallica SRU response for parser-oriented tests
 
 ## Notes
 
-- **Oxford/Bodleian**: As of January 2026, the public search API at `digital.bodleian.ox.ac.uk/api/search/` has been removed. Tests for this API are kept for documentation but will fail.
-- **Gallica**: Uses the official BnF SRU API which is stable and well-documented.
-- **Vaticana**: Does not have a public search API, only direct manifest resolution is supported.
-
-## Adding New Tests
-
-When adding new test scripts:
-
-1. Place them in the `tests/` directory
-2. Add a docstring explaining what the test does
-3. Make sure they can be run with `python -m tests.test_name`
-4. Update this README with the new test information
-5. If the test requires sample data, add it to `fixtures/`
+- Some provider surfaces are HTML-based and intentionally mocked in unit tests because the public sites can rate-limit or block scripted traffic.
+- Cambridge free-text coverage includes the browser-handoff fallback when CUDL search is blocked by its WAF.
+- Heidelberg free-text coverage includes a browser-handoff fallback when automated hit extraction does not yield stable `diglit` results.
+- Live tests are useful for smoke validation, but they are not a stable substitute for parser/contract tests.
+- When adding a new provider search adapter, prefer:
+  1. parser/unit tests
+  2. provider-registry coverage
+  3. one route-level discovery test
+  4. optional live smoke check

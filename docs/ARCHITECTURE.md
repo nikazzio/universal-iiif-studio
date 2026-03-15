@@ -14,7 +14,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 * **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards, professional status panel).
 * **Routes**:
   * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations. Implements Mirador local/remote mode selection.
-  * `discovery_handlers.py`: Orchestrates search, add-to-library, and download manager actions.
+  * `discovery_handlers.py`: Route entrypoints for search/add/download flows, delegating persistence helpers to `discovery_persistence.py`.
   * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
   * `library_query.py`: Shared filtering/query/view-model helpers for Library routes.
 * **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
@@ -23,8 +23,12 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 ### 2. Core Business Logic (`universal_iiif_core/`)
 
 * **Discovery Module**:
-  * **Resolvers**: Uses a Dispatcher pattern (`resolve_shelfmark`) to route inputs to specific implementations (`Vatican`, `Gallica`, `Oxford`, `Institut de France`).
-  * **Search**: Implements Gallica SRU parsing with optional type filtering (`all`, `manuscripts`, `printed books`) and fallback/stub logic where APIs are limited.
+  * **Provider Registry**: A shared provider catalog drives web Discovery, settings options, and CLI direct resolution from the same metadata source.
+  * **Orchestrator package**: `universal_iiif_core.discovery` now owns typed contracts and orchestration policy (`contracts.py`, `orchestrator.py`) plus search strategy adapter mapping (`search_adapters.py`).
+  * **Resolvers**: Direct resolution still ends in provider-specific resolver classes, but registration happens through the provider registry rather than UI/CLI hardcoding.
+  * **Search Modes**: Each provider declares `search_mode` (`direct`, `fallback`, `search_first`) plus an optional `search_strategy`. This keeps the UX consistent while allowing provider-specific search adapters.
+  * **Search Coverage**: Current searchable providers are `Gallica`, `Vaticana`, `Institut de France`, `Internet Archive`, `Bodleian`, `e-codices`, `Cambridge`, `Heidelberg`, `Harvard`, and `Library of Congress`, but some adapters are intentionally hybrid. For example Cambridge and Heidelberg free-text can degrade to browser handoff results when the public site blocks scripted search or does not expose stable machine-readable hits.
+  * **Result Contract**: Provider adapters return canonical `SearchResult` payloads. `viewer_url` is the normalized field for source viewer links; `raw` remains available only for provider-specific extras.
 * **Downloader Logic**:
   * Implements the **Golden Flow** (Native PDF check -> Extraction -> Fallback to IIIF).
   * Manages threading and DB updates.
@@ -52,11 +56,12 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 ### 1. Discovery, Library Add, and Resolution
 
 1. **User Input**: The user enters free text, shelfmark (e.g., "Urb.lat.1779"), an ID, or a URL.
-2. **Dispatcher**: `resolve_shelfmark` detects the library signature and selects the correct strategy.
-3. **Normalization**: The resolver converts "dirty" inputs into a canonical IIIF Manifest URL.
-4. **Gallica Filter Stage**: Optional type filters are applied on parsed metadata (`dc:type`) to avoid SRU type-filter inconsistencies.
-5. **Preview**: The UI fetches basic metadata and lazy-checks native PDF availability.
-6. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
+2. **Provider Lookup**: Discovery resolves the selected library through the shared provider registry.
+3. **Provider Resolution**: The provider decides whether to try direct resolution first, search first, or direct resolution with search fallback.
+4. **Normalization**: Provider resolvers convert "dirty" inputs into canonical IIIF Manifest URLs only when `can_resolve()` positively identifies the input as direct.
+5. **Search Adapter Stage**: Optional provider-specific filters are applied before invoking the provider search adapter (for example the Gallica type filter).
+6. **Preview / Result List**: Search adapters return canonical `SearchResult` entries; direct resolution fetches manifest details for preview and lazy-checks native PDF availability. Results without a `manifest` are rendered as consult-only cards that open the upstream catalog but cannot be added/downloaded.
+7. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
 
 ### 2. Download Manager + Golden Flow
 
@@ -123,7 +128,8 @@ Studio supports **two distinct viewing modes** for the Mirador viewer, automatic
 3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic, header mimicking, and centralized HTTP client with per-host rate limiting.
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
 5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.
-6. **Centralized HTTP Client (Issue #71, 2026-03-09)**: Eliminated ~200+ lines of duplicate retry/backoff logic by introducing `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics. All IIIF core modules now use this centralized client.
+6. **Centralized HTTP Client (Issue #71, 2026-03-09)**: Eliminated ~200+ lines of duplicate retry/backoff logic by introducing `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics. Most IIIF core modules use this client; some discovery provider surfaces still use legacy request paths and are tracked for migration.
+7. **Current Discovery Refactor Boundary (2026-03-14)**: discovery orchestration and search adapter dispatch are now extracted in `universal_iiif_core.discovery`, and UI rendering is split into dedicated modules (`discovery_form`, `discovery_results`, `discovery_download_panel`, `discovery_page`) with a compatibility aggregator. Remaining technical debt is mostly inside provider-specific parser/search code still hosted in `universal_iiif_core.resolvers.discovery`.
 
 ## Local Data & Cleanup
 
