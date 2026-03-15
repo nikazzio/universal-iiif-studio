@@ -17,6 +17,10 @@ def test_search_adapters_forward_gallica_filter_payload():
         search_archive_org_fn=lambda _q, _n: [],
         search_bodleian_fn=lambda _q, _n: [],
         search_ecodices_fn=lambda _q, _n: [],
+        search_cambridge_fn=lambda _q, _n: [],
+        search_harvard_fn=lambda _q, _n: [],
+        search_loc_fn=lambda _q, _n: [],
+        search_heidelberg_fn=lambda _q, _n: [],
     )
 
     results = handlers["gallica"]("dante", {"gallica_type": "manuscrit"})
@@ -43,6 +47,10 @@ def test_search_adapters_use_expected_provider_result_limits():
         search_archive_org_fn=_track("archive"),
         search_bodleian_fn=_track("bodleian"),
         search_ecodices_fn=_track("ecodices"),
+        search_cambridge_fn=_track("cambridge"),
+        search_harvard_fn=_track("harvard"),
+        search_loc_fn=_track("loc"),
+        search_heidelberg_fn=_track("heidelberg"),
     )
 
     handlers["vatican"]("q", {})
@@ -50,10 +58,17 @@ def test_search_adapters_use_expected_provider_result_limits():
     handlers["archive_org"]("q", {})
     handlers["bodleian"]("q", {})
     handlers["ecodices"]("q", {})
+    handlers["cambridge"]("q", {})
+    handlers["harvard"]("q", {})
+    handlers["loc"]("q", {})
+    handlers["heidelberg"]("q", {})
 
     assert captured["vatican"] == 5
     assert captured["institut"] == 10
     assert captured["archive"] == 10
     assert captured["bodleian"] == 10
     assert captured["ecodices"] == 10
-
+    assert captured["cambridge"] == 10
+    assert captured["harvard"] == 10
+    assert captured["loc"] == 10
+    assert captured["heidelberg"] == 10

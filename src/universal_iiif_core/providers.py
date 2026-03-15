@@ -19,7 +19,18 @@ from universal_iiif_core.resolvers.vatican import VaticanResolver
 
 logger = get_logger(__name__)
 
-SearchStrategy = Literal["archive_org", "bodleian", "ecodices", "gallica", "institut", "vatican"]
+SearchStrategy = Literal[
+    "archive_org",
+    "bodleian",
+    "cambridge",
+    "ecodices",
+    "gallica",
+    "harvard",
+    "heidelberg",
+    "institut",
+    "loc",
+    "vatican",
+]
 SearchMode = Literal["direct", "fallback", "search_first"]
 
 
@@ -134,18 +145,40 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         label="Universitaetsbibliothek Heidelberg",
         aliases=("heidelberg", "universitaetsbibliothek heidelberg", "universitätsbibliothek heidelberg"),
         resolver_cls=HeidelbergResolver,
-        not_found_hint="Incolla un URL Heidelberger o un ID tipo 'cpg123'.",
+        search_strategy="heidelberg",
+        search_mode="fallback",
+        not_found_hint=(
+            "Per ora la ricerca libera Heidelberg puo richiedere il browser del catalogo. "
+            "Apri la ricerca Heidelberg, poi incolla qui ID o URL del record."
+        ),
         placeholder="es. cpg123",
         sort_order=50,
+        metadata={
+            "browser_search_url": (
+                "https://www.ub.uni-heidelberg.de/cgi-bin/search.cgi?query={query}&q=homepage&sprache=ger&wo=w"
+            ),
+            "browser_search_label": "Apri ricerca Heidelberg nel browser",
+            "helper_text": "Ricerca libera variabile: usa ID/URL, oppure apri Heidelberg nel browser e incollali qui.",
+        },
     ),
     IIIFProvider(
         key="Cambridge",
         label="Cambridge University Digital Library",
         aliases=("cambridge", "cambridge university digital library", "cudl"),
         resolver_cls=CambridgeResolver,
-        not_found_hint="Incolla un URL CUDL o un ID come 'MS-ADD-03996'.",
+        search_strategy="cambridge",
+        search_mode="fallback",
+        not_found_hint=(
+            "Per ora la ricerca libera richiede il browser CUDL. "
+            "Apri la ricerca Cambridge, poi incolla qui signature o URL del record."
+        ),
         placeholder="es. MS-ADD-03996",
         sort_order=60,
+        metadata={
+            "browser_search_url": "https://cudl.lib.cam.ac.uk/search?keyword={query}",
+            "browser_search_label": "Apri ricerca Cambridge nel browser",
+            "helper_text": "Ricerca libera limitata: usa signature/URL, oppure apri CUDL nel browser e incollali qui.",
+        },
     ),
     IIIFProvider(
         key="e-codices",
@@ -162,6 +195,8 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         label="Harvard University",
         aliases=("harvard", "harvard university"),
         resolver_cls=HarvardResolver,
+        search_strategy="harvard",
+        search_mode="fallback",
         not_found_hint="Incolla un URL Harvard IIIF/Hollis con DRS ID.",
         placeholder="es. https://iiif.lib.harvard.edu/manifests/view/drs:12345678",
         sort_order=80,
@@ -171,6 +206,8 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         label="Library of Congress",
         aliases=("library of congress", "loc"),
         resolver_cls=LOCResolver,
+        search_strategy="loc",
+        search_mode="fallback",
         not_found_hint="Incolla un URL loc.gov/item/... valido.",
         placeholder="es. https://www.loc.gov/item/2021668145/",
         sort_order=90,

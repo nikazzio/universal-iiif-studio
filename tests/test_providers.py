@@ -32,11 +32,28 @@ def test_provider_library_options_exposes_new_direct_providers():
     assert options["Internet Archive"] == "Archive.org"
 
 
-def test_provider_search_capabilities_cover_bodleian_and_ecodices():
-    """Provider registry should expose search where a stable public flow exists."""
+def test_provider_search_capabilities_cover_supported_search_libraries():
+    """Provider registry should expose search capabilities for wired provider adapters."""
     assert get_provider("Bodleian").supports_search() is True
     assert get_provider("e-codices").supports_search() is True
-    assert get_provider("Cambridge").supports_search() is False
+    assert get_provider("Cambridge").supports_search() is True
+    assert get_provider("Heidelberg").supports_search() is True
+    assert get_provider("Harvard").supports_search() is True
+    assert get_provider("Library of Congress").supports_search() is True
+
+
+def test_cambridge_provider_exposes_browser_handoff_metadata():
+    """Cambridge provider should advertise the browser-driven fallback UX."""
+    provider = get_provider("Cambridge")
+    assert "{query}" in provider.metadata["browser_search_url"]
+    assert "browser" in provider.metadata["helper_text"].lower()
+
+
+def test_heidelberg_provider_exposes_browser_handoff_metadata():
+    """Heidelberg provider should advertise the browser-driven fallback UX."""
+    provider = get_provider("Heidelberg")
+    assert "{query}" in provider.metadata["browser_search_url"]
+    assert "browser" in provider.metadata["helper_text"].lower()
 
 
 def test_iter_providers_respects_explicit_sort_order():

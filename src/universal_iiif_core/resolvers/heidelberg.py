@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from .base import BaseResolver
 
 _DIRECT_ID_RE = re.compile(r"(?P<id>(?:cpg|cpl)\d{2,})$", flags=re.IGNORECASE)
+_COD_PAL_GERM_RE = re.compile(r"\bcod\.?\s*pal\.?\s*germ\.?\s*(?P<num>\d{1,5})\b", flags=re.IGNORECASE)
 
 
 class HeidelbergResolver(BaseResolver):
@@ -18,7 +19,9 @@ class HeidelbergResolver(BaseResolver):
         text = (url_or_id or "").strip()
         if not text:
             return False
-        return "digi.ub.uni-heidelberg.de" in text.lower() or bool(_DIRECT_ID_RE.fullmatch(text))
+        if "digi.ub.uni-heidelberg.de" in text.lower():
+            return True
+        return bool(self._extract_id(text))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
         """Build the canonical Heidelberg manifest URL."""
@@ -37,6 +40,8 @@ class HeidelbergResolver(BaseResolver):
         clean = value.strip()
         if match := _DIRECT_ID_RE.fullmatch(clean):
             return match.group(1).lower()
+        if cod_match := _COD_PAL_GERM_RE.search(clean):
+            return f"cpg{int(cod_match.group('num'))}"
         parsed = urlparse(clean)
         hostname = (parsed.netloc or "").lower()
         if hostname != "digi.ub.uni-heidelberg.de":

@@ -290,3 +290,63 @@ def test_resolve_manifest_ecodices_results_include_provider_viewer_link(monkeypa
     result_str = repr(result)
     assert "Apri viewer" in result_str
     assert "https://www.e-codices.unifr.ch/en/fmb/cb-0055" in result_str
+
+
+def test_resolve_manifest_cambridge_consult_only_result_stays_in_results_list(monkeypatch):
+    """Consult-only Cambridge handoff results should not be coerced into preview rendering."""
+    monkeypatch.setattr(
+        discovery_handlers,
+        "resolve_provider_input",
+        lambda _library, _query, filters=None: ProviderResolution(
+            provider=get_provider("Cambridge"),
+            status="results",
+            results=[
+                {
+                    "id": "cambridge-search:dante",
+                    "title": "Apri la ricerca Cambridge nel browser",
+                    "description": "Apri CUDL nel browser e incolla qui signature o URL del record.",
+                    "manifest": "",
+                    "viewer_url": "https://cudl.lib.cam.ac.uk/search?keyword=dante",
+                    "library": "Cambridge",
+                    "raw": {"consult_online_only": True},
+                }
+            ],
+        ),
+    )
+
+    result = discovery_handlers.resolve_manifest("Cambridge", "dante")
+    result_str = repr(result)
+    assert "Trovati 1 risultati" in result_str
+    assert "Solo consultazione online" in result_str
+    assert "https://cudl.lib.cam.ac.uk/search?keyword=dante" in result_str
+
+
+def test_resolve_manifest_heidelberg_consult_only_result_stays_in_results_list(monkeypatch):
+    """Consult-only Heidelberg handoff results should remain in the results list renderer."""
+    monkeypatch.setattr(
+        discovery_handlers,
+        "resolve_provider_input",
+        lambda _library, _query, filters=None: ProviderResolution(
+            provider=get_provider("Heidelberg"),
+            status="results",
+            results=[
+                {
+                    "id": "heidelberg-search:dante",
+                    "title": "Apri la ricerca Heidelberg nel browser",
+                    "description": "Apri Heidelberg nel browser e incolla qui ID o URL del record digitalizzato.",
+                    "manifest": "",
+                    "viewer_url": (
+                        "https://www.ub.uni-heidelberg.de/cgi-bin/search.cgi?query=dante&q=homepage&sprache=ger&wo=w"
+                    ),
+                    "library": "Heidelberg",
+                    "raw": {"consult_online_only": True},
+                }
+            ],
+        ),
+    )
+
+    result = discovery_handlers.resolve_manifest("Heidelberg", "dante")
+    result_str = repr(result)
+    assert "Trovati 1 risultati" in result_str
+    assert "Solo consultazione online" in result_str
+    assert "search.cgi?query=dante" in result_str

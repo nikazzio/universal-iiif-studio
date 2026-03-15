@@ -33,13 +33,13 @@ The test suite is `pytest`-first and covers both the shared IIIF core and the Fa
 - `Archive.org`
 - `Bodleian`
 - `e-codices`
+- `Cambridge`
+- `Heidelberg`
+- `Harvard`
+- `Library of Congress`
 
 Direct-only providers currently covered through resolver/provider tests:
 
-- `Heidelberg`
-- `Cambridge`
-- `Harvard`
-- `Library of Congress`
 - generic direct manifest URLs
 
 ## Running Tests
@@ -66,6 +66,8 @@ Targeted examples:
 ## Notes
 
 - Some provider surfaces are HTML-based and intentionally mocked in unit tests because the public sites can rate-limit or block scripted traffic.
+- Cambridge free-text coverage includes the browser-handoff fallback when CUDL search is blocked by its WAF.
+- Heidelberg free-text coverage includes a browser-handoff fallback when automated hit extraction does not yield stable `diglit` results.
 - Live tests are useful for smoke validation, but they are not a stable substitute for parser/contract tests.
 - When adding a new provider search adapter, prefer:
   1. parser/unit tests

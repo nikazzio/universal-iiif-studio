@@ -232,7 +232,8 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
         if resolution.status == "results":
             first = resolution.results[0] if resolution.results else {}
             is_direct = bool(first.get("raw", {}).get("_is_direct_match", False))
-            if len(resolution.results) == 1 and (is_direct or provider.search_mode == "fallback"):
+            has_manifest = bool(str(first.get("manifest") or "").strip())
+            if len(resolution.results) == 1 and has_manifest and (is_direct or provider.search_mode == "fallback"):
                 pages = 0 if is_direct else _page_count_from_result(first)
                 return render_preview(_build_item_preview_data(first, provider.key, pages=pages))
             return render_search_results_list(resolution.results)

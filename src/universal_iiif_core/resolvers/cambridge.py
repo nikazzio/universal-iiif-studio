@@ -6,6 +6,8 @@ from .base import BaseResolver
 
 _DIRECT_CAMBRIDGE_ID_RE = re.compile(r"(?=.*[A-Z])[A-Z0-9]+(?:-[A-Z0-9]+){2,}")
 _URL_CAMBRIDGE_ID_RE = re.compile(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)")
+_CAMBRIDGE_SHELFMARK_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+_CAMBRIDGE_SHELFMARK_PREFIX_RE = re.compile(r"^\s*MS\b", flags=re.IGNORECASE)
 
 
 class CambridgeResolver(BaseResolver):
@@ -18,7 +20,9 @@ class CambridgeResolver(BaseResolver):
         text = (url_or_id or "").strip()
         if not text:
             return False
-        return "cudl.lib.cam.ac.uk" in text.lower() or bool(_DIRECT_CAMBRIDGE_ID_RE.fullmatch(text))
+        if "cudl.lib.cam.ac.uk" in text.lower():
+            return True
+        return bool(self._extract_id(text))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:
         """Build the canonical CUDL manifest URL from a URL or direct identifier."""
@@ -35,8 +39,14 @@ class CambridgeResolver(BaseResolver):
     @staticmethod
     def _extract_id(value: str) -> str | None:
         if "cudl.lib.cam.ac.uk" not in value.lower():
-            candidate = value.strip()
-            return candidate if _DIRECT_CAMBRIDGE_ID_RE.fullmatch(candidate) else None
+            candidate = value.strip().upper()
+            if _DIRECT_CAMBRIDGE_ID_RE.fullmatch(candidate):
+                parts = candidate.split("-")
+                if parts and parts[0] == "MS":
+                    return CambridgeResolver._canonicalize_ms_shelfmark(parts)
+                return candidate
+            normalized = CambridgeResolver._normalize_shelfmark(candidate)
+            return normalized if normalized and _DIRECT_CAMBRIDGE_ID_RE.fullmatch(normalized) else None
 
         trimmed = value.split("?", 1)[0].split("#", 1)[0].rstrip("/")
         parts = [part for part in trimmed.split("/") if part]
@@ -45,4 +55,23 @@ class CambridgeResolver(BaseResolver):
 
         candidate = parts[-1]
         match = _URL_CAMBRIDGE_ID_RE.fullmatch(candidate)
-        return match.group(1) if match else None
+        return match.group(1).upper() if match else None
+
+    @staticmethod
+    def _normalize_shelfmark(value: str) -> str | None:
+        if not _CAMBRIDGE_SHELFMARK_PREFIX_RE.match(value):
+            return None
+        tokens = [token.upper() for token in _CAMBRIDGE_SHELFMARK_TOKEN_RE.findall(value)]
+        return CambridgeResolver._canonicalize_ms_shelfmark(tokens)
+
+    @staticmethod
+    def _canonicalize_ms_shelfmark(tokens: list[str]) -> str | None:
+        if not tokens or tokens[0] != "MS" or len(tokens) < 3:
+            return None
+        if not tokens[1].isalpha():
+            return None
+        suffix = tokens[2:]
+        if not suffix or not all(token.isdigit() for token in suffix):
+            return None
+        canonical_tokens = [token.zfill(5) if token.isdigit() else token for token in tokens]
+        return "-".join(canonical_tokens)

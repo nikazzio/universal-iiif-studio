@@ -74,13 +74,18 @@ def render_search_results_list(results: list) -> Div:
         thumb = item.get("thumbnail")
         doc_id = str(item.get("id") or "")
         manifest_url = str(item.get("manifest") or "")
+        is_downloadable = bool(manifest_url)
         viewer_url = _resolve_viewer_url(item)
         hx_vals = _build_discovery_hx_vals(manifest_url, doc_id, library, title)
         badge_id = f"pdf-badge-{(doc_id or 'item').replace(' ', '-').replace('/', '-')[:28]}"
-        pdf_badge = _build_pdf_badge(
-            manifest_url,
-            badge_id,
-            cls="app-chip app-chip-neutral text-[11px] tracking-wide",
+        pdf_badge = (
+            _build_pdf_badge(
+                manifest_url,
+                badge_id,
+                cls="app-chip app-chip-neutral text-[11px] tracking-wide",
+            )
+            if is_downloadable
+            else Span("Solo consultazione online", cls="app-chip app-chip-warning text-[11px] tracking-wide")
         )
 
         meta_line = []
@@ -131,6 +136,12 @@ def render_search_results_list(results: list) -> Div:
                     if description
                     else "",
                     Div(*meta_line, cls="flex flex-wrap gap-x-4 gap-y-1") if meta_line else "",
+                    P(
+                        "Nessun manifest IIIF disponibile per questo risultato. Puoi aprirlo nel catalogo online.",
+                        cls="text-xs text-amber-700 dark:text-amber-300",
+                    )
+                    if not is_downloadable
+                    else "",
                     Div(
                         A("Apri viewer", href=viewer_url, target="_blank", cls="app-btn app-btn-info text-xs")
                         if viewer_url
@@ -142,7 +153,9 @@ def render_search_results_list(results: list) -> Div:
                             hx_vals=hx_vals,
                             hx_target="#download-manager-area",
                             hx_swap="innerHTML",
-                        ),
+                        )
+                        if is_downloadable
+                        else "",
                         Button(
                             "Aggiungi + Download",
                             cls="app-btn app-btn-accent text-xs",
@@ -150,14 +163,20 @@ def render_search_results_list(results: list) -> Div:
                             hx_vals=hx_vals,
                             hx_target="#download-manager-area",
                             hx_swap="innerHTML",
-                        ),
+                        )
+                        if is_downloadable
+                        else "",
                         cls="flex flex-wrap items-center gap-2 pt-1",
                     ),
                     cls="min-w-0 flex-1 space-y-2",
                 ),
                 cls=(
-                    "flex flex-col md:flex-row gap-4 rounded-xl border border-slate-200/80 dark:border-slate-700 "
-                    "bg-white/90 dark:bg-slate-900/55 p-4 shadow-sm"
+                    "flex flex-col md:flex-row gap-4 rounded-xl border p-4 shadow-sm "
+                    + (
+                        "border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-900/55"
+                        if is_downloadable
+                        else "border-amber-300/80 dark:border-amber-700 bg-amber-50/70 dark:bg-amber-950/20"
+                    )
                 ),
             )
         )
@@ -357,4 +376,3 @@ def render_pdf_capability_badge(has_pdf: bool) -> Div:
     if has_pdf:
         return Div("PDF nativo disponibile", cls="app-chip app-chip-success text-[11px] tracking-wide")
     return Div("Solo immagini", cls="app-chip app-chip-warning text-[11px] tracking-wide")
-

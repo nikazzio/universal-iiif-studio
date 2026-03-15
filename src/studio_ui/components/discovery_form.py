@@ -2,7 +2,7 @@
 
 import json
 
-from fasthtml.common import H3, Button, Div, Form, Input, Label, Option, P, Script, Select
+from fasthtml.common import H3, A, Button, Div, Form, Input, Label, Option, P, Script, Select
 
 from studio_ui.library_options import library_options
 from universal_iiif_core.providers import iter_providers
@@ -14,6 +14,13 @@ def discovery_form() -> Div:
     providers = [provider for provider in iter_providers(ui_only=True) if provider.key != "Unknown"]
     provider_filter_map = {
         provider.key: [provider_filter.key for provider_filter in provider.filters]
+        for provider in providers
+    }
+    provider_placeholder_map = {provider.key: provider.placeholder for provider in providers}
+    provider_helper_map = {provider.key: provider.metadata.get("helper_text", "") for provider in providers}
+    provider_search_url_map = {provider.key: provider.metadata.get("browser_search_url", "") for provider in providers}
+    provider_search_label_map = {
+        provider.key: provider.metadata.get("browser_search_label", "Apri ricerca nel browser")
         for provider in providers
     }
     rendered_filters = []
@@ -62,7 +69,7 @@ def discovery_form() -> Div:
                         type="text",
                         id="shelf-input",
                         name="shelfmark",
-                        placeholder="es. Les voyages du seigneur de Villamont",
+                        placeholder=provider_placeholder_map.get("Vaticana", "Inserisci ID, URL o testo libero"),
                         cls="app-field text-base py-3 px-3.5",
                     ),
                     cls="col-span-12 lg:col-span-8",
@@ -73,7 +80,23 @@ def discovery_form() -> Div:
                         type="submit",
                         cls="w-full app-btn app-btn-accent font-semibold py-3",
                     ),
-                    cls="col-span-12 lg:col-span-4 flex items-end",
+                    cls="col-span-12 lg:col-span-4 lg:self-end",
+                ),
+                Div(
+                    P(
+                        provider_helper_map.get("Vaticana", ""),
+                        id="provider-helper-text",
+                        cls="text-xs text-slate-500 dark:text-slate-400 min-h-[1.25rem]",
+                    ),
+                    A(
+                        provider_search_label_map.get("Vaticana", "Apri ricerca nel browser"),
+                        id="provider-search-link",
+                        href="#",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        cls="hidden text-xs text-sky-700 dark:text-sky-300 underline inline-block",
+                    ),
+                    cls="col-span-12 space-y-1",
                 ),
                 Div(
                     Label(
@@ -100,11 +123,23 @@ def discovery_form() -> Div:
             f"""
             (function () {{
                 const lib = document.getElementById('lib-select');
+                const shelfInput = document.getElementById('shelf-input');
+                const helperText = document.getElementById('provider-helper-text');
+                const searchLink = document.getElementById('provider-search-link');
                 const providerFilters = {json.dumps(provider_filter_map, ensure_ascii=True)};
+                const providerPlaceholders = {json.dumps(provider_placeholder_map, ensure_ascii=True)};
+                const providerHelpers = {json.dumps(provider_helper_map, ensure_ascii=True)};
+                const providerSearchUrls = {json.dumps(provider_search_url_map, ensure_ascii=True)};
+                const providerSearchLabels = {json.dumps(provider_search_label_map, ensure_ascii=True)};
                 const filterNodes = Array.from(document.querySelectorAll('[data-filter-key],[data_filter_key]'));
-                if (!lib || !filterNodes.length) return;
+                if (!lib) return;
                 const sync = () => {{
                     const activeFilters = new Set(providerFilters[lib.value || ''] || []);
+                    const placeholder = providerPlaceholders[lib.value || ''] || 'Inserisci ID, URL o testo libero';
+                    const helper = providerHelpers[lib.value || ''] || '';
+                    const searchUrlTemplate = providerSearchUrls[lib.value || ''] || '';
+                    const searchLabel = providerSearchLabels[lib.value || ''] || 'Apri ricerca nel browser';
+                    const query = encodeURIComponent((shelfInput && shelfInput.value) || '');
                     filterNodes.forEach((node) => {{
                         const filterKey = node.getAttribute('data-filter-key') || node.getAttribute('data_filter_key');
                         const select = node.querySelector('select');
@@ -117,8 +152,27 @@ def discovery_form() -> Div:
                             }}
                         }}
                     }});
+                    if (shelfInput) {{
+                        shelfInput.placeholder = placeholder;
+                    }}
+                    if (helperText) {{
+                        helperText.textContent = helper;
+                    }}
+                    if (searchLink) {{
+                        if (searchUrlTemplate) {{
+                            searchLink.classList.remove('hidden');
+                            searchLink.textContent = searchLabel;
+                            searchLink.href = searchUrlTemplate.replace('{{query}}', query);
+                        }} else {{
+                            searchLink.classList.add('hidden');
+                            searchLink.href = '#';
+                        }}
+                    }}
                 }};
                 lib.addEventListener('change', sync);
+                if (shelfInput) {{
+                    shelfInput.addEventListener('input', sync);
+                }}
                 sync();
             }})();
             """
@@ -137,4 +191,3 @@ def discovery_form() -> Div:
             "rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-900/50 p-5 shadow-sm"
         ),
     )
-

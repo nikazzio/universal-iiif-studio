@@ -80,8 +80,12 @@ def test_heidelberg_resolver_id_and_viewer_url():
     manifest_url2, doc_id2 = resolver.get_manifest_url("https://digi.ub.uni-heidelberg.de/diglit/cpl456")
     assert manifest_url2 == "https://digi.ub.uni-heidelberg.de/diglit/iiif/cpl456/manifest.json"
     assert doc_id2 == "cpl456"
+    manifest_url3, doc_id3 = resolver.get_manifest_url("Cod. Pal. germ. 123")
+    assert manifest_url3 == "https://digi.ub.uni-heidelberg.de/diglit/iiif/cpg123/manifest.json"
+    assert doc_id3 == "cpg123"
 
     assert resolver.can_resolve("cpg123")
+    assert resolver.can_resolve("Cod. Pal. germ. 123")
     assert not resolver.can_resolve("abc123")
     assert resolver.get_manifest_url("prefix cpg123 suffix") == (None, None)
 
@@ -97,6 +101,11 @@ def test_cambridge_resolver_id_and_viewer_url():
     manifest_url2, doc_id2 = resolver.get_manifest_url("https://cudl.lib.cam.ac.uk/view/MS-ADD-03996")
     assert manifest_url2 == "https://cudl.lib.cam.ac.uk/iiif/MS-ADD-03996"
     assert doc_id2 == "MS-ADD-03996"
+    manifest_url3, doc_id3 = resolver.get_manifest_url("MS Add.9597/9/1")
+    assert manifest_url3 == "https://cudl.lib.cam.ac.uk/iiif/MS-ADD-09597-00009-00001"
+    assert doc_id3 == "MS-ADD-09597-00009-00001"
+    assert resolver.get_manifest_url("MS Add Dante") == (None, None)
+    assert resolver.can_resolve("MS Add Dante") is False
     assert not resolver.can_resolve("csg-0001")
 
 

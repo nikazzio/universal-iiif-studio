@@ -63,6 +63,42 @@ def _search_ecodices_provider(
     return search_ecodices_fn(query, 10)
 
 
+def _search_cambridge_provider(
+    query: str,
+    _payload: dict[str, Any],
+    *,
+    search_cambridge_fn: SearchWithLimitFn,
+) -> list[SearchResult]:
+    return search_cambridge_fn(query, 10)
+
+
+def _search_harvard_provider(
+    query: str,
+    _payload: dict[str, Any],
+    *,
+    search_harvard_fn: SearchWithLimitFn,
+) -> list[SearchResult]:
+    return search_harvard_fn(query, 10)
+
+
+def _search_loc_provider(
+    query: str,
+    _payload: dict[str, Any],
+    *,
+    search_loc_fn: SearchWithLimitFn,
+) -> list[SearchResult]:
+    return search_loc_fn(query, 10)
+
+
+def _search_heidelberg_provider(
+    query: str,
+    _payload: dict[str, Any],
+    *,
+    search_heidelberg_fn: SearchWithLimitFn,
+) -> list[SearchResult]:
+    return search_heidelberg_fn(query, 10)
+
+
 def build_search_strategy_handlers(
     *,
     smart_search_fn: SmartSearchFn,
@@ -71,6 +107,10 @@ def build_search_strategy_handlers(
     search_archive_org_fn: SearchWithLimitFn,
     search_bodleian_fn: SearchWithLimitFn,
     search_ecodices_fn: SearchWithLimitFn,
+    search_cambridge_fn: SearchWithLimitFn,
+    search_harvard_fn: SearchWithLimitFn,
+    search_loc_fn: SearchWithLimitFn,
+    search_heidelberg_fn: SearchWithLimitFn,
 ) -> dict[str, Callable[[str, dict[str, Any]], list[SearchResult]]]:
     """Build provider search strategy handlers from injected adapter callables."""
     return {
@@ -88,6 +128,26 @@ def build_search_strategy_handlers(
             query,
             payload,
             search_ecodices_fn=search_ecodices_fn,
+        ),
+        "cambridge": lambda query, payload: _search_cambridge_provider(
+            query,
+            payload,
+            search_cambridge_fn=search_cambridge_fn,
+        ),
+        "harvard": lambda query, payload: _search_harvard_provider(
+            query,
+            payload,
+            search_harvard_fn=search_harvard_fn,
+        ),
+        "loc": lambda query, payload: _search_loc_provider(
+            query,
+            payload,
+            search_loc_fn=search_loc_fn,
+        ),
+        "heidelberg": lambda query, payload: _search_heidelberg_provider(
+            query,
+            payload,
+            search_heidelberg_fn=search_heidelberg_fn,
         ),
         "gallica": lambda query, payload: _search_gallica_provider(
             query,

@@ -27,7 +27,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
   * **Orchestrator package**: `universal_iiif_core.discovery` now owns typed contracts and orchestration policy (`contracts.py`, `orchestrator.py`) plus search strategy adapter mapping (`search_adapters.py`).
   * **Resolvers**: Direct resolution still ends in provider-specific resolver classes, but registration happens through the provider registry rather than UI/CLI hardcoding.
   * **Search Modes**: Each provider declares `search_mode` (`direct`, `fallback`, `search_first`) plus an optional `search_strategy`. This keeps the UX consistent while allowing provider-specific search adapters.
-  * **Search Coverage**: Current searchable providers are `Gallica`, `Vaticana`, `Institut de France`, `Internet Archive`, `Bodleian`, and `e-codices`. The remaining providers are currently direct-resolution only.
+  * **Search Coverage**: Current searchable providers are `Gallica`, `Vaticana`, `Institut de France`, `Internet Archive`, `Bodleian`, `e-codices`, `Cambridge`, `Heidelberg`, `Harvard`, and `Library of Congress`, but some adapters are intentionally hybrid. For example Cambridge and Heidelberg free-text can degrade to browser handoff results when the public site blocks scripted search or does not expose stable machine-readable hits.
   * **Result Contract**: Provider adapters return canonical `SearchResult` payloads. `viewer_url` is the normalized field for source viewer links; `raw` remains available only for provider-specific extras.
 * **Downloader Logic**:
   * Implements the **Golden Flow** (Native PDF check -> Extraction -> Fallback to IIIF).
@@ -60,7 +60,7 @@ The application is strictly divided into two main layers. The **UI Layer** depen
 3. **Provider Resolution**: The provider decides whether to try direct resolution first, search first, or direct resolution with search fallback.
 4. **Normalization**: Provider resolvers convert "dirty" inputs into canonical IIIF Manifest URLs only when `can_resolve()` positively identifies the input as direct.
 5. **Search Adapter Stage**: Optional provider-specific filters are applied before invoking the provider search adapter (for example the Gallica type filter).
-6. **Preview / Result List**: Search adapters return canonical `SearchResult` entries; direct resolution fetches manifest details for preview and lazy-checks native PDF availability.
+6. **Preview / Result List**: Search adapters return canonical `SearchResult` entries; direct resolution fetches manifest details for preview and lazy-checks native PDF availability. Results without a `manifest` are rendered as consult-only cards that open the upstream catalog but cannot be added/downloaded.
 7. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
 
 ### 2. Download Manager + Golden Flow

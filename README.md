@@ -89,8 +89,8 @@ Direct resolution is shared across web and CLI for these providers:
 Current discovery search coverage:
 - `search_first`: Gallica, Internet Archive
 - `fallback`: Vaticana, Institut de France
-- `direct + search adapter`: Bodleian, e-codices
-- `direct only`: Heidelberg, Cambridge, Harvard, Library of Congress, generic direct manifest URLs
+- `direct + search adapter`: Bodleian, e-codices, Heidelberg, Cambridge, Harvard, Library of Congress
+- `direct only`: generic direct manifest URLs
 
 Provider behavior summary:
 
@@ -100,11 +100,11 @@ Provider behavior summary:
 | Gallica | Yes | Yes | Uses SRU search and optional type filter |
 | Institut de France | Yes | Yes | HTML search + manifest enrichment |
 | Bodleian | Yes | Yes | JSON-LD search surface |
-| Heidelberg | Yes | No | Direct resolver only for now |
-| Cambridge | Yes | No | Direct resolver only for now |
+| Heidelberg | Yes | Yes (browser handoff when needed) | Direct ID/URL works; also normalizes inputs like `Cod. Pal. germ. 123` -> `cpg123`; generic queries can degrade to browser handoff |
+| Cambridge | Yes | Yes (browser handoff when blocked) | Signature/URL resolution works directly; blocked free-text queries return a browser handoff result that opens CUDL search |
 | e-codices | Yes | Yes | HTML search surface |
-| Harvard | Yes | No | Direct resolver only for now |
-| Library of Congress | Yes | No | Direct resolver only; live manifest fetch may still be host-blocked in some environments |
+| Harvard | Yes | Yes (hybrid) | Shows all catalog results; records without IIIF manifest are marked as consultazione online only |
+| Library of Congress | Yes | Yes | JSON API search; live manifest fetch may still be host-blocked in some environments |
 | Internet Archive | Yes | Yes | `advancedsearch.php` + IIIF manifest validation |
 | Altro / URL Diretto | Yes | No | Generic direct manifest resolution |
 
