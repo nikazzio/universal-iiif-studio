@@ -30,6 +30,59 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.23.0 (2026-03-27)
+
+### Bug Fixes
+
+- Add official vatican text search fallback
+  ([`478cd04`](https://github.com/nikazzio/universal-iiif-studio/commit/478cd04f4a5a333e939917440211200acb0ab8b1))
+
+- Avoid bogus archive.org direct manifests
+  ([`b659b77`](https://github.com/nikazzio/universal-iiif-studio/commit/b659b77c9dcc718afd4f4aff08f5d0f496e3d3fa))
+
+- Correct e-codices URL parsing and Harvard canonical ID handling
+  ([`83b2d9e`](https://github.com/nikazzio/universal-iiif-studio/commit/83b2d9ec1d49a3066e481348e4a7750d56c3aaeb))
+
+- Filter broken archive.org manifests
+  ([`d0de3af`](https://github.com/nikazzio/universal-iiif-studio/commit/d0de3af6b3803ca5eba76ac446f5a6bb71b07d06))
+
+- Harden provider resolver matching and archive search probing
+  ([`2e802ef`](https://github.com/nikazzio/universal-iiif-studio/commit/2e802efe629a79b6666616f88764e821fa9c2235))
+
+- Harden resolver correctness and archive.org probe performance
+  ([`8f24032`](https://github.com/nikazzio/universal-iiif-studio/commit/8f240324d8e0f5fd61ac7903b98c64be34b88976))
+
+- Preserve provider viewer links in discovery
+  ([`27a29ba`](https://github.com/nikazzio/universal-iiif-studio/commit/27a29bac074bc067d702ae9ce5a8db25b7063a88))
+
+### Documentation
+
+- Normalize changelog policy references
+  ([`c854a81`](https://github.com/nikazzio/universal-iiif-studio/commit/c854a81c2e18c47a61ddcf01e28348897cd0da6a))
+
+### Features
+
+- Add archive.org discovery search
+  ([`f18c07a`](https://github.com/nikazzio/universal-iiif-studio/commit/f18c07a0d7a73654b75bdcf538be2b9d78357b9c))
+
+- Add Bodleian and e-codices search adapters
+  ([`693b14d`](https://github.com/nikazzio/universal-iiif-studio/commit/693b14d82cd51fce6e6e62b92958f83ddfda34e2))
+
+- Enrich Archive.org search results and reduce probe latency
+  ([`988dc24`](https://github.com/nikazzio/universal-iiif-studio/commit/988dc2439d4f21c33bc1dbd4bbb8a828d72882bb))
+
+- Expand discovery search adapters and job-ready result UX
+  ([`098c7d1`](https://github.com/nikazzio/universal-iiif-studio/commit/098c7d1c60e5ea56c38337cc724ecf014b6e0162))
+
+### Refactoring
+
+- Split discovery orchestration and UI modules
+  ([`93ac20d`](https://github.com/nikazzio/universal-iiif-studio/commit/93ac20d854dde6c0cfcda58048d816a7dc4593ad))
+
+- Tidy discovery provider flow
+  ([`be818ba`](https://github.com/nikazzio/universal-iiif-studio/commit/be818ba19c7e65cdbc37d69591cd4370b554555b))
+
+
 ## v0.22.4 (2026-03-11)
 
 ### Bug Fixes
