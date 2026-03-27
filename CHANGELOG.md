@@ -30,6 +30,36 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.24.0 (2026-03-27)
+
+### Bug Fixes
+
+- Align pagination offset with displayed page size
+  ([`4664f85`](https://github.com/nikazzio/universal-iiif-studio/commit/4664f857912ad3f1a8a276670981d3e60906e0a7))
+
+- Gallica search regression — forward max_records/page through smart_search
+  ([`8d01e9e`](https://github.com/nikazzio/universal-iiif-studio/commit/8d01e9ee7c7cd6a1a7133c47f8d756063df87f95))
+
+- Handle multi-line semantic-release bullets in changelog policy check
+  ([`9d7f8bc`](https://github.com/nikazzio/universal-iiif-studio/commit/9d7f8bc13fc1e7f7249037375fdc024900b8a9fe))
+
+### Documentation
+
+- Update documentation for async probe, pagination, and discovery settings
+  ([`8b14038`](https://github.com/nikazzio/universal-iiif-studio/commit/8b1403886565b33cc1d9e3cc06f5dcfeed703dd9))
+
+### Features
+
+- Async manifest probe, configurable max_results, HTMX lazy-load
+  ([`4d0cd85`](https://github.com/nikazzio/universal-iiif-studio/commit/4d0cd8550287904cfcdca585a5397728acb0ec3c))
+
+- Discovery settings tab in UI
+  ([`79251f3`](https://github.com/nikazzio/universal-iiif-studio/commit/79251f3db0797369460dcc6d0bd51ff52b388490))
+
+- Load-more pagination for paginatable providers
+  ([`4f6bc85`](https://github.com/nikazzio/universal-iiif-studio/commit/4f6bc85acaa40b3a7cd9de3106b285e6e5955e4c))
+
+
 ## v0.23.0 (2026-03-27)
 
 ### Bug Fixes
