@@ -425,11 +425,10 @@ def search_archive_org(query: str, max_results: int = 20, page: int = 1) -> list
 
     clean_q = q.replace('"', " ")
     requested_results = max(1, min(max_results, 50))
-    fetch_rows = min(max(requested_results * 3, 20), 60)
     params = {
         "q": f"({clean_q}) AND mediatype:texts",
         "fl[]": ["identifier", "title", "creator", "date", "mediatype", "description", "volume", "language"],
-        "rows": str(fetch_rows),
+        "rows": str(requested_results),
         "page": str(max(1, page)),
         "output": "json",
     }
@@ -678,8 +677,6 @@ def search_harvard(query: str, max_results: int = 20, page: int = 1) -> list[Sea
             continue
         seen_ids.add(doc_id)
         deduped.append(item)
-        if len(deduped) >= requested_results:
-            break
     return deduped
 
 
@@ -722,8 +719,6 @@ def search_loc(query: str, max_results: int = 20, page: int = 1) -> list[SearchR
                 "raw": {"viewer_url": viewer_url},
             }
         )
-        if len(results) >= requested_results:
-            break
     return results
 
 
