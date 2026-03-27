@@ -19,3 +19,4 @@ class ProviderResolution:
     doc_id: str | None = None
     results: list[SearchResult] = field(default_factory=list)
     not_found_hint: str = ""
+    has_more: bool = False

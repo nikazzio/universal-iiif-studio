@@ -36,6 +36,9 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 - Discovery with shared provider registry for web + CLI
 - Discovery with free-text search plus provider-specific filters (currently Gallica type filter with labels `Tutti i materiali`, `Solo manoscritti`, `Solo libri a stampa`)
 - Discovery internals split into typed orchestrator/search adapters (`universal_iiif_core.discovery`) and modular UI components (`studio_ui.components.discovery_*`)
+- **Configurable search results**: `settings.discovery.max_results_per_provider` (default 20, editable from Settings > Discovery tab)
+- **Async manifest probing**: Archive.org results appear immediately; manifest validity is checked per-card via HTMX lazy-load
+- **Load-more pagination**: paginatable providers (Archive.org, Harvard, LOC, Gallica) support "Carica altri risultati" for additional pages
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
@@ -109,7 +112,8 @@ Provider behavior summary:
 | Altro / URL Diretto | Yes | No | Generic direct manifest resolution |
 
 Search result contract:
-- discovery providers return canonical `SearchResult` items with `manifest`, `library`, and `id`
+- discovery providers return canonical `SearchResult` items with `manifest`, `library`, `id`, and optional `manifest_status`
+- `manifest_status` can be `"ok"`, `"pending"`, or `"unavailable"` — Archive.org results start as `"pending"` and are validated asynchronously via HTMX probe
 - providers should populate `viewer_url` when they know the source viewer URL
 - `raw` is still available for provider-specific metadata, but UI code should not depend on `raw["viewer_url"]` anymore
 

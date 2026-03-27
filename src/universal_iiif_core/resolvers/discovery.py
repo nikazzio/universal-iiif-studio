@@ -45,7 +45,6 @@ CAMBRIDGE_SEARCH_URL: Final = "https://cudl.lib.cam.ac.uk/search"
 HARVARD_API_URL: Final = "https://api.lib.harvard.edu/v2/items.json"
 LOC_SEARCH_URL: Final = "https://www.loc.gov/search/"
 HEIDELBERG_SITE_SEARCH_URL: Final = "https://www.ub.uni-heidelberg.de/cgi-bin/search.cgi"
-ARCHIVE_MANIFEST_PROBE_LIMIT: Final = 5
 
 # Browser-like headers are required for several catalog/search surfaces that reject
 # generic scripted requests with 403/500 responses.
@@ -154,7 +153,9 @@ _VATICAN_NUMERIC_COLLECTIONS: Final[list[str]] = [
 _VATICAN_TEXT_PREFIXES: Final[list[str]] = ["Urb.lat.", "Vat.lat.", "Pal.lat.", "Reg.lat.", "Barb.lat."]
 
 
-def smart_search(input_text: str, *, gallica_type_filter: str = "all") -> list[SearchResult]:
+def smart_search(
+    input_text: str, *, max_records: int = 20, page: int = 1, gallica_type_filter: str = "all"
+) -> list[SearchResult]:
     """PUNTO DI INGRESSO PRINCIPALE (Logica Ibrida).
 
     Logica:
@@ -194,7 +195,7 @@ def smart_search(input_text: str, *, gallica_type_filter: str = "all") -> list[S
 
     # 2. RICERCA TESTUALE (FALLBACK)
     logger.info("Input '%s' interpretato come ricerca SRU.", text)
-    return search_gallica(text, gallica_type_filter=gallica_type_filter)
+    return search_gallica(text, max_records=max_records, page=page, gallica_type_filter=gallica_type_filter)
 
 
 def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | None]:
@@ -335,7 +336,9 @@ def _matches_gallica_type_filter(item: SearchResult, normalized_filter: str) -> 
     return True
 
 
-def search_gallica(query: str, max_records: int = 15, *, gallica_type_filter: str = "all") -> list[SearchResult]:
+def search_gallica(
+    query: str, max_records: int = 20, *, page: int = 1, gallica_type_filter: str = "all"
+) -> list[SearchResult]:
     """Search Gallica SRU and return parsed SearchResult entries.
 
     Network errors are logged here; parser returns structured results or
@@ -352,13 +355,14 @@ def search_gallica(query: str, max_records: int = 15, *, gallica_type_filter: st
     requested_records = max(1, min(max_records, 50))
     fetch_records = 50 if normalized_filter != "all" else requested_records
     maximum_records = str(fetch_records)
+    start_record = (max(1, page) - 1) * requested_records + 1
     resolver = GallicaResolver()
     params = {
         "operation": "searchRetrieve",
         "version": "1.2",
         "query": cql,
         "maximumRecords": maximum_records,
-        "startRecord": "1",
+        "startRecord": str(start_record),
         "collapsing": "true",  # Raggruppa versioni simili
     }
     try:
@@ -377,7 +381,7 @@ def search_gallica(query: str, max_records: int = 15, *, gallica_type_filter: st
     return filtered[:requested_records]
 
 
-def search_institut(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_institut(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Institut de France (Bibnum) records page and return IIIF entries."""
     if not (q := (query or "").strip()):
         return []
@@ -409,19 +413,23 @@ def search_institut(query: str, max_results: int = 12) -> list[SearchResult]:
     return results
 
 
-def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
-    """Search Internet Archive advancedsearch and return IIIF-ready results."""
+def search_archive_org(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
+    """Search Internet Archive advancedsearch and return IIIF-ready results.
+
+    Manifest probing is NOT performed inline — results are returned immediately
+    with ``manifest_status="pending"`` and validated asynchronously via the
+    ``/api/discovery/probe_manifest`` HTMX endpoint.
+    """
     if not (q := (query or "").strip()):
         return []
 
     clean_q = q.replace('"', " ")
-    requested_results = max(1, min(max_results, 20))
-    fetch_rows = min(max(requested_results * 3, requested_results), 30)
+    requested_results = max(1, min(max_results, 50))
     params = {
         "q": f"({clean_q}) AND mediatype:texts",
         "fl[]": ["identifier", "title", "creator", "date", "mediatype", "description", "volume", "language"],
-        "rows": str(fetch_rows),
-        "page": "1",
+        "rows": str(requested_results),
+        "page": str(max(1, page)),
         "output": "json",
     }
 
@@ -438,19 +446,18 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
     docs = payload.get("response", {}).get("docs", [])
     resolver = ArchiveOrgResolver()
     results: list[SearchResult] = []
-    manifest_probes = 0
 
     for doc in docs:
-        manifest_url, doc_id, manifest_probes, should_stop = _resolve_archive_candidate(
-            doc,
-            resolver,
-            manifest_probes,
-        )
-        if should_stop:
-            break
-        if not manifest_url or not doc_id or not isinstance(doc, dict):
+        if not isinstance(doc, dict):
+            continue
+        identifier = str(doc.get("identifier") or "").strip()
+        if not identifier:
+            continue
+        manifest_url, doc_id = resolver.get_manifest_url(identifier)
+        if not manifest_url or not doc_id:
             continue
         result = _build_archive_result(doc, doc_id=doc_id, manifest_url=manifest_url)
+        result["manifest_status"] = "pending"
         results.append(result)
         if len(results) >= requested_results:
             break
@@ -458,7 +465,7 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
     return results[:requested_results]
 
 
-def search_bodleian(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_bodleian(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Digital Bodleian using its JSON-LD search representation."""
     if not (q := (query or "").strip()):
         return []
@@ -493,7 +500,7 @@ def search_bodleian(query: str, max_results: int = 12) -> list[SearchResult]:
     return results
 
 
-def search_ecodices(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_ecodices(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search e-codices HTML results and map them to IIIF manifests."""
     if not (q := (query or "").strip()):
         return []
@@ -531,7 +538,7 @@ def search_ecodices(query: str, max_results: int = 12) -> list[SearchResult]:
     return results
 
 
-def search_cambridge(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_cambridge(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Cambridge Digital Library and map viewer hits to IIIF manifests."""
     if not (q := (query or "").strip()):
         return []
@@ -638,13 +645,15 @@ def _build_cambridge_browser_handoff_result(query: str) -> SearchResult:
     }
 
 
-def search_harvard(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_harvard(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Harvard metadata surface and extract IIIF manifest references when present."""
     if not (q := (query or "").strip()):
         return []
 
     requested_results = max(1, min(max_results, 20))
-    params = {"q": q, "limit": str(min(requested_results * 10, 100))}
+    api_limit = min(requested_results * 10, 100)
+    start_offset = (max(1, page) - 1) * api_limit
+    params = {"q": q, "limit": str(api_limit), "start": str(start_offset)}
     payload = get_json(HARVARD_API_URL + "?" + urlencode(params), headers=HTML_BROWSER_HEADERS, retries=2)
     collected = _extract_harvard_results(payload) if isinstance(payload, dict) else []
 
@@ -668,18 +677,16 @@ def search_harvard(query: str, max_results: int = 12) -> list[SearchResult]:
             continue
         seen_ids.add(doc_id)
         deduped.append(item)
-        if len(deduped) >= requested_results:
-            break
     return deduped
 
 
-def search_loc(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_loc(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Library of Congress JSON API and keep results that map to IIIF manifests."""
     if not (q := (query or "").strip()):
         return []
 
     requested_results = max(1, min(max_results, 20))
-    params = {"q": q, "fo": "json", "sp": "1", "c": str(min(requested_results * 5, 100))}
+    params = {"q": q, "fo": "json", "sp": str(max(1, page)), "c": str(min(requested_results * 5, 100))}
     payload = get_json(_build_loc_search_url(params), headers=HTML_BROWSER_HEADERS, retries=2)
     if not isinstance(payload, dict):
         logger.error("LOC search failed for query '%s': empty/invalid payload", q)
@@ -712,12 +719,10 @@ def search_loc(query: str, max_results: int = 12) -> list[SearchResult]:
                 "raw": {"viewer_url": viewer_url},
             }
         )
-        if len(results) >= requested_results:
-            break
     return results
 
 
-def search_heidelberg(query: str, max_results: int = 12) -> list[SearchResult]:
+def search_heidelberg(query: str, max_results: int = 20, page: int = 1) -> list[SearchResult]:
     """Search Heidelberg website and map diglit hits to IIIF manifests when discoverable."""
     if not (q := (query or "").strip()):
         return []
@@ -909,11 +914,11 @@ def _archive_thumbnail_url(identifier: str) -> str:
     return f"https://iiif.archive.org/image/iiif/2/{encoded}/full/180,/0/default.jpg"
 
 
-def _archive_manifest_is_usable(manifest_url: str) -> bool:
-    """Quickly validate Archive.org manifests before exposing them in search results.
+def archive_manifest_is_usable(manifest_url: str) -> bool:
+    """Validate whether a IIIF manifest URL resolves to an actual manifest.
 
-    Uses retries=0 and a short timeout to keep per-probe latency bounded;
-    combined with ARCHIVE_MANIFEST_PROBE_LIMIT this caps total blocking time.
+    Uses retries=0 and a short timeout to keep per-probe latency bounded.
+    Called from the async probe endpoint for individual result cards.
     """
     payload = get_json(
         manifest_url,
@@ -1080,30 +1085,6 @@ def _build_generic_harvard_results(payload: Any) -> list[SearchResult]:
             }
         )
     return results
-
-
-def _resolve_archive_candidate(
-    doc: Any,
-    resolver: ArchiveOrgResolver,
-    manifest_probes: int,
-) -> tuple[str | None, str | None, int, bool]:
-    if not isinstance(doc, dict):
-        return None, None, manifest_probes, False
-    identifier = str(doc.get("identifier") or "").strip()
-    if not identifier:
-        return None, None, manifest_probes, False
-
-    manifest_url, doc_id = resolver.get_manifest_url(identifier)
-    if not manifest_url or not doc_id:
-        return None, None, manifest_probes, False
-    if manifest_probes >= ARCHIVE_MANIFEST_PROBE_LIMIT:
-        logger.debug("Archive.org manifest probe limit reached (%s)", ARCHIVE_MANIFEST_PROBE_LIMIT)
-        return None, None, manifest_probes, True
-    manifest_probes += 1
-    if not _archive_manifest_is_usable(manifest_url):
-        logger.debug("Skipping Archive.org result with unusable manifest: %s", manifest_url)
-        return None, None, manifest_probes, False
-    return manifest_url, doc_id, manifest_probes, False
 
 
 def _archive_strip_description(raw: str) -> str:
@@ -1283,7 +1264,7 @@ def get_manifest_details(manifest_url: str) -> SearchResult | None:
         return None
 
 
-def search_vatican(query: str, max_results: int = 5) -> list[SearchResult]:
+def search_vatican(query: str, max_results: int = 5, page: int = 1) -> list[SearchResult]:
     """Search Vatican Library through a hybrid strategy.
 
     We first try direct shelfmark normalization and a few historical heuristics for
@@ -1293,6 +1274,7 @@ def search_vatican(query: str, max_results: int = 5) -> list[SearchResult]:
     Args:
         query: User input (e.g., "1223", "Urb lat 1223", "Vat.gr.123", "dante")
         max_results: Maximum number of results to return
+        page: Page number (unused — Vatican search is not paginated)
 
     Returns:
         List of SearchResult for manifests that exist

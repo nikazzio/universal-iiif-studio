@@ -11,6 +11,7 @@ from .discovery_page import discovery_content
 from .discovery_results import (
     render_error_message,
     render_feedback_message,
+    render_load_more_fragment,
     render_pdf_capability_badge,
     render_preview,
     render_search_results_list,
@@ -24,6 +25,7 @@ __all__ = [
     "render_download_status",
     "render_error_message",
     "render_feedback_message",
+    "render_load_more_fragment",
     "render_pdf_capability_badge",
     "render_preview",
     "render_search_results_list",

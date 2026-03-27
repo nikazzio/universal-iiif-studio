@@ -42,6 +42,7 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
     assert first["id"] == "b29000427_0001"
     assert first["library"] == "Archive.org"
     assert first["manifest"] == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
+    assert first["manifest_status"] == "pending"
     assert first["publisher"] == "Internet Archive"
     assert first["date"] == "1909"
     assert "Subject-index" in first["title"]
@@ -50,8 +51,8 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
     assert first["thumbnail"].startswith("https://iiif.archive.org/image/iiif/2/")
 
 
-def test_search_archive_org_skips_broken_manifests(monkeypatch):
-    """Archive search should drop results whose IIIF manifest probe fails."""
+def test_search_archive_org_returns_all_results_without_inline_probe(monkeypatch):
+    """Archive search returns all results with manifest_status=pending (no inline probe)."""
     payload = {
         "response": {
             "docs": [
@@ -76,17 +77,16 @@ def test_search_archive_org_skips_broken_manifests(monkeypatch):
     def fake_get_json(url, headers=None, retries=3, **kwargs):  # noqa: ARG001
         if "advancedsearch.php" in url:
             return payload
-        if url.endswith("/broken_item_0001/manifest.json"):
-            return None
-        if url.endswith("/working_item_0002/manifest.json"):
-            return {"type": "Manifest", "items": [{}]}
-        raise AssertionError(f"Unexpected URL {url}")
+        raise AssertionError(f"Unexpected URL {url} — no inline probing should occur")
 
     monkeypatch.setattr(discovery, "get_json", fake_get_json)
 
     results = discovery.search_archive_org("archive bot", max_results=2)
-    assert len(results) == 1
-    assert results[0]["id"] == "working_item_0002"
+    assert len(results) == 2
+    assert results[0]["id"] == "broken_item_0001"
+    assert results[1]["id"] == "working_item_0002"
+    assert results[0]["manifest_status"] == "pending"
+    assert results[1]["manifest_status"] == "pending"
 
 
 def test_archive_org_resolver_rejects_ambiguous_free_text():

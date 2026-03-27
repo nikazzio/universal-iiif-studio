@@ -5,22 +5,22 @@ def test_search_adapters_forward_gallica_filter_payload():
     """Gallica adapter must forward `gallica_type` from filters to smart_search."""
     captured: dict[str, str] = {}
 
-    def _smart_search(query: str, *, gallica_type_filter: str = "all"):
+    def _smart_search(query: str, *, max_records: int = 20, page: int = 1, gallica_type_filter: str = "all"):
         captured["query"] = query
         captured["gallica_type_filter"] = gallica_type_filter
         return [{"id": "G1", "manifest": "u1"}]
 
     handlers = build_search_strategy_handlers(
         smart_search_fn=_smart_search,
-        search_vatican_fn=lambda _q, _n: [],
-        search_institut_fn=lambda _q, _n: [],
-        search_archive_org_fn=lambda _q, _n: [],
-        search_bodleian_fn=lambda _q, _n: [],
-        search_ecodices_fn=lambda _q, _n: [],
-        search_cambridge_fn=lambda _q, _n: [],
-        search_harvard_fn=lambda _q, _n: [],
-        search_loc_fn=lambda _q, _n: [],
-        search_heidelberg_fn=lambda _q, _n: [],
+        search_vatican_fn=lambda _q, _n, _p=1: [],
+        search_institut_fn=lambda _q, _n, _p=1: [],
+        search_archive_org_fn=lambda _q, _n, _p=1: [],
+        search_bodleian_fn=lambda _q, _n, _p=1: [],
+        search_ecodices_fn=lambda _q, _n, _p=1: [],
+        search_cambridge_fn=lambda _q, _n, _p=1: [],
+        search_harvard_fn=lambda _q, _n, _p=1: [],
+        search_loc_fn=lambda _q, _n, _p=1: [],
+        search_heidelberg_fn=lambda _q, _n, _p=1: [],
     )
 
     results = handlers["gallica"]("dante", {"gallica_type": "manuscrit"})
@@ -34,7 +34,7 @@ def test_search_adapters_use_expected_provider_result_limits():
     captured: dict[str, int] = {}
 
     def _track(name: str):
-        def _inner(_query: str, max_results: int):
+        def _inner(_query: str, max_results: int, page: int = 1):
             captured[name] = max_results
             return []
 
@@ -63,12 +63,12 @@ def test_search_adapters_use_expected_provider_result_limits():
     handlers["loc"]("q", {})
     handlers["heidelberg"]("q", {})
 
-    assert captured["vatican"] == 5
-    assert captured["institut"] == 10
-    assert captured["archive"] == 10
-    assert captured["bodleian"] == 10
-    assert captured["ecodices"] == 10
-    assert captured["cambridge"] == 10
-    assert captured["harvard"] == 10
-    assert captured["loc"] == 10
-    assert captured["heidelberg"] == 10
+    assert captured["vatican"] == 20
+    assert captured["institut"] == 20
+    assert captured["archive"] == 20
+    assert captured["bodleian"] == 20
+    assert captured["ecodices"] == 20
+    assert captured["cambridge"] == 20
+    assert captured["harvard"] == 20
+    assert captured["loc"] == 20
+    assert captured["heidelberg"] == 20

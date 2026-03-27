@@ -389,3 +389,13 @@ Runtime notes:
 - `hue` (`number`, default: `0`)
 - `invert` (`bool`, default: `false`)
 - `grayscale` (`bool`, default: `false`)
+
+## `settings.discovery`
+
+Discovery search configuration. Editable from Settings > Discovery tab in the web UI.
+
+- `max_results_per_provider` (`int`, default: `20`)
+  - Maximum number of results returned by each search provider per query.
+  - Clamped to [1, 50] at runtime and on save.
+  - For paginatable providers (Archive.org, Harvard, LOC, Gallica), additional results can be loaded via the "Carica altri risultati" button.
+  - Non-paginatable providers (Vatican, Bodleian, Cambridge, Heidelberg, Institut, e-codices) return at most this many results from a single API call.

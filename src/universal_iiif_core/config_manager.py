@@ -238,6 +238,9 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             },
         },
         "network": DEFAULT_NETWORK_SETTINGS,
+        "discovery": {
+            "max_results_per_provider": 20,
+        },
     },
 }
 

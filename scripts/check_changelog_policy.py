@@ -47,27 +47,64 @@ def _iter_release_blocks(lines: list[str]) -> list[tuple[str, list[str]]]:
     return blocks
 
 
+def _collapse_bullets(block_lines: list[str]) -> list[tuple[str, str]]:
+    """Collapse multi-line bullets into (first_line, full_text) pairs.
+
+    python-semantic-release places commit links on indented continuation
+    lines.  We join them so the reference check sees the complete bullet.
+    """
+    bullets: list[tuple[str, str]] = []
+    current_first: str | None = None
+    current_parts: list[str] = []
+
+    for line in block_lines:
+        if line.startswith("- "):
+            if current_first is not None:
+                bullets.append((current_first, " ".join(current_parts)))
+            current_first = line
+            current_parts = [line[2:].strip()]
+        elif current_first is not None and line.startswith("  "):
+            current_parts.append(line.strip())
+        else:
+            if current_first is not None:
+                bullets.append((current_first, " ".join(current_parts)))
+                current_first = None
+                current_parts = []
+
+    if current_first is not None:
+        bullets.append((current_first, " ".join(current_parts)))
+
+    return bullets
+
+
 def _validate_release_block(title: str, block_lines: list[str]) -> list[str]:
     errors: list[str] = []
     sections_seen: set[str] = set()
     current_section: str | None = None
+    section_lines: list[str] = []
+
+    def _check_section_bullets() -> None:
+        for first_line, full_text in _collapse_bullets(section_lines):
+            if full_text.lower() == "none.":
+                continue
+            if not RE_ISSUE_REF.search(full_text) and not RE_COMMIT_LINK.search(full_text):
+                errors.append(f"{title}: bullet missing issue/PR reference -> '{first_line}'")
 
     for line in block_lines:
         section = RE_SECTION.match(line)
         if section:
+            _check_section_bullets()
             current_section = section.group("section")
             sections_seen.add(current_section)
+            section_lines = []
             continue
 
         if current_section is None:
             continue
 
-        if line.startswith("- "):
-            item = line[2:].strip()
-            if item.lower() == "none.":
-                continue
-            if not RE_ISSUE_REF.search(item) and not RE_COMMIT_LINK.search(item):
-                errors.append(f"{title}: bullet missing issue/PR reference -> '{line}'")
+        section_lines.append(line)
+
+    _check_section_bullets()
 
     if not sections_seen and not any(line.startswith("**Detailed Changes**:") for line in block_lines):
         errors.append(f"{title}: missing at least one '### <section>' subsection")

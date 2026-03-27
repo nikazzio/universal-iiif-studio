@@ -28,6 +28,7 @@ from studio_ui.routes.discovery_persistence import (
     resolve_saved_entry_title,
     upsert_saved_entry,
 )
+from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
@@ -226,7 +227,12 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
 
         logger.info("Resolving: lib=%s input=%s", library, shelfmark)
 
-        resolution = resolve_provider_input(library, shelfmark, filters={"gallica_type": gallica_type})
+        cm = get_config_manager()
+        max_results = cm.data.get("settings", {}).get("discovery", {}).get("max_results_per_provider", 20)
+
+        resolution = resolve_provider_input(
+            library, shelfmark, filters={"gallica_type": gallica_type, "max_results": max_results}
+        )
         provider = resolution.provider
 
         if resolution.status == "results":
@@ -236,7 +242,18 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
             if len(resolution.results) == 1 and has_manifest and (is_direct or provider.search_mode == "fallback"):
                 pages = 0 if is_direct else _page_count_from_result(first)
                 return render_preview(_build_item_preview_data(first, provider.key, pages=pages))
-            return render_search_results_list(resolution.results)
+
+            has_more = _provider_supports_pagination(provider) and len(resolution.results) >= max_results
+            return render_search_results_list(
+                resolution.results,
+                pagination={
+                    "library": library,
+                    "shelfmark": shelfmark,
+                    "gallica_type": gallica_type,
+                    "page": 1,
+                    "has_more": has_more,
+                },
+            )
 
         if resolution.status != "manifest" or not resolution.manifest_url:
             return _with_feedback_toast(
@@ -255,13 +272,87 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
     except ValueError as exc:
         logger.warning("Validation error in resolve_manifest: %s", exc)
         return _with_feedback_toast("Errore Input", str(exc), tone="danger")
-    except Exception:
+    except Exception as exc:
         logger.exception("Unexpected error in resolve_manifest")
+        short_detail = str(exc)[:200] if str(exc).strip() else "Errore sconosciuto"
         return _with_feedback_toast(
-            "Errore Interno",
-            "Si è verificato un errore imprevisto. Riprova più tardi.",
+            "Errore nella ricerca",
+            f"La ricerca per '{shelfmark}' su {library} ha generato un errore: {short_detail}",
             tone="danger",
         )
+
+
+def probe_manifest(manifest_url: str, result_id: str = ""):
+    """Validate a single IIIF manifest URL and return an HTML status fragment.
+
+    Called by HTMX lazy-load on search result cards with ``manifest_status=pending``.
+    """
+    from fasthtml.common import Div, Span
+
+    from universal_iiif_core.resolvers.discovery import archive_manifest_is_usable
+
+    manifest_url = (manifest_url or "").strip()
+    if not manifest_url:
+        return Div(
+            Span("Non disponibile", cls="text-xs text-red-500 font-medium"),
+            id=f"probe-{result_id}",
+        )
+
+    ok = archive_manifest_is_usable(manifest_url)
+    if ok:
+        return Div(
+            Span("✓ Manifesto disponibile", cls="text-xs text-emerald-600 dark:text-emerald-400 font-medium"),
+            id=f"probe-{result_id}",
+        )
+    return Div(
+        Span("✗ Manifesto non disponibile", cls="text-xs text-red-500 dark:text-red-400 font-medium"),
+        id=f"probe-{result_id}",
+    )
+
+
+# Providers whose external API supports page/offset pagination.
+_PAGINATABLE_STRATEGIES = frozenset({"archive_org", "loc", "harvard", "gallica"})
+
+
+def _provider_supports_pagination(provider) -> bool:
+    return (provider.search_strategy or "") in _PAGINATABLE_STRATEGIES
+
+
+def load_more_results(library: str, shelfmark: str, page: int = 2, gallica_type: str = "all"):
+    """Return the next page of search results as an HTMX fragment."""
+    from studio_ui.components.discovery import render_load_more_fragment
+
+    try:
+        if not shelfmark or not shelfmark.strip() or not is_known_provider(library):
+            return ""
+
+        cm = get_config_manager()
+        max_results = cm.data.get("settings", {}).get("discovery", {}).get("max_results_per_provider", 20)
+        page = max(1, int(page))
+
+        resolution = resolve_provider_input(
+            library,
+            shelfmark,
+            filters={"gallica_type": gallica_type, "max_results": max_results, "page": page},
+        )
+
+        if resolution.status != "results" or not resolution.results:
+            return render_load_more_fragment([], has_more=False)
+
+        has_more = _provider_supports_pagination(resolution.provider) and len(resolution.results) >= max_results
+        return render_load_more_fragment(
+            resolution.results,
+            has_more=has_more,
+            pagination={
+                "library": library,
+                "shelfmark": shelfmark,
+                "gallica_type": gallica_type,
+                "page": page,
+            },
+        )
+    except Exception:
+        logger.exception("Error loading more results (page %s)", page)
+        return ""
 
 
 def add_to_library(manifest_url: str, doc_id: str, library: str, result_title: str = ""):

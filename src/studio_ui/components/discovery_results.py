@@ -1,5 +1,7 @@
 """Discovery search results and preview renderers."""
 
+from __future__ import annotations
+
 import json
 from urllib.parse import quote
 
@@ -60,8 +62,46 @@ def _build_pdf_badge(manifest_url: str, badge_id: str, *, cls: str) -> Div:
     )
 
 
-def render_search_results_list(results: list) -> Div:
-    """Render list of search results aligned with global app theme."""
+def _render_load_more_section(pagination: dict | None) -> Div | str:
+    """Render the 'load more' button section for paginatable providers."""
+    if not pagination or not pagination.get("has_more"):
+        return ""
+    page = int(pagination.get("page", 1))
+    hx_vals = json.dumps(
+        {
+            "library": pagination["library"],
+            "shelfmark": pagination["shelfmark"],
+            "gallica_type": pagination.get("gallica_type", "all"),
+            "page": page + 1,
+        }
+    )
+    return Div(
+        Button(
+            Span("↓ Carica altri risultati", cls="font-medium"),
+            cls=(
+                "w-full py-3 rounded-lg border border-slate-300 dark:border-slate-600 "
+                "text-sm text-slate-700 dark:text-slate-300 "
+                "bg-white/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-700 "
+                "transition-all cursor-pointer shadow-sm"
+            ),
+            hx_post="/api/discovery/load_more",
+            hx_vals=hx_vals,
+            hx_target="#load-more-section",
+            hx_swap="outerHTML",
+            hx_indicator="#load-more-spinner",
+        ),
+        Div(
+            Span("Caricamento risultati…", cls="text-sm text-slate-500 dark:text-slate-400 animate-pulse"),
+            id="load-more-spinner",
+            cls="htmx-indicator text-center py-3",
+        ),
+        id="load-more-section",
+        cls="contents",
+    )
+
+
+def _build_result_cards(results: list) -> list:
+    """Build card elements from search result dicts."""
     cards = []
     for item in results:
         title = str(item.get("title") or "Senza titolo")
@@ -74,19 +114,50 @@ def render_search_results_list(results: list) -> Div:
         thumb = item.get("thumbnail")
         doc_id = str(item.get("id") or "")
         manifest_url = str(item.get("manifest") or "")
-        is_downloadable = bool(manifest_url)
+        manifest_status = str(item.get("manifest_status") or "ok")
+        is_downloadable = bool(manifest_url) and manifest_status != "unavailable"
         viewer_url = _resolve_viewer_url(item)
         hx_vals = _build_discovery_hx_vals(manifest_url, doc_id, library, title)
-        badge_id = f"pdf-badge-{(doc_id or 'item').replace(' ', '-').replace('/', '-')[:28]}"
+        safe_id = (doc_id or "item").replace(" ", "-").replace("/", "-")[:28]
+        badge_id = f"pdf-badge-{safe_id}"
+        probe_id = f"probe-{safe_id}"
+
+        # Manifest status badge: pending results get a lazy-loaded probe
+        if manifest_status == "pending" and manifest_url:
+            probe_badge = Div(
+                Span("⏳ Verifica manifest…", cls="text-[11px] text-slate-500 animate-pulse"),
+                id=probe_id,
+                hx_post="/api/discovery/probe_manifest",
+                hx_vals=json.dumps({"manifest_url": manifest_url, "result_id": safe_id}),
+                hx_trigger="load",
+                hx_swap="outerHTML",
+            )
+        else:
+            probe_badge = None
+
         pdf_badge = (
             _build_pdf_badge(
                 manifest_url,
                 badge_id,
                 cls="app-chip app-chip-neutral text-[11px] tracking-wide",
             )
-            if is_downloadable
+            if is_downloadable and manifest_status != "pending"
             else Span("Solo consultazione online", cls="app-chip app-chip-warning text-[11px] tracking-wide")
+            if not is_downloadable and manifest_status != "pending"
+            else None
         )
+
+        chip_row_items = [
+            Span(library, cls="app-chip app-chip-primary text-[11px] tracking-wide"),
+            Span(
+                (doc_id[:40] + "...") if len(doc_id) > 40 else doc_id,
+                cls="app-chip app-chip-neutral text-[11px] font-mono",
+            ),
+        ]
+        if pdf_badge:
+            chip_row_items.append(pdf_badge)
+        if probe_badge:
+            chip_row_items.append(probe_badge)
 
         meta_line = []
         if author and author != "Autore sconosciuto":
@@ -119,12 +190,7 @@ def render_search_results_list(results: list) -> Div:
                     Div(
                         H3(title[:140], cls="text-base font-semibold text-slate-900 dark:text-slate-100 leading-tight"),
                         Div(
-                            Span(library, cls="app-chip app-chip-primary text-[11px] tracking-wide"),
-                            Span(
-                                (doc_id[:40] + "...") if len(doc_id) > 40 else doc_id,
-                                cls="app-chip app-chip-neutral text-[11px] font-mono",
-                            ),
-                            pdf_badge,
+                            *chip_row_items,
                             cls="flex flex-wrap items-center gap-2",
                         ),
                         cls="flex flex-col gap-2",
@@ -180,6 +246,13 @@ def render_search_results_list(results: list) -> Div:
                 ),
             )
         )
+    return cards
+
+
+def render_search_results_list(results: list, *, pagination: dict | None = None) -> Div:
+    """Render list of search results aligned with global app theme."""
+    cards = _build_result_cards(results)
+    load_more = _render_load_more_section(pagination)
 
     return Div(
         Div(
@@ -193,9 +266,18 @@ def render_search_results_list(results: list) -> Div:
                 "border-slate-200 dark:border-slate-700"
             ),
         ),
-        Div(*cards, cls="space-y-3 max-h-[640px] overflow-y-auto pr-1"),
+        Div(*cards, load_more, id="discovery-results-cards", cls="space-y-3 max-h-[640px] overflow-y-auto pr-1"),
         id="discovery-preview",
     )
+
+
+def render_load_more_fragment(results: list, *, has_more: bool = False, pagination: dict | None = None) -> Div:
+    """Render new cards + optional next load-more button (replaces #load-more-section)."""
+    cards = _build_result_cards(results)
+    pag = dict(pagination or {})
+    pag["has_more"] = has_more
+    next_section = _render_load_more_section(pag) if has_more else ""
+    return Div(*cards, next_section, id="load-more-section", cls="contents")
 
 
 _FEEDBACK_STYLES = {

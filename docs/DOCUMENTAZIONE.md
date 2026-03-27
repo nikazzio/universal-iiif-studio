@@ -137,6 +137,12 @@ La barra di ricerca Discovery è pensata in stile "standard":
   * `Solo manoscritti`,
   * `Solo libri a stampa`.
 
+Il numero massimo di risultati per provider è configurabile da **Settings > Discovery** (default: 20, range 1-50).
+
+Per i provider con API paginate (Archive.org, Harvard, Library of Congress, Gallica), un pulsante **"Carica altri risultati"** in fondo alla lista permette di caricare le pagine successive senza ricaricare la pagina.
+
+I risultati di Archive.org mostrano anche descrizione, volume e lingua quando disponibili. La validazione del manifest IIIF avviene in modo asincrono per ogni card (badge "Verifica manifest…" → "✓ Manifesto disponibile" / "✗ Non disponibile").
+
 Nota: su Gallica i filtri per tipologia vengono applicati localmente sui metadati (`dc:type`) estratti dai record SRU, perché i filtri CQL diretti su `dc.type` non sono sempre affidabili.
 
 ### 🛰️ Smart Resolvers
