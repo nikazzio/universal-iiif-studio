@@ -139,6 +139,8 @@ _HTML_TAG_RE: Final = re.compile(r"<[^>]+>")
 _SPACE_RE: Final = re.compile(r"\s+")
 _SPACE_BEFORE_PUNCT_RE: Final = re.compile(r"\s+([,;:!?])")
 _SPACE_BEFORE_SINGLE_PERIOD_RE: Final = re.compile(r"(?<!\.)\s+\.(?!\.)")
+# Matches volume hints in descriptions: "v. 1", "vol. 3", "volume 5", "t. 2" etc.
+_ARCHIVE_VOLUME_RE: Final = re.compile(r"\b(?:v(?:ol(?:ume)?)?\.?|t(?:omo)?\.?)\s*(\d+)\b", flags=re.IGNORECASE)
 
 _VATICAN_NUMERIC_COLLECTIONS: Final[list[str]] = [
     "Urb.lat",
@@ -417,7 +419,7 @@ def search_archive_org(query: str, max_results: int = 12) -> list[SearchResult]:
     fetch_rows = min(max(requested_results * 3, requested_results), 30)
     params = {
         "q": f"({clean_q}) AND mediatype:texts",
-        "fl[]": ["identifier", "title", "creator", "date", "mediatype"],
+        "fl[]": ["identifier", "title", "creator", "date", "mediatype", "description", "volume", "language"],
         "rows": str(fetch_rows),
         "page": "1",
         "output": "json",
@@ -910,13 +912,14 @@ def _archive_thumbnail_url(identifier: str) -> str:
 def _archive_manifest_is_usable(manifest_url: str) -> bool:
     """Quickly validate Archive.org manifests before exposing them in search results.
 
-    Uses retries=0 to avoid long waits per probe — the probe limit is already kept
-    low (ARCHIVE_MANIFEST_PROBE_LIMIT) to bound total latency.
+    Uses retries=0 and a short timeout to keep per-probe latency bounded;
+    combined with ARCHIVE_MANIFEST_PROBE_LIMIT this caps total blocking time.
     """
     payload = get_json(
         manifest_url,
         headers={**HTML_BROWSER_HEADERS, "Accept": "application/json"},
         retries=0,
+        timeout=(5, 8),
     )
     if payload is None:
         logger.debug("Archive.org manifest probe failed for %s: empty payload", manifest_url)
@@ -1103,12 +1106,29 @@ def _resolve_archive_candidate(
     return manifest_url, doc_id, manifest_probes, False
 
 
+def _archive_strip_description(raw: str) -> str:
+    """Strip HTML tags and normalise whitespace from an Archive.org description."""
+    text = _HTML_TAG_RE.sub(" ", raw)
+    return _SPACE_RE.sub(" ", text).strip()
+
+
 def _build_archive_result(doc: dict[str, Any], *, doc_id: str, manifest_url: str) -> SearchResult:
     title = _archive_scalar(doc.get("title")) or doc_id
     author = _archive_scalar(doc.get("creator")) or "Autore sconosciuto"
     date = _archive_scalar(doc.get("date"))
     mediatype = _archive_scalar(doc.get("mediatype")) or "texts"
+    language = _archive_scalar(doc.get("language")) or ""
     thumb = _archive_thumbnail_url(doc_id)
+
+    # Volume: explicit field takes priority, otherwise search in description.
+    volume = _archive_scalar(doc.get("volume"))
+    raw_desc = _archive_scalar(doc.get("description")) or ""
+    description = _archive_strip_description(raw_desc)
+
+    if not volume and description:
+        vol_match = _ARCHIVE_VOLUME_RE.search(description)
+        if vol_match:
+            volume = vol_match.group(1)
 
     result: SearchResult = {
         "id": doc_id,
@@ -1127,6 +1147,12 @@ def _build_archive_result(doc: dict[str, Any], *, doc_id: str, manifest_url: str
     }
     if date:
         result["date"] = date[:100]
+    if description:
+        # Prepend volume info so multi-volume works are immediately distinguishable.
+        prefix = f"Vol. {volume} — " if volume else ""
+        result["description"] = (prefix + description)[:220]
+    if language:
+        result["language"] = language[:40]
     return result
 
 

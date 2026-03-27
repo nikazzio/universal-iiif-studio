@@ -26,7 +26,7 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
         }
     }
 
-    def fake_get_json(url, headers=None, retries=3):  # noqa: ARG001
+    def fake_get_json(url, headers=None, retries=3, **kwargs):  # noqa: ARG001
         if "advancedsearch.php" in url:
             assert "mediatype%3Atexts" in url
             return payload
@@ -73,7 +73,7 @@ def test_search_archive_org_skips_broken_manifests(monkeypatch):
         }
     }
 
-    def fake_get_json(url, headers=None, retries=3):  # noqa: ARG001
+    def fake_get_json(url, headers=None, retries=3, **kwargs):  # noqa: ARG001
         if "advancedsearch.php" in url:
             return payload
         if url.endswith("/broken_item_0001/manifest.json"):

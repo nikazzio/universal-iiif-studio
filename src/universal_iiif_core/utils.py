@@ -27,7 +27,12 @@ DEFAULT_HEADERS = {
 }
 
 
-def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | None:
+def get_json(
+    url: str,
+    headers: dict | None = None,
+    retries: int = 3,
+    timeout: tuple[int, int] = (10, 20),
+) -> Any | None:
     """Fetch JSON from a URL with retry logic (LEGACY).
 
     DEPRECATED: New code should use HTTPClient.get_json() instead.
@@ -38,6 +43,7 @@ def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | N
         url: URL to fetch
         headers: Optional additional headers (merged with defaults)
         retries: Optional override for max retry attempts, kept for backward compatibility
+        timeout: (connect_timeout, read_timeout) in seconds
 
     Returns:
         Parsed JSON data or None on error
@@ -52,7 +58,7 @@ def get_json(url: str, headers: dict | None = None, retries: int = 3) -> Any | N
 
     try:
         # HTTPClient.get_json() handles all retry logic, backoff, rate limiting
-        return http_client.get_json(url, library_name=None, timeout=(10, 20), headers=headers, retries=retries)
+        return http_client.get_json(url, library_name=None, timeout=timeout, headers=headers, retries=retries)
     except Exception as e:
         logger.debug(f"get_json failed for {url}: {e}")
         return None
