@@ -5,7 +5,10 @@ from urllib.parse import urlparse
 
 from .base import BaseResolver
 
-_PATH_RE = re.compile(r"/(?:(?:en|de|fr|it)/)?(?P<library>[a-z0-9]+)/(?P<shelfmark>[a-z0-9._-]+)", flags=re.IGNORECASE)
+_PATH_RE = re.compile(
+    r"/(?:(?:en|de|fr|it)/)?(?P<library>[a-z0-9]{2,5})/(?P<shelfmark>[a-z0-9._-]*\d{3}[a-z0-9._-]*)",
+    flags=re.IGNORECASE,
+)
 _MANIFEST_RE = re.compile(
     r"/metadata/iiif/(?P<compound>[a-z0-9._-]+-[a-z0-9._-]+)/manifest\.json$",
     flags=re.IGNORECASE,

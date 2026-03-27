@@ -124,12 +124,22 @@ def test_ecodices_resolver_compound_id_and_page_url():
 
 
 def test_harvard_resolver_extracts_drs_id():
-    """Extract Harvard DRS identifiers from viewer URLs."""
+    """Extract Harvard DRS and IDS identifiers; doc_id includes the canonical prefix."""
     resolver = HarvardResolver()
 
     manifest_url, doc_id = resolver.get_manifest_url("https://iiif.lib.harvard.edu/manifests/view/drs:12345678")
     assert manifest_url == "https://iiif.lib.harvard.edu/manifests/drs:12345678"
-    assert doc_id == "12345678"
+    assert doc_id == "drs:12345678"
+
+    # ids: manifest URLs must not be rewritten to drs:
+    manifest_url2, doc_id2 = resolver.get_manifest_url("https://iiif.lib.harvard.edu/manifests/view/ids:504952783")
+    assert manifest_url2 == "https://iiif.lib.harvard.edu/manifests/ids:504952783"
+    assert doc_id2 == "ids:504952783"
+
+    # Bare drs: token (as emitted by search_harvard)
+    manifest_url3, doc_id3 = resolver.get_manifest_url("drs:494880795")
+    assert manifest_url3 == "https://iiif.lib.harvard.edu/manifests/drs:494880795"
+    assert doc_id3 == "drs:494880795"
 
 
 def test_loc_resolver_strips_span_suffix():
