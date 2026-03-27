@@ -7,6 +7,7 @@ from universal_iiif_core.config_manager import get_config_manager
 
 from .controls import raw_file_script, raw_init
 from .panes import (
+    _build_discovery_pane,
     _build_general_pane,
     _build_images_pane,
     _build_network_pane,
@@ -171,6 +172,7 @@ def settings_content() -> Div:
     network_pane = _build_network_pane(cm, s)
     viewer_pane = _build_viewer_pane(cm, s)
     system_pane = _build_system_pane(cm, s)
+    discovery_pane = _build_discovery_pane(cm, s)
 
     # Recreate the real tab buttons for clarity (kept here to allow localization)
     tab_buttons = Div(
@@ -179,12 +181,15 @@ def settings_content() -> Div:
         Button("PDF Export", type="button", data_tab="pdf", cls="settings-tab"),
         Button("Imaging Pipeline", type="button", data_tab="images", cls="settings-tab"),
         Button("Network & Libraries", type="button", data_tab="network", cls="settings-tab"),
+        Button("Discovery", type="button", data_tab="discovery", cls="settings-tab"),
         Button("Viewer", type="button", data_tab="viewer", cls="settings-tab"),
         Button("Paths & System", type="button", data_tab="system", cls="settings-tab"),
-        cls="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2 mb-4",
+        cls="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4",
     )
 
-    panes = Div(general_pane, processing_pane, pdf_pane, images_pane, network_pane, viewer_pane, system_pane)
+    panes = Div(
+        general_pane, processing_pane, pdf_pane, images_pane, network_pane, discovery_pane, viewer_pane, system_pane
+    )
 
     form = Form(
         tab_buttons,

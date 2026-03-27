@@ -246,6 +246,18 @@ def _postprocess_network_settings(settings_node: dict[str, Any]) -> None:
     normalize_network_settings(settings_node)
 
 
+def _postprocess_discovery_settings(settings_node: dict[str, Any]) -> None:
+    discovery = settings_node.setdefault("discovery", {})
+    if not isinstance(discovery, dict):
+        settings_node["discovery"] = {}
+        discovery = settings_node["discovery"]
+    try:
+        val = int(discovery.get("max_results_per_provider", 20))
+    except (TypeError, ValueError):
+        val = 20
+    discovery["max_results_per_provider"] = max(1, min(val, 50))
+
+
 def _postprocess_storage_settings(settings_node: dict[str, Any]) -> None:
     storage = settings_node.setdefault("storage", {})
     if not isinstance(storage, dict):
@@ -425,6 +437,7 @@ async def save_settings(request):
         _postprocess_images_settings(settings_node)
         _postprocess_pdf_settings(settings_node)
         _postprocess_network_settings(settings_node)
+        _postprocess_discovery_settings(settings_node)
         _postprocess_storage_settings(settings_node)
         profile_changes = _postprocess_pdf_profiles(settings_node)
         ui_settings = settings_node.get("ui")
