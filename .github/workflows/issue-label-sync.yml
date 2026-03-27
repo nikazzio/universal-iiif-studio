@@ -39,6 +39,7 @@ jobs:
                 "area:export",
                 "area:providers",
                 "area:desktop",
+                "area:core",
                 "area:roadmap",
               ]),
               semver: new Set(["major", "minor", "patch", "semver:none"]),

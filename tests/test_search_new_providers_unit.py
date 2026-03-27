@@ -20,6 +20,16 @@ class _Resp:
             raise RuntimeError(f"HTTP {self.status_code}")
 
 
+def _patch_http_client(monkeypatch, fake_get):
+    """Replace the discovery module's cached HTTPClient with one backed by *fake_get*."""
+
+    class _MockClient:
+        def get(self, *args, **kwargs):
+            return fake_get(*args, **kwargs)
+
+    monkeypatch.setattr(discovery, "_http_client_cache", _MockClient())
+
+
 def test_search_loc_maps_loc_item_urls_to_manifests(monkeypatch):
     """LOC search should keep only entries that map to canonical IIIF item manifests."""
     payload = {
@@ -150,7 +160,7 @@ def test_search_cambridge_parses_view_links(monkeypatch):
     <a href="/view/MS-ADD-03996">MS ADD 03996</a>
     <a href="/view/MS-ADD-12345">MS ADD 12345</a>
     """
-    monkeypatch.setattr(discovery.requests, "get", lambda *_a, **_k: _Resp(status_code=200, text=html))
+    _patch_http_client(monkeypatch, lambda *_a, **_k: _Resp(status_code=200, text=html))
 
     results = discovery.search_cambridge("ms add", max_results=10)
     assert len(results) == 2
@@ -159,9 +169,8 @@ def test_search_cambridge_parses_view_links(monkeypatch):
 
 def test_search_cambridge_handles_waf_challenge(monkeypatch):
     """Cambridge WAF challenge responses should produce a browser handoff result."""
-    monkeypatch.setattr(
-        discovery.requests,
-        "get",
+    _patch_http_client(
+        monkeypatch,
         lambda *_a, **_k: _Resp(status_code=202, text="", headers={"x-amzn-waf-action": "challenge"}),
     )
 
@@ -188,7 +197,7 @@ def test_search_cambridge_signature_normalization_without_http():
 
 def test_search_cambridge_ms_free_text_does_not_take_direct_path(monkeypatch):
     """`MS ...` free text without numeric shelfmark parts should not become a direct manifest ID."""
-    monkeypatch.setattr(discovery.requests, "get", lambda *_a, **_k: _Resp(status_code=200, text="<html></html>"))
+    _patch_http_client(monkeypatch, lambda *_a, **_k: _Resp(status_code=200, text="<html></html>"))
     results = discovery.search_cambridge("MS Add Dante", max_results=10)
     assert len(results) == 1
     assert results[0]["manifest"] == ""
@@ -198,7 +207,7 @@ def test_search_cambridge_ms_free_text_does_not_take_direct_path(monkeypatch):
 def test_search_heidelberg_maps_diglit_links(monkeypatch):
     """Heidelberg search should map `diglit/<id>` links to IIIF manifest URLs."""
     html = '<a href="https://digi.ub.uni-heidelberg.de/diglit/cpg123">Cod. Pal. germ. 123</a>'
-    monkeypatch.setattr(discovery.requests, "get", lambda *_a, **_k: _Resp(status_code=200, text=html))
+    _patch_http_client(monkeypatch, lambda *_a, **_k: _Resp(status_code=200, text=html))
 
     results = discovery.search_heidelberg("cpg", max_results=10)
     assert len(results) == 1
@@ -208,7 +217,7 @@ def test_search_heidelberg_maps_diglit_links(monkeypatch):
 
 def test_search_heidelberg_returns_browser_handoff_when_no_hits(monkeypatch):
     """Heidelberg free-text without diglit hits should degrade to a consult-only browser result."""
-    monkeypatch.setattr(discovery.requests, "get", lambda *_a, **_k: _Resp(status_code=200, text="<html></html>"))
+    _patch_http_client(monkeypatch, lambda *_a, **_k: _Resp(status_code=200, text="<html></html>"))
 
     results = discovery.search_heidelberg("dante", max_results=10)
     assert len(results) == 1

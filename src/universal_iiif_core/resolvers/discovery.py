@@ -10,10 +10,12 @@ from urllib.parse import quote, urlencode
 
 import requests
 
+from ..config_manager import get_config_manager
 from ..discovery.contracts import ProviderResolution
 from ..discovery.orchestrator import resolve_provider_input as resolve_provider_input_orchestrated
 from ..discovery.search_adapters import build_search_strategy_handlers
 from ..exceptions import ResolverError
+from ..http_client import HTTPClient
 from ..logger import get_logger
 from ..providers import IIIFProvider
 from ..utils import get_json
@@ -33,6 +35,21 @@ logger = get_logger(__name__)
 
 # Constants
 TIMEOUT_SECONDS: Final = 20
+_DISCOVERY_TIMEOUT: Final = (10, 20)
+
+_http_client_cache: HTTPClient | None = None
+
+
+def _get_http_client() -> HTTPClient:
+    """Return a lazily-initialised HTTPClient for discovery searches."""
+    global _http_client_cache  # noqa: PLW0603
+    if _http_client_cache is None:
+        cm = get_config_manager()
+        network_policy = cm.data.get("settings", {}).get("network", {})
+        _http_client_cache = HTTPClient(network_policy=network_policy)
+    return _http_client_cache
+
+
 GALLICA_BASE_URL: Final = "https://gallica.bnf.fr/SRU"
 ARCHIVE_ADVANCEDSEARCH_URL: Final = "https://archive.org/advancedsearch.php"
 INSTITUT_SEARCH_URL: Final = "https://bibnum.institutdefrance.fr/records/default"
@@ -282,7 +299,13 @@ def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
 
     try:
         logger.debug("Searching Gallica SRU by ID: %s", doc_id)
-        resp = requests.get(GALLICA_BASE_URL, params=params, headers=REAL_BROWSER_HEADERS, timeout=TIMEOUT_SECONDS)
+        resp = _get_http_client().get(
+            GALLICA_BASE_URL,
+            params=params,
+            headers=REAL_BROWSER_HEADERS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="gallica",
+        )
         resp.raise_for_status()
 
         resolver = GallicaResolver()
@@ -367,7 +390,13 @@ def search_gallica(
     }
     try:
         logger.debug("Searching Gallica SRU: %s (filter=%s)", cql, normalized_filter)
-        resp = requests.get(GALLICA_BASE_URL, params=params, headers=REAL_BROWSER_HEADERS, timeout=TIMEOUT_SECONDS)
+        resp = _get_http_client().get(
+            GALLICA_BASE_URL,
+            params=params,
+            headers=REAL_BROWSER_HEADERS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="gallica",
+        )
         resp.raise_for_status()
         results = GallicaXMLParser.parse_sru(resp.content, resolver)
     except (requests.RequestException, xml.etree.ElementTree.ParseError, ValueError) as exc:
@@ -388,11 +417,12 @@ def search_institut(query: str, max_results: int = 20, page: int = 1) -> list[Se
 
     try:
         logger.debug("Searching Institut records: %s", q)
-        response = requests.get(
+        response = _get_http_client().get(
             INSTITUT_SEARCH_URL,
             params={"search": q},
             headers=HTML_BROWSER_HEADERS,
-            timeout=TIMEOUT_SECONDS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="institut",
         )
         response.raise_for_status()
     except (requests.RequestException, requests.Timeout) as exc:
@@ -473,11 +503,12 @@ def search_bodleian(query: str, max_results: int = 20, page: int = 1) -> list[Se
     requested_results = max(1, min(max_results, 20))
     try:
         logger.debug("Searching Bodleian JSON-LD search surface: %s", q)
-        response = requests.get(
+        response = _get_http_client().get(
             BODLEIAN_SEARCH_URL,
             params={"q": q},
             headers={**HTML_BROWSER_HEADERS, "Accept": "application/ld+json"},
-            timeout=TIMEOUT_SECONDS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="bodleian",
         )
         response.raise_for_status()
         payload = response.json()
@@ -508,7 +539,7 @@ def search_ecodices(query: str, max_results: int = 20, page: int = 1) -> list[Se
     requested_results = max(1, min(max_results, 20))
     try:
         logger.debug("Searching e-codices HTML search surface: %s", q)
-        response = requests.get(
+        response = _get_http_client().get(
             ECODICES_SEARCH_URL,
             params={
                 "sQueryString": q,
@@ -518,7 +549,8 @@ def search_ecodices(query: str, max_results: int = 20, page: int = 1) -> list[Se
                 "aSelectedFacets": "",
             },
             headers=HTML_BROWSER_HEADERS,
-            timeout=TIMEOUT_SECONDS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="ecodices",
         )
         response.raise_for_status()
     except (requests.RequestException, requests.Timeout) as exc:
@@ -579,11 +611,12 @@ def search_cambridge(query: str, max_results: int = 20, page: int = 1) -> list[S
             ]
 
     try:
-        response = requests.get(
+        response = _get_http_client().get(
             CAMBRIDGE_SEARCH_URL,
             params={"keyword": q},
             headers=HTML_BROWSER_HEADERS,
-            timeout=TIMEOUT_SECONDS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="cambridge",
         )
         if response.status_code == 202 and response.headers.get("x-amzn-waf-action") == "challenge":
             logger.warning("Cambridge search is blocked by WAF challenge in current environment.")
@@ -765,11 +798,12 @@ def search_heidelberg(query: str, max_results: int = 20, page: int = 1) -> list[
             ]
 
     try:
-        response = requests.get(
+        response = _get_http_client().get(
             HEIDELBERG_SITE_SEARCH_URL,
             params={"query": q, "q": "homepage", "sprache": "ger", "wo": "w"},
             headers=HTML_BROWSER_HEADERS,
-            timeout=TIMEOUT_SECONDS,
+            timeout=_DISCOVERY_TIMEOUT,
+            library_name="heidelberg",
         )
         response.raise_for_status()
     except (requests.RequestException, requests.Timeout) as exc:
@@ -1382,6 +1416,10 @@ def _search_vatican_official_site(query: str, max_results: int = 5) -> list[Sear
 
     The result page rejects cold requests from non-browser clients, so we first prime the
     session on the manuscripts landing page and then send the actual search with a referer.
+
+    Note: this function uses a raw ``requests.Session`` rather than the centralised
+    ``HTTPClient`` because the two-step cookie flow requires an isolated session to
+    avoid cross-contamination with other provider cookies.
     """
     if not (q := (query or "").strip()):
         return []
