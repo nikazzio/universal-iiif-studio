@@ -167,10 +167,7 @@ def _clone_or_update_wiki_or_exit(*, remote_url: str, wiki_dir: Path) -> None:
         _clone_or_update_wiki(remote_url=remote_url, wiki_dir=wiki_dir)
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
-        msg = (
-            "Failed to clone or update wiki repository. "
-            "Verify that the wiki is enabled and credentials are valid."
-        )
+        msg = "Failed to clone or update wiki repository. Verify that the wiki is enabled and credentials are valid."
         if stderr:
             msg = f"{msg}\n{stderr}"
         raise SystemExit(msg) from exc

@@ -33,7 +33,9 @@ iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 
 - IIIF manifest resolution and page download pipeline
 - **Centralized HTTP client** with automatic retry, exponential backoff, and per-host rate limiting
-- Discovery with free-text search plus optional Gallica filters (`all`, `manuscripts`, `printed books`)
+- Discovery with shared provider registry for web + CLI
+- Discovery with free-text search plus provider-specific filters (currently Gallica type filter with labels `Tutti i materiali`, `Solo manoscritti`, `Solo libri a stampa`)
+- Discovery internals split into typed orchestrator/search adapters (`universal_iiif_core.discovery`) and modular UI components (`studio_ui.components.discovery_*`)
 - Native PDF-first workflow (configurable)
 - Canvas/image fallback with optional compiled PDF generation
 - Local Library + Studio workflow: select in Library, analyze in Studio
@@ -58,7 +60,7 @@ python3 src/studio_app.py
 ```
 
 Navigation model:
-- `Discovery` supports free text/shelfmark/ID/URL search and optional Gallica type filters.
+- `Discovery` supports free text/shelfmark/ID/URL search and provider-specific filters when available.
 - `Aggiungi item` in Discovery performs a light prefetch (`metadata.json` + `manifest.json`) without full scans.
 - `Library` is the canonical entrypoint for local documents.
 - `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
@@ -71,6 +73,45 @@ Navigation model:
 ```bash
 iiif-cli "<manifest-url>"
 ```
+
+Direct resolution is shared across web and CLI for these providers:
+- Vaticana
+- Gallica
+- Institut de France
+- Bodleian
+- Heidelberg
+- Cambridge
+- e-codices
+- Harvard
+- Library of Congress
+- Internet Archive
+
+Current discovery search coverage:
+- `search_first`: Gallica, Internet Archive
+- `fallback`: Vaticana, Institut de France
+- `direct + search adapter`: Bodleian, e-codices, Heidelberg, Cambridge, Harvard, Library of Congress
+- `direct only`: generic direct manifest URLs
+
+Provider behavior summary:
+
+| Provider | Direct resolution | Free-text search | Notes |
+| --- | --- | --- | --- |
+| Vaticana | Yes | Yes | Hybrid flow: shelfmark heuristics first, DigiVatLib manuscripts search fallback for free text |
+| Gallica | Yes | Yes | Uses SRU search and optional type filter |
+| Institut de France | Yes | Yes | HTML search + manifest enrichment |
+| Bodleian | Yes | Yes | JSON-LD search surface |
+| Heidelberg | Yes | Yes (browser handoff when needed) | Direct ID/URL works; also normalizes inputs like `Cod. Pal. germ. 123` -> `cpg123`; generic queries can degrade to browser handoff |
+| Cambridge | Yes | Yes (browser handoff when blocked) | Signature/URL resolution works directly; blocked free-text queries return a browser handoff result that opens CUDL search |
+| e-codices | Yes | Yes | HTML search surface |
+| Harvard | Yes | Yes (hybrid) | Shows all catalog results; records without IIIF manifest are marked as consultazione online only |
+| Library of Congress | Yes | Yes | JSON API search; live manifest fetch may still be host-blocked in some environments |
+| Internet Archive | Yes | Yes | `advancedsearch.php` + IIIF manifest validation |
+| Altro / URL Diretto | Yes | No | Generic direct manifest resolution |
+
+Search result contract:
+- discovery providers return canonical `SearchResult` items with `manifest`, `library`, and `id`
+- providers should populate `viewer_url` when they know the source viewer URL
+- `raw` is still available for provider-specific metadata, but UI code should not depend on `raw["viewer_url"]` anymore
 
 ## Configuration
 

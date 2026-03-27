@@ -29,6 +29,7 @@ class SearchResult(TypedDict, total=False):
     language: str
     thumbnail: str
     manifest: str
+    viewer_url: str
     library: str
     thumb: str
     ark: str

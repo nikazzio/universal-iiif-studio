@@ -1569,9 +1569,7 @@ def _resolve_manifest_for_selected_source(
 
     fallback_source_mode = "local" if manifest_exists_local else "remote"
     fallback_manifest_url = (
-        local_manifest_url
-        if fallback_source_mode == "local"
-        else (remote_manifest_url or local_manifest_url)
+        local_manifest_url if fallback_source_mode == "local" else (remote_manifest_url or local_manifest_url)
     )
     return fallback_manifest, fallback_canvas, manifest_exists_local, fallback_manifest_url, fallback_source_mode
 

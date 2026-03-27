@@ -13,6 +13,11 @@ _ARK_CAPTURE_RE = re.compile(r"ark:/(12148)/([a-z0-9]+)", flags=re.IGNORECASE)
 # Deve iniziare con caratteri tipici Gallica (spesso b) ed essere lungo almeno 6 char.
 _SHORT_ID_RE = re.compile(r"^[a-z0-9]{6,}$", flags=re.IGNORECASE)
 
+# Bare IDs matching this pattern belong to Heidelberg (e.g. cpg123, cpl456).
+# Exclude them from Gallica autodetection to avoid misrouting catalog shelfmarks.
+# Pattern mirrors the known-prefix bare IDs in resolvers/heidelberg.py.
+_HEIDELBERG_BARE_ID_RE = re.compile(r"^(?:cpg|cpl|cpgr|cpb)\d+$", flags=re.IGNORECASE)
+
 
 class GallicaResolver(BaseResolver):
     """Resolver for Gallica (BnF) tailored to extract ARK IDs reliably.
@@ -38,7 +43,9 @@ class GallicaResolver(BaseResolver):
         # Se contiene un pattern ARK esplicito
         if "ark:/" in s:
             return True
-        # Se sembra uno short ID valido
+        # Se sembra uno short ID valido, ma non un ID Heidelberg (cpg123, hd16, ...)
+        if _HEIDELBERG_BARE_ID_RE.fullmatch(s):
+            return False
         return bool(_SHORT_ID_RE.match(s))
 
     def get_manifest_url(self, url_or_id: str) -> tuple[str | None, str | None]:

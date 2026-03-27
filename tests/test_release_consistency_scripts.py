@@ -116,7 +116,7 @@ changelog_file = "CHANGELOG.md"
             "jobs:\n"
             "  semantic-release:\n"
             "    steps:\n"
-            "      - run: pip install \"python-semantic-release>=10.5.3,<11\"\n"
+            '      - run: pip install "python-semantic-release>=10.5.3,<11"\n'
             "      - run: semantic-release version --push\n"
             "      - run: semantic-release publish\n"
         ),
@@ -167,7 +167,7 @@ changelog_file = "CHANGELOG.md"
             "jobs:\n"
             "  semantic-release:\n"
             "    steps:\n"
-            "      - run: pip install \"python-semantic-release>=10.5.3,<11\"\n"
+            '      - run: pip install "python-semantic-release>=10.5.3,<11"\n'
             "      - run: semantic-release version --push\n"
             "      - run: semantic-release publish\n"
         ),

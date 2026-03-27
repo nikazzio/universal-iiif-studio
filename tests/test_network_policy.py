@@ -69,9 +69,9 @@ def test_library_without_custom_policy_uses_global_timeouts():
     settings = _settings_copy()
     settings.setdefault("network", {}).setdefault("global", {})["connect_timeout_s"] = 13
     settings.setdefault("network", {}).setdefault("global", {})["read_timeout_s"] = 44
-    settings.setdefault("network", {}).setdefault("libraries", {}).setdefault("bodleian", {})[
-        "use_custom_policy"
-    ] = False
+    settings.setdefault("network", {}).setdefault("libraries", {}).setdefault("bodleian", {})["use_custom_policy"] = (
+        False
+    )
 
     policy = resolve_library_network_policy(settings, "Bodleian")
 
@@ -101,9 +101,9 @@ def test_global_download_defaults_are_fully_applied_when_custom_is_disabled():
             "respect_retry_after": False,
         }
     )
-    settings.setdefault("network", {}).setdefault("libraries", {}).setdefault("bodleian", {})[
-        "use_custom_policy"
-    ] = False
+    settings.setdefault("network", {}).setdefault("libraries", {}).setdefault("bodleian", {})["use_custom_policy"] = (
+        False
+    )
 
     policy = resolve_library_network_policy(settings, "Bodleian")
 

@@ -4,28 +4,16 @@ import sys
 from universal_iiif_core import __version__
 from universal_iiif_core.logger import get_logger, setup_logging
 from universal_iiif_core.logic import IIIFDownloader
-from universal_iiif_core.resolvers.gallica import GallicaResolver
-from universal_iiif_core.resolvers.generic import GenericResolver
-from universal_iiif_core.resolvers.oxford import OxfordResolver
-from universal_iiif_core.resolvers.vatican import VaticanResolver
+from universal_iiif_core.providers import resolve_with_provider
 
 logger = get_logger(__name__)
 
 
 def resolve_url_with_library(input_str):
     """Finds the right resolver for the input and returns (manifest_url, id, library_name)."""
-    resolvers = [
-        (VaticanResolver(), "Vaticana (BAV)"),
-        (GallicaResolver(), "Gallica (BnF)"),
-        (OxfordResolver(), "Bodleian (Oxford)"),
-        (GenericResolver(), "Generic"),
-    ]
-    for res, lib_name in resolvers:
-        if res.can_resolve(input_str):
-            result = res.get_manifest_url(input_str)
-            # Check if valid manifest returned
-            if result[0]:
-                return result[0], result[1], lib_name
+    manifest_url, doc_id, provider = resolve_with_provider(input_str)
+    if manifest_url:
+        return manifest_url, doc_id, provider.key
     return None, None, "Unknown"
 
 

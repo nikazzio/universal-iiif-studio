@@ -1,39 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Final
-
-from .gallica import GallicaResolver
-from .generic import GenericResolver
-from .institut import InstitutResolver
-from .oxford import OxfordResolver
-from .vatican import VaticanResolver
+from universal_iiif_core.providers import get_provider
+from universal_iiif_core.resolvers.generic import GenericResolver
 
 
 class ResolverRegistry:
-    """Registry mapping library keywords to resolver classes.
-
-    Keeps the keyword -> resolver mapping in one place and provides a
-    clean lookup API instead of ad-hoc if/elif chains.
-    """
-
-    _MAP: Final = {
-        "vatican": VaticanResolver,
-        "gallica": GallicaResolver,
-        "bnf": GallicaResolver,
-        "institut": InstitutResolver,
-        "bibnum": InstitutResolver,
-        "oxford": OxfordResolver,
-        "bodleian": OxfordResolver,
-    }
+    """Registry mapping library values to resolver classes."""
 
     @classmethod
-    def get_resolver_class(cls, library_name: str) -> Any:
+    def get_resolver_class(cls, library_name: str):
         """Return the resolver class matching the provided library name."""
-        name = (library_name or "").lower()
-        for key, resolver in cls._MAP.items():
-            if key in name:
-                return resolver
-        return GenericResolver
+        provider = get_provider(library_name, fallback="Unknown")
+        return provider.resolver_cls if provider.resolver_cls is not None else GenericResolver
 
 
 def resolve_shelfmark(library: str, shelfmark: str) -> tuple[str | None, str | None]:

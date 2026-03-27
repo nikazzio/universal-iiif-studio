@@ -54,7 +54,7 @@ def _validate_semantic_release_config(pyproject_text: str) -> list[str]:
         errors.append("Missing [tool.semantic_release.changelog] configuration.")
     if f'insertion_flag = "{INSERTION_FLAG}"' not in pyproject_text:
         errors.append("semantic-release changelog insertion_flag is not configured.")
-    if '[tool.semantic_release.changelog.default_templates]' not in pyproject_text:
+    if "[tool.semantic_release.changelog.default_templates]" not in pyproject_text:
         errors.append("Missing [tool.semantic_release.changelog.default_templates] configuration.")
     if 'changelog_file = "CHANGELOG.md"' not in pyproject_text:
         errors.append("semantic-release changelog_file must point to CHANGELOG.md.")
@@ -63,7 +63,7 @@ def _validate_semantic_release_config(pyproject_text: str) -> list[str]:
 
 def _validate_release_workflow(workflow_text: str) -> list[str]:
     errors: list[str] = []
-    if 'python-semantic-release>=10.5.3,<11' not in workflow_text:
+    if "python-semantic-release>=10.5.3,<11" not in workflow_text:
         errors.append("Release workflow must pin python-semantic-release to a bounded 10.x range.")
     if "semantic-release version --push" not in workflow_text:
         errors.append("Release workflow is missing the semantic-release version step.")

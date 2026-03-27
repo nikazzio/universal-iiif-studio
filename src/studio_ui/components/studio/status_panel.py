@@ -63,10 +63,7 @@ def status_badge(label: str, value: str, variant: str = "default") -> Div:
             value,
             cls=f"font-mono text-sm font-semibold tracking-tight {styles['value']}",
         ),
-        cls=(
-            f"flex flex-col gap-0.5 px-3 py-2 rounded border "
-            f"{styles['bg']} {styles['border']}"
-        ),
+        cls=(f"flex flex-col gap-0.5 px-3 py-2 rounded border {styles['bg']} {styles['border']}"),
     )
 
 
@@ -128,10 +125,7 @@ def technical_status_panel(
     return Div(
         # Primary Status Row (prominent)
         Div(
-            *[
-                status_badge(key, value, get_status_variant(key, value))
-                for key, value in status_items
-            ],
+            *[status_badge(key, value, get_status_variant(key, value)) for key, value in status_items],
             cls="grid grid-cols-2 sm:grid-cols-4 gap-2",
         ),
         # Secondary Status Row (compact)
