@@ -19,6 +19,16 @@ class _Resp:
         return self._json_data
 
 
+def _patch_http_client(monkeypatch, fake_get):
+    """Replace the discovery module's cached HTTPClient with one backed by *fake_get*."""
+
+    class _MockClient:
+        def get(self, *args, **kwargs):
+            return fake_get(*args, **kwargs)
+
+    monkeypatch.setattr(discovery, "_http_client_cache", _MockClient())
+
+
 def test_search_institut_blank_input_returns_empty():
     """Blank query must return an empty result list without HTTP calls."""
     assert discovery.search_institut("") == []
@@ -34,10 +44,10 @@ def test_search_institut_extracts_results_and_manifest_metadata(monkeypatch):
     </div>
     """
 
-    def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
+    def fake_get(url, params=None, **kwargs):
         if "records/default" in url:
             return _Resp(text=html)
-        raise AssertionError(f"Unexpected URL for requests.get: {url}")
+        raise AssertionError(f"Unexpected URL for http_client.get: {url}")
 
     def fake_get_json(url, **_kwargs):  # noqa: ARG001
         if "/iiif/17837/manifest" in url:
@@ -50,7 +60,7 @@ def test_search_institut_extracts_results_and_manifest_metadata(monkeypatch):
             return None  # get_json returns None on error
         raise AssertionError(f"Unexpected URL for get_json: {url}")
 
-    monkeypatch.setattr(discovery.requests, "get", fake_get)
+    _patch_http_client(monkeypatch, fake_get)
     monkeypatch.setattr(discovery, "get_json", fake_get_json)
 
     results = discovery.search_institut("brantome", max_results=5)

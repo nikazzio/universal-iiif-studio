@@ -15,6 +15,16 @@ class _Resp:
             raise requests.HTTPError(f"HTTP {self.status_code}")
 
 
+def _patch_http_client(monkeypatch, fake_get):
+    """Replace the discovery module's cached HTTPClient with one backed by *fake_get*."""
+
+    class _MockClient:
+        def get(self, *args, **kwargs):
+            return fake_get(*args, **kwargs)
+
+    monkeypatch.setattr(discovery, "_http_client_cache", _MockClient())
+
+
 def test_search_ecodices_blank_input_returns_empty():
     """Blank query must return an empty result list without HTTP calls."""
     assert discovery.search_ecodices("") == []
@@ -46,13 +56,13 @@ def test_search_ecodices_maps_html_results(monkeypatch):
     </div>
     """
 
-    def fake_get(url, params=None, headers=None, timeout=None):  # noqa: ARG001
+    def fake_get(url, params=None, **kwargs):
         assert url == "https://www.e-codices.unifr.ch/en/search/all"
         assert params["sQueryString"] == "dante"
         assert params["sSearchField"] == "fullText"
         return _Resp(text=html)
 
-    monkeypatch.setattr(discovery.requests, "get", fake_get)
+    _patch_http_client(monkeypatch, fake_get)
 
     results = discovery.search_ecodices("dante", max_results=5)
     assert len(results) == 1
