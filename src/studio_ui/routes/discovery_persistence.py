@@ -13,7 +13,7 @@ from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import get_json, get_request_session, save_json
+from universal_iiif_core.utils import get_json, save_json
 
 logger = get_logger(__name__)
 
@@ -182,8 +182,11 @@ def _thumbnail_url_from_manifest(manifest_payload: dict, *, manifest_url: str = 
 
 
 def _stream_thumbnail_bytes(url: str, *, max_bytes: int) -> BytesIO | None:
-    session = get_request_session()
-    with session.get(url, timeout=15, stream=True) as response:
+    from universal_iiif_core.http_client import get_http_client
+
+    client = get_http_client()
+    response = client.get(url, timeout=(10, 15), stream=True)
+    try:
         response.raise_for_status()
         content_length = response.headers.get("Content-Length")
         if content_length is not None:
@@ -202,6 +205,8 @@ def _stream_thumbnail_bytes(url: str, *, max_bytes: int) -> BytesIO | None:
             if downloaded > max_bytes:
                 return None
             buffer.write(chunk)
+    finally:
+        response.close()
     if buffer.tell() <= 0:
         return None
     buffer.seek(0)

@@ -149,6 +149,9 @@ def _validate_structure(
     _validate_scalar_structure(node, schema, path=path, issues=issues)
 
 
+_ROOT_KEY_WHITELIST_PREFIXES: tuple[str, ...] = ("settings-pdf-profile-",)
+
+
 def _validate_object_structure(
     node: Any,
     schema: dict[str, Any],
@@ -161,6 +164,8 @@ def _validate_object_structure(
         return
     for key in node:
         if key not in schema:
+            if not path and any(key.startswith(p) for p in _ROOT_KEY_WHITELIST_PREFIXES):
+                continue
             _add_warning(
                 issues,
                 path=_join(path, key),

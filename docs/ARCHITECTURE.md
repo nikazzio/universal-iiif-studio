@@ -127,7 +127,7 @@ Studio supports **two distinct viewing modes** for the Mirador viewer, automatic
 ## Key Design Decisions
 
 1. **Scans as Operational Source + Temp Staging**: `scans/` is the operational source for Viewer/OCR/Cropper, but runtime can stage validated pages in `temp_images/<doc_id>` before promotion. Promotion policy can stay strict (`never`) or happen on pause (`settings.storage.partial_promotion_mode=on_pause`), with overwrite of existing scans enabled only for explicit refresh/redownload flows.
-2. **Zero Legacy**: Deprecated APIs are removed or stubbed. No "dead code" is allowed in the codebase.
+2. **Zero Legacy**: Deprecated APIs are removed or stubbed. Legacy shims (`get_request_session`) have been retired; the deprecated `config.py` tripwire module has been deleted. The `get_json()` shim in `utils.py` is the last legacy HTTP helper (tracked for migration to `HTTPClient.get_json()`).
 3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic, header mimicking, and centralized HTTP client with per-host rate limiting.
 4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
 5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.

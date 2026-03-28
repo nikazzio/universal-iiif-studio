@@ -48,7 +48,6 @@
         "max"
       ],
       "iiif_quality": "default",
-      "viewer_quality": 95,
       "probe_remote_max_resolution": true,
       "tile_stitch_max_ram_gb": 2
     },

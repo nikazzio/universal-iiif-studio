@@ -64,41 +64,6 @@ def get_json(
         return None
 
 
-def get_request_session():
-    """Create a requests Session with default headers and retry strategy (LEGACY).
-
-    DEPRECATED: New code should use HTTPClient instead.
-    This function is kept for backward compatibility with code that needs
-    direct Session access (e.g., streaming downloads).
-
-    Returns a plain requests.Session with:
-    - DEFAULT_HEADERS configured
-    - Basic retry strategy for transport errors
-
-    For new code, use HTTPClient which provides better rate limiting,
-    metrics tracking, and per-library policies.
-    """
-    import requests
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
-
-    session = requests.Session()
-    session.headers.update(DEFAULT_HEADERS)
-
-    # Basic retry strategy (transport level only)
-    retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"],
-    )
-
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
-
-
 def save_json(path, data):
     """Saves data to a local JSON file."""
     p = Path(path)

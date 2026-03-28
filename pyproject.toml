@@ -28,8 +28,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/universal-iiif"
-Repository = "https://github.com/yourusername/universal-iiif"
+Homepage = "https://github.com/nikazzio/universal-iiif-studio"
+Repository = "https://github.com/nikazzio/universal-iiif-studio"
 
 [tool.setuptools.packages.find]
 where = ["src"]
