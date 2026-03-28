@@ -22,11 +22,11 @@ from studio_ui.routes.library_query import (
     _safe_catalog_title,
 )
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.library_catalog import infer_item_type, normalize_item_type, parse_manifest_catalog
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import get_json
 
 logger = get_logger(__name__)
 
@@ -105,7 +105,7 @@ def _refresh_response(*, message: str, tone: str = "info", **filters):
 
 
 def _update_catalog_metadata(doc_id: str, manifest_url: str) -> dict:
-    manifest = get_json(manifest_url)
+    manifest = get_http_client().get_json(manifest_url)
     if not manifest:
         raise ValueError("Manifest non accessibile")
     catalog = parse_manifest_catalog(

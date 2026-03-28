@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.resolvers import discovery
 
 
@@ -43,7 +44,7 @@ def test_search_loc_maps_loc_item_urls_to_manifests(monkeypatch):
         ]
     }
 
-    monkeypatch.setattr(discovery, "get_json", lambda *_a, **_k: payload)
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, *_a, **_k: payload)
 
     results = discovery.search_loc("dante", max_results=5)
     assert len(results) == 1
@@ -66,7 +67,7 @@ def test_search_harvard_extracts_iiif_manifest_tokens(monkeypatch):
         }
     }
 
-    monkeypatch.setattr(discovery, "get_json", lambda *_a, **_k: payload)
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, *_a, **_k: payload)
 
     results = discovery.search_harvard("iiif", max_results=10)
     ids = {str(item["id"]) for item in results}
@@ -95,7 +96,7 @@ def test_search_harvard_prefers_structured_title_and_preview(monkeypatch):
         }
     }
 
-    monkeypatch.setattr(discovery, "get_json", lambda *_a, **_k: payload)
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, *_a, **_k: payload)
     results = discovery.search_harvard("manuscript", max_results=5)
 
     assert len(results) == 1
@@ -108,7 +109,7 @@ def test_search_harvard_uses_fallback_query_when_primary_has_no_iiif(monkeypatch
     """Harvard search should keep primary results and enrich with IIIF fallback query."""
     calls: list[str] = []
 
-    def _fake_get_json(url, **_kwargs):  # noqa: ANN001
+    def _fake_get_json(_self, url, **_kwargs):  # noqa: ANN001
         calls.append(url)
         if "q=dante+iiif.lib.harvard.edu" in url:
             return {"location": {"url": "https://iiif.lib.harvard.edu/manifests/drs:87654321"}}
@@ -123,7 +124,7 @@ def test_search_harvard_uses_fallback_query_when_primary_has_no_iiif(monkeypatch
             }
         }
 
-    monkeypatch.setattr(discovery, "get_json", _fake_get_json)
+    monkeypatch.setattr(HTTPClient, "get_json", _fake_get_json)
     results = discovery.search_harvard("dante", max_results=10)
 
     assert any("q=dante+iiif.lib.harvard.edu" in call for call in calls)
@@ -144,7 +145,7 @@ def test_search_harvard_keeps_non_iiif_records_as_consultation_entries(monkeypat
             ]
         }
     }
-    monkeypatch.setattr(discovery, "get_json", lambda *_a, **_k: payload)
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, *_a, **_k: payload)
 
     results = discovery.search_harvard("achille marozzo", max_results=5)
     assert len(results) == 1

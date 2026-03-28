@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from ..config_manager import get_config_manager
 from ..export_studio import build_professional_pdf
-from ..utils import get_json
+from ..utils import load_json
 
 
 def create_pdf(self, files=None):
@@ -32,7 +32,7 @@ def create_pdf(self, files=None):
     desc = cover_cfg.get("description", "")
     transcription_json = None
     if self.ocr_path.exists():
-        transcription_json = get_json(str(self.ocr_path))
+        transcription_json = load_json(self.ocr_path)
 
     try:
         self.logger.info(f"Generating PDF for {len(files)} pages...")

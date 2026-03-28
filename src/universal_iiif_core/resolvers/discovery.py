@@ -15,10 +15,9 @@ from ..discovery.contracts import ProviderResolution
 from ..discovery.orchestrator import resolve_provider_input as resolve_provider_input_orchestrated
 from ..discovery.search_adapters import build_search_strategy_handlers
 from ..exceptions import ResolverError
-from ..http_client import HTTPClient
+from ..http_client import HTTPClient, get_http_client
 from ..logger import get_logger
 from ..providers import IIIFProvider
-from ..utils import get_json
 from .archive_org import ArchiveOrgResolver
 from .cambridge import CambridgeResolver
 from .ecodices import EcodicesResolver
@@ -464,7 +463,7 @@ def search_archive_org(query: str, max_results: int = 20, page: int = 1) -> list
     }
 
     logger.debug("Searching Archive.org advancedsearch: %s", clean_q)
-    payload = get_json(
+    payload = get_http_client().get_json(
         _build_archive_search_url(params),
         headers=HTML_BROWSER_HEADERS,
         retries=2,
@@ -687,12 +686,13 @@ def search_harvard(query: str, max_results: int = 20, page: int = 1) -> list[Sea
     api_limit = min(requested_results * 10, 100)
     start_offset = (max(1, page) - 1) * api_limit
     params = {"q": q, "limit": str(api_limit), "start": str(start_offset)}
-    payload = get_json(HARVARD_API_URL + "?" + urlencode(params), headers=HTML_BROWSER_HEADERS, retries=2)
+    harvard_url = HARVARD_API_URL + "?" + urlencode(params)
+    payload = get_http_client().get_json(harvard_url, headers=HTML_BROWSER_HEADERS, retries=2)
     collected = _extract_harvard_results(payload) if isinstance(payload, dict) else []
 
     if not any(str(item.get("manifest") or "").strip() for item in collected):
         enrichment_params = {"q": f"{q} iiif.lib.harvard.edu", "limit": str(min(requested_results * 10, 100))}
-        enrichment_payload = get_json(
+        enrichment_payload = get_http_client().get_json(
             HARVARD_API_URL + "?" + urlencode(enrichment_params),
             headers=HTML_BROWSER_HEADERS,
             retries=2,
@@ -720,7 +720,7 @@ def search_loc(query: str, max_results: int = 20, page: int = 1) -> list[SearchR
 
     requested_results = max(1, min(max_results, 20))
     params = {"q": q, "fo": "json", "sp": str(max(1, page)), "c": str(min(requested_results * 5, 100))}
-    payload = get_json(_build_loc_search_url(params), headers=HTML_BROWSER_HEADERS, retries=2)
+    payload = get_http_client().get_json(_build_loc_search_url(params), headers=HTML_BROWSER_HEADERS, retries=2)
     if not isinstance(payload, dict):
         logger.error("LOC search failed for query '%s': empty/invalid payload", q)
         return []
@@ -891,7 +891,7 @@ def _fetch_institut_manifest_result(
         return None
 
     try:
-        manifest = get_json(manifest_url)
+        manifest = get_http_client().get_json(manifest_url)
         if not manifest:
             raise ValueError("Empty manifest")
     except (ValueError, Exception) as exc:
@@ -954,7 +954,7 @@ def archive_manifest_is_usable(manifest_url: str) -> bool:
     Uses retries=0 and a short timeout to keep per-probe latency bounded.
     Called from the async probe endpoint for individual result cards.
     """
-    payload = get_json(
+    payload = get_http_client().get_json(
         manifest_url,
         headers={**HTML_BROWSER_HEADERS, "Accept": "application/json"},
         retries=0,
@@ -1286,7 +1286,7 @@ def get_manifest_details(manifest_url: str) -> SearchResult | None:
         return None
 
     try:
-        manifest = get_json(url)
+        manifest = get_http_client().get_json(url)
         if not manifest:
             raise ValueError("Empty manifest")
 
@@ -1479,7 +1479,7 @@ def _build_vatican_html_result(chunk: str) -> SearchResult | None:
 def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchResult | None:
     """Verify a Vatican manifest exists and return SearchResult if valid."""
     try:
-        manifest = get_json(manifest_url)
+        manifest = get_http_client().get_json(manifest_url)
         if not manifest:
             return None
 

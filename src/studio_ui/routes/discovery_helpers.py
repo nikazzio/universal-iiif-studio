@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.library_catalog import parse_manifest_catalog
 from universal_iiif_core.logger import get_logger
@@ -18,7 +19,7 @@ from universal_iiif_core.logic.downloader import IIIFDownloader
 from universal_iiif_core.network_policy import resolve_library_network_policy
 from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import generate_job_id, get_json
+from universal_iiif_core.utils import generate_job_id
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,7 @@ def analyze_manifest(manifest_url: str) -> dict[str, Any]:
     Returns a dict with keys: label, description, pages.
     Raises exceptions on network / parsing errors so callers can handle them.
     """
-    manifest_data = get_json(manifest_url)
+    manifest_data = get_http_client().get_json(manifest_url)
     if not manifest_data:
         raise ValueError("Manifest vuoto o irraggiungibile")
 

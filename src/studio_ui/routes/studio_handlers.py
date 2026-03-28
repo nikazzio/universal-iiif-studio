@@ -38,6 +38,7 @@ from studio_ui.pages.studio import studio_layout
 from studio_ui.routes import export_handlers as export_monitor_handlers
 from studio_ui.routes.discovery_helpers import start_downloader_thread
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.iiif_logic import total_canvases as manifest_total_canvases
 from universal_iiif_core.iiif_resolution import probe_remote_max_dimensions
 from universal_iiif_core.jobs import job_manager
@@ -53,7 +54,7 @@ from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.scan_optimize import optimize_local_scans, summarize_scan_folder
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.thumbnail_utils import ensure_thumbnail, guess_available_pages
-from universal_iiif_core.utils import get_json, load_json, save_json
+from universal_iiif_core.utils import load_json, save_json
 
 logger = get_logger(__name__)
 _STUDIO_ALLOWED_TABS = ("transcription", "snippets", "history", "visual", "info", "images", "output", "jobs")
@@ -1518,7 +1519,7 @@ def _load_studio_manifest_context(
         return manifest_json, initial_canvas, True
 
     if remote_manifest_url:
-        remote_manifest = get_json(remote_manifest_url, retries=2) or {}
+        remote_manifest = get_http_client().get_json(remote_manifest_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
             return remote_manifest, _resolve_initial_canvas(remote_manifest, page), False
 
@@ -1548,7 +1549,7 @@ def _resolve_manifest_for_selected_source(
 ) -> tuple[dict, str | None, bool, str, str]:
     manifest_exists_local = manifest_path.exists()
     if read_source_mode == "remote" and remote_manifest_url:
-        remote_manifest = get_json(remote_manifest_url, retries=2) or {}
+        remote_manifest = get_http_client().get_json(remote_manifest_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
             return (
                 remote_manifest,

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from PIL import Image
 from requests import Response
 
-from universal_iiif_core import iiif_resolution, library_catalog, utils
+from universal_iiif_core import iiif_resolution, library_catalog
 from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.ocr.model_manager import ModelManager
 
@@ -84,39 +84,6 @@ def test_http_client_post_treats_403_as_retriable_and_rate_limited(monkeypatch):
 
     assert response.status_code == 200
     assert len(limiter.calls) == 2
-
-
-def test_legacy_get_json_uses_network_settings_and_preserves_request_args(monkeypatch):
-    """Legacy wrapper should pass the network node and forward headers/retries."""
-    captured: dict[str, object] = {}
-    network_policy = {"global": {"connect_timeout_s": 9}}
-
-    def _fake_get_json(self, url, **kwargs):
-        captured["network_policy"] = self.network_policy
-        captured["url"] = url
-        captured["kwargs"] = kwargs
-        return {"ok": True}
-
-    monkeypatch.setattr(
-        "universal_iiif_core.config_manager.get_config_manager",
-        lambda: SimpleNamespace(data={"settings": {"network": network_policy}}),
-    )
-    monkeypatch.setattr(HTTPClient, "get_json", _fake_get_json)
-
-    result = utils.get_json(
-        "https://example.com/manifest.json",
-        headers={"X-Test": "yes"},
-        retries=7,
-    )
-
-    assert result == {"ok": True}
-    assert captured["network_policy"] == network_policy
-    assert captured["kwargs"] == {
-        "library_name": None,
-        "timeout": (10, 20),
-        "headers": {"X-Test": "yes"},
-        "retries": 7,
-    }
 
 
 def test_probe_remote_max_dimensions_uses_network_node(monkeypatch):

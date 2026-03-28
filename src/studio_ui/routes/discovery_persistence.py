@@ -10,10 +10,11 @@ from typing import Any
 
 from studio_ui.common.title_utils import resolve_preferred_title
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.parsers import IIIFManifestParser
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import get_json, save_json
+from universal_iiif_core.utils import save_json
 
 logger = get_logger(__name__)
 
@@ -279,7 +280,7 @@ def persist_prefetch_light(
     }
     save_json(data_dir / "metadata.json", metadata_payload)
 
-    fetch_json = get_json_fn or get_json
+    fetch_json = get_json_fn or get_http_client().get_json
     manifest_payload = fetch_json(str(manifest_url or "").strip(), retries=2)
     derived_thumb = str(thumbnail_url or "").strip()
     manifest_cached = False

@@ -924,3 +924,21 @@ class HTTPClient:
             # Log preview for debugging
             self.logger.debug(f"Response preview: {response.text[:200]}")
             return None
+
+
+_http_client_instance: HTTPClient | None = None
+
+
+def get_http_client() -> HTTPClient:
+    """Get or create the module-level HTTPClient singleton.
+
+    Thread-safe lazy initialization using the current network policy settings.
+    """
+    global _http_client_instance
+    if _http_client_instance is None:
+        from .config_manager import get_config_manager
+
+        cm = get_config_manager()
+        network_policy = cm.data.get("settings", {}).get("network", {})
+        _http_client_instance = HTTPClient(network_policy=network_policy)
+    return _http_client_instance

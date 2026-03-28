@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import requests
 
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.resolvers import discovery
 
 
@@ -49,7 +50,7 @@ def test_search_institut_extracts_results_and_manifest_metadata(monkeypatch):
             return _Resp(text=html)
         raise AssertionError(f"Unexpected URL for http_client.get: {url}")
 
-    def fake_get_json(url, **_kwargs):  # noqa: ARG001
+    def fake_get_json(_self, url, **_kwargs):  # noqa: ARG001
         if "/iiif/17837/manifest" in url:
             return {
                 "label": "Oeuvres de Brantôme",
@@ -61,7 +62,7 @@ def test_search_institut_extracts_results_and_manifest_metadata(monkeypatch):
         raise AssertionError(f"Unexpected URL for get_json: {url}")
 
     _patch_http_client(monkeypatch, fake_get)
-    monkeypatch.setattr(discovery, "get_json", fake_get_json)
+    monkeypatch.setattr(HTTPClient, "get_json", fake_get_json)
 
     results = discovery.search_institut("brantome", max_results=5)
 

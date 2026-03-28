@@ -3,6 +3,7 @@ import pytest
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import discovery_handlers, discovery_helpers
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 # Mark as slow (creates files, uses vault, mock downloads)
@@ -22,9 +23,9 @@ def test_add_to_library_persists_saved_entry(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        discovery_handlers,
+        HTTPClient,
         "get_json",
-        lambda _url, retries=2: {"items": [{"id": "canvas-1"}, {"id": "canvas-2"}]},
+        lambda _self, _url, **_kw: {"items": [{"id": "canvas-1"}, {"id": "canvas-2"}]},
     )
 
     result = discovery_handlers.add_to_library("https://example.org/manifest.json", "DOC_A", "Gallica")
@@ -55,9 +56,9 @@ def test_discovery_preserves_search_result_title_over_signature_manifest(monkeyp
         },
     )
     monkeypatch.setattr(
-        discovery_handlers,
+        HTTPClient,
         "get_json",
-        lambda _url, retries=2: {"items": [{"id": "canvas-1"}]},
+        lambda _self, _url, **_kw: {"items": [{"id": "canvas-1"}]},
     )
     monkeypatch.setattr(
         discovery_handlers,
@@ -96,11 +97,11 @@ def test_add_to_library_rejects_path_traversal_and_does_not_write(monkeypatch, t
         )
         called = {"count": 0}
 
-        def _fake_get_json(_url, retries=2):
+        def _fake_get_json(_self, _url, **_kwargs):
             called["count"] += 1
             return {"items": [{"id": "canvas-1"}]}
 
-        monkeypatch.setattr(discovery_handlers, "get_json", _fake_get_json)
+        monkeypatch.setattr(HTTPClient, "get_json", _fake_get_json)
 
         result = discovery_handlers.add_to_library(
             "https://example.org/manifest.json",

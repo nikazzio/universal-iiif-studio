@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.providers import get_provider
 from universal_iiif_core.resolvers import discovery
 from universal_iiif_core.resolvers.archive_org import ArchiveOrgResolver
@@ -26,14 +27,14 @@ def test_search_archive_org_parses_advancedsearch_docs(monkeypatch):
         }
     }
 
-    def fake_get_json(url, headers=None, retries=3, **kwargs):  # noqa: ARG001
+    def fake_get_json(_self, url, headers=None, retries=3, **kwargs):  # noqa: ARG001
         if "advancedsearch.php" in url:
             assert "mediatype%3Atexts" in url
             return payload
         assert url == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
         return {"type": "Manifest", "items": [{}]}
 
-    monkeypatch.setattr(discovery, "get_json", fake_get_json)
+    monkeypatch.setattr(HTTPClient, "get_json", fake_get_json)
 
     results = discovery.search_archive_org("london library", max_results=5)
     assert len(results) == 1
@@ -74,12 +75,12 @@ def test_search_archive_org_returns_all_results_without_inline_probe(monkeypatch
         }
     }
 
-    def fake_get_json(url, headers=None, retries=3, **kwargs):  # noqa: ARG001
+    def fake_get_json(_self, url, headers=None, retries=3, **kwargs):  # noqa: ARG001
         if "advancedsearch.php" in url:
             return payload
         raise AssertionError(f"Unexpected URL {url} — no inline probing should occur")
 
-    monkeypatch.setattr(discovery, "get_json", fake_get_json)
+    monkeypatch.setattr(HTTPClient, "get_json", fake_get_json)
 
     results = discovery.search_archive_org("archive bot", max_results=2)
     assert len(results) == 2

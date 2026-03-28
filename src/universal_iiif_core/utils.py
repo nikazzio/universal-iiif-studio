@@ -8,7 +8,6 @@ import shutil
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
 
 from .logger import get_logger
 
@@ -25,43 +24,6 @@ DEFAULT_HEADERS = {
     "Upgrade-Insecure-Requests": "1",
     "DNT": "1",
 }
-
-
-def get_json(
-    url: str,
-    headers: dict | None = None,
-    retries: int = 3,
-    timeout: tuple[int, int] = (10, 20),
-) -> Any | None:
-    """Fetch JSON from a URL with retry logic (LEGACY).
-
-    DEPRECATED: New code should use HTTPClient.get_json() instead.
-    This function is kept for backward compatibility and creates a temporary
-    HTTPClient instance for each call.
-
-    Args:
-        url: URL to fetch
-        headers: Optional additional headers (merged with defaults)
-        retries: Optional override for max retry attempts, kept for backward compatibility
-        timeout: (connect_timeout, read_timeout) in seconds
-
-    Returns:
-        Parsed JSON data or None on error
-    """
-    from .config_manager import get_config_manager
-    from .http_client import HTTPClient
-
-    # Create temporary HTTPClient with current config
-    cm = get_config_manager()
-    network_policy = cm.data.get("settings", {}).get("network", {})
-    http_client = HTTPClient(network_policy=network_policy)
-
-    try:
-        # HTTPClient.get_json() handles all retry logic, backoff, rate limiting
-        return http_client.get_json(url, library_name=None, timeout=timeout, headers=headers, retries=retries)
-    except Exception as e:
-        logger.debug(f"get_json failed for {url}: {e}")
-        return None
 
 
 def save_json(path, data):

@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.export.service import (
     execute_export_job,
     get_export_capabilities,
@@ -166,8 +167,9 @@ def test_execute_export_job_remote_temp_custom_requires_manifest_or_local(monkey
     )
 
     monkeypatch.setattr(
-        "universal_iiif_core.services.export.service.get_json",
-        lambda *_a, **_k: {},
+        HTTPClient,
+        "get_json",
+        lambda _self, *_a, **_k: {},
     )
 
     with pytest.raises(ValueError, match="Impossibile validare pagine richieste"):

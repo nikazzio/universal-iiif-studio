@@ -29,13 +29,13 @@ from studio_ui.routes.discovery_persistence import (
     upsert_saved_entry,
 )
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.providers import is_known_provider
 from universal_iiif_core.resolvers.discovery import resolve_provider_input
 from universal_iiif_core.services.storage.vault_manager import VaultManager
-from universal_iiif_core.utils import get_json
 
 logger = get_logger(__name__)
 
@@ -211,7 +211,7 @@ def _quick_manifest_has_native_pdf(manifest_url: str) -> bool:
     if cached and cached[0] > now:
         return bool(cached[1])
 
-    manifest = get_json(clean_url, retries=1)
+    manifest = get_http_client().get_json(clean_url, retries=1)
     has_pdf = bool(isinstance(manifest, dict) and _has_native_pdf_rendering(manifest))
     _pdf_capability_cache[clean_url] = (now + _PDF_CAPABILITY_TTL_SECONDS, has_pdf)
     return has_pdf
@@ -377,7 +377,7 @@ def add_to_library(manifest_url: str, doc_id: str, library: str, result_title: s
             description=str(info.get("description") or ""),
             pages=int(info.get("pages", 0) or 0),
             thumbnail_url=str(info.get("thumbnail") or ""),
-            get_json_fn=get_json,
+            get_json_fn=get_http_client().get_json,
         )
         upsert_saved_entry(
             manifest_url,
@@ -447,7 +447,7 @@ def add_and_download(manifest_url: str, doc_id: str, library: str, result_title:
             description=str(info.get("description") or ""),
             pages=int(info.get("pages", 0) or 0),
             thumbnail_url=str(info.get("thumbnail") or ""),
-            get_json_fn=get_json,
+            get_json_fn=get_http_client().get_json,
         )
         upsert_saved_entry(
             manifest_url,

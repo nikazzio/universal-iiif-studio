@@ -11,12 +11,13 @@ from typing import Any
 
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.export_studio import build_professional_pdf, clean_filename
+from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.iiif_resolution import fetch_highres_page_image
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.pdf_profiles import resolve_effective_profile
 from universal_iiif_core.services.ocr.storage import OCRStorage
-from universal_iiif_core.utils import get_json, load_json, save_json
+from universal_iiif_core.utils import load_json, save_json
 
 logger = get_logger(__name__)
 
@@ -506,7 +507,7 @@ def _load_export_manifest_payload(paths: dict[str, Path], source_url: str) -> di
     if not isinstance(manifest_payload, dict):
         manifest_payload = {}
     if not manifest_payload and source_url:
-        remote_manifest = get_json(source_url, retries=2) or {}
+        remote_manifest = get_http_client().get_json(source_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
             manifest_payload = remote_manifest
     return manifest_payload

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import universal_iiif_core.logic.downloader as downloader_module
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.logic.downloader import IIIFDownloader
 
 # Mark as slow (creates downloader instances, file checks)
@@ -44,7 +45,7 @@ def _build_downloader(
     prefer_native_pdf: bool,
     create_pdf_from_images: bool,
 ) -> IIIFDownloader:
-    monkeypatch.setattr(downloader_module, "get_json", lambda _url: manifest)
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, _url, **_kw: manifest)
     monkeypatch.setattr(downloader_module, "get_download_logger", lambda _ms: _DummyLogger())
     monkeypatch.setattr(downloader_module, "VaultManager", _DummyVault)
     monkeypatch.setattr(
@@ -284,7 +285,7 @@ def test_extract_pages_from_pdf_uses_viewer_dpi(monkeypatch, tmp_path: Path):
 
 def test_should_prefer_native_pdf_respects_prefer_images_flag(monkeypatch, tmp_path: Path):
     """CLI prefer-images must disable native PDF preference."""
-    monkeypatch.setattr(downloader_module, "get_json", lambda _url: _manifest_with_native_pdf())
+    monkeypatch.setattr(HTTPClient, "get_json", lambda _self, _url, **_kw: _manifest_with_native_pdf())
     monkeypatch.setattr(downloader_module, "get_download_logger", lambda _ms: _DummyLogger())
     monkeypatch.setattr(downloader_module, "VaultManager", _DummyVault)
 

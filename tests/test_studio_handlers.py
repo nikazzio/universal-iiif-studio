@@ -9,6 +9,7 @@ from starlette.requests import Request
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import studio_handlers
 from universal_iiif_core.config_manager import get_config_manager
+from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 # Mark as slow (extensive file I/O, image creation, vault operations)
@@ -306,11 +307,11 @@ def test_studio_saved_remote_first_bypasses_local_gate():
                 {"id": "https://example.org/canvas/2"},
             ]
         }
-        original_get_json = studio_handlers.get_json
-        studio_handlers.get_json = (
-            lambda url, retries=2: remote_manifest
+        original_get_json = HTTPClient.get_json
+        HTTPClient.get_json = (
+            lambda _self, url, **_kw: remote_manifest
             if "remote-manifest.json" in url
-            else original_get_json(url, retries=retries)
+            else original_get_json(_self, url, **_kw)
         )
         response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=1)
         rendered = str(response)
@@ -318,7 +319,7 @@ def test_studio_saved_remote_first_bypasses_local_gate():
         assert 'const containerId = "mirador-viewer";' in rendered
         assert "remote" in rendered
     finally:
-        studio_handlers.get_json = original_get_json
+        HTTPClient.get_json = original_get_json
         cm.set_setting("viewer.mirador.require_complete_local_images", old_gate)
         cm.set_setting("viewer.source_policy.saved_mode", old_policy)
 
@@ -352,8 +353,8 @@ def test_studio_saved_remote_first_renders_degraded_remote_when_manifest_unavail
     try:
         cm.set_setting("viewer.mirador.require_complete_local_images", True)
         cm.set_setting("viewer.source_policy.saved_mode", "remote_first")
-        original_get_json = studio_handlers.get_json
-        studio_handlers.get_json = lambda _url, retries=2: None
+        original_get_json = HTTPClient.get_json
+        HTTPClient.get_json = lambda _self, _url, **_kw: None
         response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=7)
         rendered = str(response)
         assert "mirador-viewer" in rendered
@@ -362,7 +363,7 @@ def test_studio_saved_remote_first_renders_degraded_remote_when_manifest_unavail
         assert '"manifestId": "https://example.org/unavailable-remote-manifest.json"' in rendered
         assert "const initialPage = 7;" in rendered
     finally:
-        studio_handlers.get_json = original_get_json
+        HTTPClient.get_json = original_get_json
         cm.set_setting("viewer.mirador.require_complete_local_images", old_gate)
         cm.set_setting("viewer.source_policy.saved_mode", old_policy)
 
@@ -398,8 +399,8 @@ def test_studio_remote_first_uses_local_manifest_context_when_remote_fetch_fails
 
     try:
         cm.set_setting("viewer.source_policy.saved_mode", "remote_first")
-        original_get_json = studio_handlers.get_json
-        studio_handlers.get_json = lambda _url, retries=2: None
+        original_get_json = HTTPClient.get_json
+        HTTPClient.get_json = lambda _self, _url, **_kw: None
         response = studio_handlers.studio_page(_request(), doc_id=doc_id, library=library, page=2)
         rendered = str(response)
         assert "mirador-viewer" in rendered
@@ -409,7 +410,7 @@ def test_studio_remote_first_uses_local_manifest_context_when_remote_fetch_fails
         assert '"canvasId": "https://example.org/canvas/2"' in rendered
         assert "remote-manifest-missing.json" not in rendered
     finally:
-        studio_handlers.get_json = original_get_json
+        HTTPClient.get_json = original_get_json
         cm.set_setting("viewer.source_policy.saved_mode", old_policy)
 
 

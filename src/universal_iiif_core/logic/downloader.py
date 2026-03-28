@@ -17,7 +17,7 @@ from urllib3.util.retry import Retry
 
 from .._rate_limiter import get_host_limiter
 from ..config_manager import get_config_manager
-from ..http_client import HTTPClient
+from ..http_client import HTTPClient, get_http_client
 from ..iiif_tiles import stitch_iiif_tiles_to_jpeg
 from ..image_settings import normalize_stitch_mode, resolve_download_strategy
 from ..library_catalog import parse_manifest_catalog
@@ -25,7 +25,7 @@ from ..logger import get_download_logger
 from ..network_policy import resolve_library_network_policy
 from ..pdf_utils import convert_pdf_to_images  # noqa: F401 - preserved for monkeypatch compatibility in tests
 from ..services.storage.vault_manager import VaultManager
-from ..utils import DEFAULT_HEADERS, ensure_dir, get_json, save_json
+from ..utils import DEFAULT_HEADERS, ensure_dir, save_json
 from .download_helpers import derive_identifier
 
 SECURE_RANDOM = SystemRandom()
@@ -257,7 +257,7 @@ class IIIFDownloader:
         )
 
         # load manifest and derive human label (for display, NOT for storage)
-        self.manifest: dict[str, Any] = get_json(manifest_url) or {}
+        self.manifest: dict[str, Any] = get_http_client().get_json(manifest_url) or {}
         self.label = self.manifest.get("label", "unknown_manuscript")
         if isinstance(self.label, list):
             self.label = self.label[0] if self.label else "unknown_manuscript"
