@@ -30,6 +30,49 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.24.1 (2026-03-28)
+
+### Bug Fixes
+
+- Address PR review — thread-safe singleton, cleanup imports and test patterns
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+- Reset HTTPClient singleton when network settings change
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+### Chores
+
+- Codebase hygiene — retire legacy HTTP shims and migrate to HTTPClient
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+- Codebase hygiene — retire legacy shims and fix metadata
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+- Migrate get_json() shim to HTTPClient.get_json()
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+### Continuous Integration
+
+- Add area:core to issue label sync allowed set
+  ([`9343e8f`](https://github.com/nikazzio/universal-iiif-studio/commit/9343e8fdf7ff0baa0767f7b569d201f6d1959b87))
+
+### Documentation
+
+- Update ARCHITECTURE.md — all legacy HTTP shims retired
+  ([#116](https://github.com/nikazzio/universal-iiif-studio/pull/116),
+  [`c88348a`](https://github.com/nikazzio/universal-iiif-studio/commit/c88348a6e8764619391574831581665af2ba32e4))
+
+### Refactoring
+
+- Migrate discovery search surfaces to centralized HTTPClient
+  ([`2af3b5d`](https://github.com/nikazzio/universal-iiif-studio/commit/2af3b5dfda478c129c3b2d2370cf4ddb190e528d))
+
+
 ## v0.24.0 (2026-03-27)
 
 ### Bug Fixes
