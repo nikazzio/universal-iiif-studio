@@ -50,3 +50,4 @@ repomix-output*
 .vscode/
 .idea/
 *.swp
+PRIORITIES.md
