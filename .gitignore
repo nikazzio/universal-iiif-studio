@@ -51,3 +51,4 @@ repomix-output*
 .idea/
 *.swp
 PRIORITIES.md
+.claude/skills/
