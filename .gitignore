@@ -50,3 +50,5 @@ repomix-output*
 .vscode/
 .idea/
 *.swp
+PRIORITIES.md
+.claude/skills/
