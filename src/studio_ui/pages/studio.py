@@ -220,5 +220,6 @@ def studio_layout(
                 }});
             }})();
         """),
+        Script(src="/static/shortcuts.js"),
         cls="flex flex-col h-screen overflow-hidden",
     )
