@@ -24,14 +24,14 @@ jobs:
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
         cache: 'pip'
         cache-dependency-path: 'requirements.txt'
-        
+
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
@@ -39,19 +39,60 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pytest pytest-timeout ruff
-        
+
     - name: Lint with Ruff
       run: |
         ruff check . --ignore C901,D417
       continue-on-error: false
-        
-    - name: Run tests
+
+    - name: Run fast tests
       run: |
         pytest -v --tb=short -m "not slow"
+      continue-on-error: false
+
+  test-slow:
+    # Slow tests: HTTPClient, downloader, rate limiter, export, and
+    # other networking/IO-heavy regression tests.  Runs in parallel
+    # with the fast lane so PR feedback stays quick.
+    if: |
+      github.event_name != 'push' ||
+      (
+        !contains(github.event.head_commit.message, '[skip ci]') &&
+        !contains(github.event.head_commit.message, '[skip-release]')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest pytest-timeout
+
+    - name: Run slow tests
+      run: |
+        pytest -v --tb=short -m "slow"
       continue-on-error: false
