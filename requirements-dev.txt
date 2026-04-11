@@ -8,3 +8,4 @@ pyright
 
 # Testing
 pytest
+pytest-timeout

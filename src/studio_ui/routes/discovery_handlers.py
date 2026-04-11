@@ -365,7 +365,9 @@ def add_to_library(manifest_url: str, doc_id: str, library: str, result_title: s
         if not manifest_url or not doc_id or not library:
             return _with_feedback_toast("Dati mancanti", "Manifest, ID e biblioteca sono obbligatori.", tone="danger")
 
-        info, _err = _analyze_manifest_safe(manifest_url)
+        info, manifest_err = _analyze_manifest_safe(manifest_url)
+        if manifest_err is not None:
+            return manifest_err
         info = info or {}
         preferred_title = resolve_saved_entry_title(info, doc_id, result_title=result_title)
         reference_text = str(info.get("reference_text") or result_title or "").strip()
@@ -435,7 +437,9 @@ def add_and_download(manifest_url: str, doc_id: str, library: str, result_title:
                 tone="info",
             )
 
-        info, _err = _analyze_manifest_safe(manifest_url)
+        info, manifest_err = _analyze_manifest_safe(manifest_url)
+        if manifest_err is not None:
+            return manifest_err
         info = info or {}
         preferred_title = resolve_saved_entry_title(info, doc_id, result_title=result_title)
         reference_text = str(info.get("reference_text") or result_title or "").strip()
