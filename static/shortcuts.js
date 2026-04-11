@@ -34,35 +34,11 @@
     };
   }
 
-  /* ── page navigation via Mirador ────────────────────────────────── */
-
-  function navigateToPage(page) {
-    if (page < 1) return;
-    var mi = window.miradorInstance;
-    if (!mi || !mi.store) return;
-    var state = mi.store.getState();
-    var windowId = Object.keys(state.windows || {})[0];
-    if (!windowId) return;
-    var win = state.windows[windowId];
-    var manifestId = win.manifestId;
-    var manifest = (state.manifests || {})[manifestId];
-    if (!manifest || !manifest.json) return;
-    var canvases = [];
-    try {
-      var sequences = manifest.json.sequences || [];
-      canvases = (sequences[0] || {}).canvases || [];
-    } catch (e) {
-      return;
-    }
-    if (page > canvases.length) return;
-    var canvasId = canvases[page - 1]["@id"] || canvases[page - 1].id;
-    if (!canvasId) return;
-    mi.store.dispatch({
-      type: "mirador/SET_CANVAS",
-      windowId: windowId,
-      canvasId: canvasId,
-    });
-  }
+  /* ── page navigation ─────────────────────────────────────────────
+   * Reuse the global navigateToPage() defined by navigation.py.
+   * It handles URL update, Mirador Redux dispatch, HTMX tab refresh,
+   * and slider/counter sync all in one call.
+   * ─────────────────────────────────────────────────────────────── */
 
   /* ── save transcription ─────────────────────────────────────────── */
 
