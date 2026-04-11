@@ -147,6 +147,37 @@ def test_exception_sanitization_start_download(monkeypatch):
     )
 
 
+def test_add_to_library_returns_early_on_manifest_error(monkeypatch):
+    """Regression: add_to_library must not call persist_prefetch_light when manifest analysis fails."""
+    from studio_ui.routes import discovery_handlers
+
+    monkeypatch.setattr(discovery_handlers, "analyze_manifest", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    called = []
+    monkeypatch.setattr(discovery_handlers, "persist_prefetch_light", lambda *a, **kw: called.append(1) or ("", ""))
+
+    result = discovery_handlers.add_to_library("https://bad-url", "doc", "Lib")
+
+    assert not called, "persist_prefetch_light should not be called when manifest analysis fails"
+    assert "Errore" in str(result)
+
+
+def test_add_and_download_returns_early_on_manifest_error(monkeypatch):
+    """Regression: add_and_download must not call persist_prefetch_light when manifest analysis fails."""
+    from studio_ui.routes import discovery_handlers
+
+    monkeypatch.setattr(discovery_handlers, "analyze_manifest", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    called = []
+    monkeypatch.setattr(discovery_handlers, "persist_prefetch_light", lambda *a, **kw: called.append(1) or ("", ""))
+    monkeypatch.setattr(discovery_handlers, "start_downloader_thread", lambda *a, **kw: "jid")
+
+    result = discovery_handlers.add_and_download("https://bad-url", "doc", "Lib")
+
+    assert not called, "persist_prefetch_light should not be called when manifest analysis fails"
+    assert "Errore" in str(result)
+
+
 def test_path_validation_with_symlinks(tmp_path):
     """Ensure symlinks cannot escape downloads_dir."""
     config = get_config_manager()
