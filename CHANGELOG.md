@@ -30,6 +30,35 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.24.3 (2026-04-11)
+
+### Bug Fixes
+
+- Restore one-shot legacy migration and fix config audit issues
+  ([#134](https://github.com/nikazzio/universal-iiif-studio/pull/134),
+  [`7a20fe9`](https://github.com/nikazzio/universal-iiif-studio/commit/7a20fe9230654da953b3bd87f82a088bf6cec174))
+
+### Continuous Integration
+
+- Add parallel slow test job for full regression coverage
+  ([#133](https://github.com/nikazzio/universal-iiif-studio/pull/133),
+  [`1d08be2`](https://github.com/nikazzio/universal-iiif-studio/commit/1d08be24b44b5df4a087a4b0939ef74f827d48d5))
+
+- Refactor to matrix strategy and fix review feedback
+  ([#133](https://github.com/nikazzio/universal-iiif-studio/pull/133),
+  [`1d08be2`](https://github.com/nikazzio/universal-iiif-studio/commit/1d08be24b44b5df4a087a4b0939ef74f827d48d5))
+
+### Refactoring
+
+- Remove legacy config migration paths
+  ([#134](https://github.com/nikazzio/universal-iiif-studio/pull/134),
+  [`7a20fe9`](https://github.com/nikazzio/universal-iiif-studio/commit/7a20fe9230654da953b3bd87f82a088bf6cec174))
+
+- Sync config.example.json and remove remaining legacy refs
+  ([#134](https://github.com/nikazzio/universal-iiif-studio/pull/134),
+  [`7a20fe9`](https://github.com/nikazzio/universal-iiif-studio/commit/7a20fe9230654da953b3bd87f82a088bf6cec174))
+
+
 ## v0.24.2 (2026-04-11)
 
 ### Bug Fixes
