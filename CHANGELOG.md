@@ -30,6 +30,42 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.24.2 (2026-04-11)
+
+### Bug Fixes
+
+- Resolve hanging tests and add pytest-timeout safeguard
+  ([#132](https://github.com/nikazzio/universal-iiif-studio/pull/132),
+  [`a08a55c`](https://github.com/nikazzio/universal-iiif-studio/commit/a08a55ca98dbc8886ab0518b871705fc20acfba6))
+
+- **ci**: Install pytest-timeout in CI pipeline
+  ([#132](https://github.com/nikazzio/universal-iiif-studio/pull/132),
+  [`a08a55c`](https://github.com/nikazzio/universal-iiif-studio/commit/a08a55ca98dbc8886ab0518b871705fc20acfba6))
+
+### Chores
+
+- Add CLAUDE.md and fix repomix config
+  ([#131](https://github.com/nikazzio/universal-iiif-studio/pull/131),
+  [`adc2661`](https://github.com/nikazzio/universal-iiif-studio/commit/adc2661d9621e2f19b9dd555e37bccd16d7998bf))
+
+- Add CLAUDE.md and fix repomix config for Claude Code
+  ([#131](https://github.com/nikazzio/universal-iiif-studio/pull/131),
+  [`adc2661`](https://github.com/nikazzio/universal-iiif-studio/commit/adc2661d9621e2f19b9dd555e37bccd16d7998bf))
+
+- Ignore .claude/skills/ in git (local symlinks)
+  ([#131](https://github.com/nikazzio/universal-iiif-studio/pull/131),
+  [`adc2661`](https://github.com/nikazzio/universal-iiif-studio/commit/adc2661d9621e2f19b9dd555e37bccd16d7998bf))
+
+- Ignore PRIORITIES.md in git ([#131](https://github.com/nikazzio/universal-iiif-studio/pull/131),
+  [`adc2661`](https://github.com/nikazzio/universal-iiif-studio/commit/adc2661d9621e2f19b9dd555e37bccd16d7998bf))
+
+### Testing
+
+- Add regression tests for manifest error early-return
+  ([#132](https://github.com/nikazzio/universal-iiif-studio/pull/132),
+  [`a08a55c`](https://github.com/nikazzio/universal-iiif-studio/commit/a08a55ca98dbc8886ab0518b871705fc20acfba6))
+
+
 ## v0.24.1 (2026-03-28)
 
 ### Bug Fixes
