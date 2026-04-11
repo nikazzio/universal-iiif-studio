@@ -251,6 +251,63 @@ def _deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
     return dst
 
 
+def _migrate_legacy_keys_once(data: dict[str, Any]) -> None:
+    """One-shot migration of legacy config keys to canonical locations.
+
+    Converts old keys in-place so existing user configs keep working.
+    Migrated keys are removed from the source location to keep configs clean.
+    """
+    settings = data.get("settings")
+    if not isinstance(settings, dict):
+        return
+
+    # --- system.* → network.* ---
+    system = settings.get("system")
+    if isinstance(system, dict):
+        network = settings.setdefault("network", {})
+        global_net = network.setdefault("global", {})
+        download_net = network.setdefault("download", {})
+
+        if "max_concurrent_downloads" in system and "max_concurrent_download_jobs" not in global_net:
+            global_net["max_concurrent_download_jobs"] = system["max_concurrent_downloads"]
+        if "download_workers" in system and "default_workers_per_job" not in download_net:
+            download_net["default_workers_per_job"] = system["download_workers"]
+        if "request_timeout" in system:
+            timeout = system["request_timeout"]
+            if "read_timeout_s" not in global_net:
+                global_net["read_timeout_s"] = timeout
+            if "connect_timeout_s" not in global_net:
+                global_net["connect_timeout_s"] = timeout
+
+        del settings["system"]
+
+    # --- pdf.render_dpi → pdf.viewer_dpi / pdf.ocr_dpi ---
+    pdf = settings.get("pdf")
+    if isinstance(pdf, dict) and "render_dpi" in pdf:
+        pdf.setdefault("viewer_dpi", pdf["render_dpi"])
+        pdf.setdefault("ocr_dpi", pdf["render_dpi"])
+        del pdf["render_dpi"]
+
+    # --- images.viewer_quality → pdf.viewer_jpeg_quality ---
+    images = settings.get("images")
+    pdf = settings.get("pdf")
+    if isinstance(images, dict) and isinstance(pdf, dict):
+        if "viewer_quality" in images and "viewer_jpeg_quality" not in pdf:
+            pdf["viewer_jpeg_quality"] = images["viewer_quality"]
+        images.pop("viewer_quality", None)
+
+    # --- ui.theme_color → ui.theme_accent_color ---
+    ui = settings.get("ui")
+    if isinstance(ui, dict) and "theme_color" in ui:
+        if "theme_accent_color" not in ui:
+            ui["theme_accent_color"] = ui["theme_color"]
+        del ui["theme_color"]
+
+    # --- images.download_strategy (remove, computed at runtime) ---
+    if isinstance(images, dict):
+        images.pop("download_strategy", None)
+
+
 def _log_validation_report(data: dict[str, Any]) -> None:
     issues = validate_config(data, schema=DEFAULT_CONFIG_JSON)
     if not issues:
@@ -332,6 +389,7 @@ class ConfigManager:
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
+        _migrate_legacy_keys_once(data)
         _log_validation_report(data)
 
         return cls(path=cfg_path, _data=data)

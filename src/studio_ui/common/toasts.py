@@ -69,7 +69,6 @@ def _toast_style(tone: str) -> str:
             "theme_preset": get_setting("ui.theme_preset", ""),
             "theme_primary_color": get_setting("ui.theme_primary_color", ""),
             "theme_accent_color": get_setting("ui.theme_accent_color", ""),
-            "theme_color": get_setting("ui.theme_color", ""),
         }
     )
     site_theme = _normalize_hex(resolved_theme["accent"])

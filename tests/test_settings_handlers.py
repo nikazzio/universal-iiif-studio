@@ -103,8 +103,8 @@ def test_save_settings_applies_download_strategy_mode(monkeypatch):
 
     images = dummy_cm.data["settings"]["images"]
     assert images["download_strategy_mode"] == "quality_first"
-    assert images["download_strategy"] == ["max", "3000", "1740"]
     assert images["download_strategy_custom"] == ["1740", "1200", "max"]
+    assert "download_strategy" not in images
 
 
 def test_save_settings_applies_default_stitch_mode(monkeypatch):

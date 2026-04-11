@@ -614,7 +614,6 @@ def _build_general_pane(cm, s):
                 theme["accent"],
                 help_text="Accento UI (tab attivo, focus, slider, call to action).",
             ),
-            Input(type="hidden", name="settings.ui.theme_color", value=theme["accent"]),
             cls="grid grid-cols-1 md:grid-cols-2 gap-4",
         ),
         Div(H3("Defaults & Behaviour", cls="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 mt-6")),

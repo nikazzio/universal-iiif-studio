@@ -16,7 +16,6 @@ from universal_iiif_core.image_settings import (
     normalize_stitch_mode,
     normalize_strategy_mode,
     normalize_strategy_values,
-    resolve_download_strategy,
 )
 from universal_iiif_core.logger import get_logger, setup_logging
 from universal_iiif_core.network_policy import normalize_network_settings
@@ -212,8 +211,8 @@ def _postprocess_images_settings(settings_node: dict[str, Any]) -> None:
     if not custom_values:
         custom_values = list(IMAGE_STRATEGY_PRESETS["balanced"])
     images["download_strategy_custom"] = custom_values
+    images.pop("download_strategy", None)
 
-    images["download_strategy"] = resolve_download_strategy(images)
     images["stitch_mode_default"] = normalize_stitch_mode(images.get("stitch_mode_default"))
     images["iiif_quality"] = normalize_iiif_quality(images.get("iiif_quality"))
 

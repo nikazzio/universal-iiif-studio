@@ -62,16 +62,17 @@ def test_prune_obsolete_settings_creates_backup_and_removes_legacy_keys(tmp_path
     """Obsolete keys should be removed with an automatic backup snapshot."""
     cfg_path = tmp_path / "config.json"
     payload = _base_config()
-    payload.setdefault("settings", {}).setdefault("system", {})["download_workers"] = 6
+    # Use keys that are obsolete but NOT auto-migrated at load time
     payload["settings"].setdefault("images", {})["ocr_quality"] = 90
+    payload["settings"].setdefault("defaults", {})["auto_generate_pdf"] = True
     _write_config(cfg_path, payload)
 
     manager = ConfigManager.load(path=cfg_path)
     removed, backup_path = manager.prune_obsolete_settings(create_backup=True)
 
-    assert "settings.system.download_workers" in removed
     assert "settings.images.ocr_quality" in removed
+    assert "settings.defaults.auto_generate_pdf" in removed
     assert backup_path is not None
     assert backup_path.exists()
-    assert manager.get_setting("system.download_workers") is None
     assert manager.get_setting("images.ocr_quality") is None
+    assert manager.get_setting("defaults.auto_generate_pdf") is None
