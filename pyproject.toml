@@ -101,6 +101,7 @@ indent-style = "space"
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
+timeout = 60
 testpaths = ["tests"]
 python_files = "test_*.py"
 markers = [
