@@ -161,6 +161,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "jpeg_quality": 70,
             "page_size": 48,
             "page_size_options": [24, 48, 72, 96],
+            "studio_page_size_max": 72,
         },
         "housekeeping": {
             "temp_cleanup_days": 7,

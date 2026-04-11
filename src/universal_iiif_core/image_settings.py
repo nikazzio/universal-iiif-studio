@@ -89,5 +89,4 @@ def resolve_download_strategy(
     if custom_values:
         return custom_values
 
-    legacy_values = normalize_strategy_values(images.get("download_strategy", []))
-    return legacy_values or list(IMAGE_STRATEGY_PRESETS["balanced"])
+    return list(IMAGE_STRATEGY_PRESETS["balanced"])
