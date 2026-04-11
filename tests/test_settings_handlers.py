@@ -124,19 +124,6 @@ def test_save_settings_applies_default_stitch_mode(monkeypatch):
     assert images["stitch_mode_default"] == "direct_only"
 
 
-def test_save_settings_migrates_legacy_viewer_quality_to_pdf(monkeypatch):
-    """Legacy images.viewer_quality should populate the PDF raster quality setting."""
-    dummy_cm = _DummyConfigManager()
-    dummy_cm.data["settings"]["images"] = {"viewer_quality": 87}
-    monkeypatch.setattr(settings_handlers, "get_config_manager", lambda: dummy_cm)
-    monkeypatch.setattr(settings_handlers, "setup_logging", lambda: None)
-
-    request = _DummyRequest({})
-    _ = asyncio.run(settings_handlers.save_settings(request))
-
-    assert dummy_cm.data["settings"]["pdf"]["viewer_jpeg_quality"] == 87
-
-
 def test_save_settings_creates_new_pdf_profile_from_legacy_payload(monkeypatch):
     """Legacy new_profile payload remains supported for backward compatibility."""
     dummy_cm = _DummyConfigManager()

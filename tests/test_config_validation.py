@@ -14,10 +14,9 @@ def _clone_default() -> dict:
     return json.loads(json.dumps(DEFAULT_CONFIG_JSON))
 
 
-def test_validate_config_reports_deprecated_and_unknown_keys():
-    """Deprecated and unknown keys should produce warnings."""
+def test_validate_config_reports_unknown_keys():
+    """Unknown keys should produce warnings."""
     data = _clone_default()
-    data["settings"]["thumbnails"]["columns"] = 6
     data["settings"]["extra_section"] = {"foo": "bar"}
     data["settings"]["pdf"]["profiles"]["catalog"]["custom_profile"] = {
         **data["settings"]["pdf"]["profiles"]["catalog"]["balanced"],
@@ -26,12 +25,6 @@ def test_validate_config_reports_deprecated_and_unknown_keys():
 
     issues = validate_config(data, schema=DEFAULT_CONFIG_JSON)
 
-    assert any(
-        issue.severity == SEVERITY_WARNING
-        and issue.code == "deprecated_key"
-        and issue.path == "settings.thumbnails.columns"
-        for issue in issues
-    )
     assert any(
         issue.severity == SEVERITY_WARNING and issue.code == "unknown_key" and issue.path == "settings.extra_section"
         for issue in issues

@@ -19,7 +19,7 @@ from universal_iiif_core.image_settings import (
     resolve_download_strategy,
 )
 from universal_iiif_core.logger import get_logger, setup_logging
-from universal_iiif_core.network_policy import migrate_legacy_network_settings, normalize_network_settings
+from universal_iiif_core.network_policy import normalize_network_settings
 
 # Initialize logging
 setup_logging()
@@ -209,9 +209,8 @@ def _postprocess_images_settings(settings_node: dict[str, Any]) -> None:
     images["download_strategy_mode"] = mode
 
     custom_values = normalize_strategy_values(images.get("download_strategy_custom", []))
-    legacy_values = normalize_strategy_values(images.get("download_strategy", []))
     if not custom_values:
-        custom_values = legacy_values or list(IMAGE_STRATEGY_PRESETS["balanced"])
+        custom_values = list(IMAGE_STRATEGY_PRESETS["balanced"])
     images["download_strategy_custom"] = custom_values
 
     images["download_strategy"] = resolve_download_strategy(images)
@@ -233,16 +232,14 @@ def _postprocess_pdf_settings(settings_node: dict[str, Any]) -> None:
         images = {}
         settings_node["images"] = images
 
-    legacy_quality = images.get("viewer_quality")
     try:
-        viewer_jpeg_quality = int(pdf.get("viewer_jpeg_quality") or legacy_quality or 95)
+        viewer_jpeg_quality = int(pdf.get("viewer_jpeg_quality") or 95)
     except (TypeError, ValueError):
         viewer_jpeg_quality = 95
     pdf["viewer_jpeg_quality"] = max(10, min(viewer_jpeg_quality, 100))
 
 
 def _postprocess_network_settings(settings_node: dict[str, Any]) -> None:
-    migrate_legacy_network_settings(settings_node)
     normalize_network_settings(settings_node)
 
 

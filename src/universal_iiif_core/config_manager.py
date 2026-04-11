@@ -10,7 +10,6 @@ packaged (e.g., stlite-desktop). It stores user-editable values in a local
 from __future__ import annotations
 
 import json
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -22,7 +21,6 @@ from .logger import get_logger
 from .network_policy import (
     DEFAULT_NETWORK_SETTINGS,
     OBSOLETE_SETTING_KEYS,
-    migrate_legacy_network_settings,
     normalize_network_settings,
 )
 
@@ -62,7 +60,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "theme_preset": "rosewater",
             "theme_primary_color": "#7B8CC7",
             "theme_accent_color": "#E8A6B6",
-            "theme_color": "#E8A6B6",
             "items_per_page": 12,
             "toast_duration": 3000,
             "studio_recent_max_items": 8,
@@ -74,7 +71,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         "images": {
             "download_strategy_mode": "balanced",
             "download_strategy_custom": ["3000", "1740", "max"],
-            "download_strategy": ["3000", "1740", "max"],
             "stitch_mode_default": "auto_fallback",
             "iiif_quality": "default",
             "probe_remote_max_resolution": True,
@@ -335,23 +331,6 @@ class ConfigManager:
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
-        # Back-compat: older configs may have a single `pdf.render_dpi`.
-        pdf_cfg = data.get("settings", {}).get("pdf")
-        if isinstance(pdf_cfg, dict):
-            legacy = pdf_cfg.get("render_dpi")
-            if legacy is not None:
-                pdf_cfg.setdefault("viewer_dpi", legacy)
-                pdf_cfg.setdefault("ocr_dpi", legacy)
-                # Keep the in-memory config clean; it will disappear on next save.
-                with suppress(KeyError):
-                    del pdf_cfg["render_dpi"]
-
-        settings_node = data.get("settings")
-        if not isinstance(settings_node, dict):
-            data["settings"] = {}
-            settings_node = data["settings"]
-        migrate_legacy_network_settings(settings_node)
-
         _log_validation_report(data)
 
         return cls(path=cfg_path, _data=data)
@@ -374,12 +353,11 @@ class ConfigManager:
         return backup_path
 
     def normalize_runtime_settings(self) -> None:
-        """Normalize runtime settings and keep legacy/network compatibility in sync."""
+        """Normalize runtime settings."""
         settings_node = self._data.setdefault("settings", {})
         if not isinstance(settings_node, dict):
             self._data["settings"] = {}
             settings_node = self._data["settings"]
-        migrate_legacy_network_settings(settings_node)
         normalize_network_settings(settings_node)
 
     def prune_obsolete_settings(self, *, create_backup: bool = True) -> tuple[list[str], Path | None]:

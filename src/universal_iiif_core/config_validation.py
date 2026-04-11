@@ -23,49 +23,6 @@ class ConfigValidationIssue:
     message: str
 
 
-DEPRECATED_KEYS: tuple[str, ...] = (
-    "settings.system.max_concurrent_downloads",
-    "settings.system.download_workers",
-    "settings.system.request_timeout",
-    "settings.system.ocr_concurrency",
-    "settings.defaults.auto_generate_pdf",
-    "settings.images.ocr_quality",
-    "settings.images.viewer_quality",
-    "settings.pdf.ocr_dpi",
-    "settings.thumbnails.columns",
-    "settings.thumbnails.paginate_enabled",
-    "settings.thumbnails.default_select_all",
-    "settings.thumbnails.actions_apply_to_all_default",
-    "settings.thumbnails.hover_preview_enabled",
-    "settings.thumbnails.hover_preview_max_long_edge_px",
-    "settings.thumbnails.hover_preview_jpeg_quality",
-    "settings.thumbnails.hover_preview_delay_ms",
-    "settings.thumbnails.inline_base64_max_tiles",
-    "settings.thumbnails.hover_preview_max_tiles",
-    "settings.network.tuning_steps",
-    "settings.network.libraries.gallica.size_strategy_mode",
-    "settings.network.libraries.gallica.size_strategy_custom",
-    "settings.network.libraries.gallica.allow_max_size",
-    "settings.network.libraries.gallica.iiif_quality",
-    "settings.network.libraries.vaticana.size_strategy_mode",
-    "settings.network.libraries.vaticana.size_strategy_custom",
-    "settings.network.libraries.vaticana.allow_max_size",
-    "settings.network.libraries.vaticana.iiif_quality",
-    "settings.network.libraries.bodleian.size_strategy_mode",
-    "settings.network.libraries.bodleian.size_strategy_custom",
-    "settings.network.libraries.bodleian.allow_max_size",
-    "settings.network.libraries.bodleian.iiif_quality",
-    "settings.network.libraries.institut_de_france.size_strategy_mode",
-    "settings.network.libraries.institut_de_france.size_strategy_custom",
-    "settings.network.libraries.institut_de_france.allow_max_size",
-    "settings.network.libraries.institut_de_france.iiif_quality",
-    "settings.network.libraries.unknown.size_strategy_mode",
-    "settings.network.libraries.unknown.size_strategy_custom",
-    "settings.network.libraries.unknown.allow_max_size",
-    "settings.network.libraries.unknown.iiif_quality",
-)
-
-
 PROFILE_PAYLOAD_SCHEMA: dict[str, Any] = {
     "label": "Balanced",
     "compression": "Standard",
@@ -112,7 +69,6 @@ def validate_config(data: dict[str, Any], schema: dict[str, Any]) -> list[Config
     """Validate merged config data against schema and runtime expectations."""
     issues: list[ConfigValidationIssue] = []
     _validate_structure(data, schema, path="", issues=issues)
-    _validate_deprecated_keys(data, issues)
     _validate_semantics(data, issues)
     return issues
 
@@ -257,17 +213,6 @@ def _validate_profiles_catalog(
                     code="invalid_type",
                     message=f"Expected {type(expected).__name__}, got {_type_name(payload[key])}.",
                 )
-
-
-def _validate_deprecated_keys(data: dict[str, Any], issues: list[ConfigValidationIssue]) -> None:
-    for key_path in DEPRECATED_KEYS:
-        if _path_exists(data, key_path):
-            _add_warning(
-                issues,
-                path=key_path,
-                code="deprecated_key",
-                message="Deprecated config key is present and ignored by current runtime.",
-            )
 
 
 def _validate_semantics(data: dict[str, Any], issues: list[ConfigValidationIssue]) -> None:

@@ -71,17 +71,16 @@ def resolve_ui_theme(ui: dict[str, Any] | None) -> dict[str, str]:
     preset_def = THEME_PRESETS[preset]
 
     primary = normalize_hex(ui_data.get("theme_primary_color"), preset_def["primary"])
-    accent = normalize_hex(ui_data.get("theme_accent_color") or ui_data.get("theme_color"), preset_def["accent"])
+    accent = normalize_hex(ui_data.get("theme_accent_color"), preset_def["accent"])
     return {"preset": preset, "primary": primary, "accent": accent}
 
 
 def normalize_ui_theme_in_place(ui: dict[str, Any] | None) -> dict[str, str]:
-    """Normalize and persist theme keys in-place, including legacy theme_color."""
+    """Normalize and persist theme keys in-place."""
     if not isinstance(ui, dict):
         return resolve_ui_theme({})
     resolved = resolve_ui_theme(ui)
     ui["theme_preset"] = resolved["preset"]
     ui["theme_primary_color"] = resolved["primary"]
     ui["theme_accent_color"] = resolved["accent"]
-    ui["theme_color"] = resolved["accent"]  # legacy key used in older UI paths
     return resolved

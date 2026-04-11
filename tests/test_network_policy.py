@@ -3,11 +3,7 @@ from __future__ import annotations
 import json
 
 from universal_iiif_core.config_manager import DEFAULT_CONFIG_JSON
-from universal_iiif_core.network_policy import (
-    migrate_legacy_network_settings,
-    resolve_global_max_concurrent_jobs,
-    resolve_library_network_policy,
-)
+from universal_iiif_core.network_policy import resolve_library_network_policy
 
 
 def _settings_copy() -> dict:
@@ -24,14 +20,6 @@ def test_gallica_safe_defaults_are_applied():
     assert policy["workers_per_job"] == 1
     assert "iiif_quality" not in policy
     assert "size_strategy" not in policy
-
-
-def test_legacy_migration_maps_system_concurrency_to_network_global():
-    """Legacy system concurrency should migrate to network.global value."""
-    settings = _settings_copy()
-    settings.setdefault("system", {})["max_concurrent_downloads"] = 4
-    migrate_legacy_network_settings(settings)
-    assert resolve_global_max_concurrent_jobs(settings) == 4
 
 
 def test_unknown_library_inherits_global_defaults_when_custom_disabled():

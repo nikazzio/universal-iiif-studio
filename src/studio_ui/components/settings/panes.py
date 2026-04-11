@@ -1228,7 +1228,7 @@ def _build_images_pane(cm, s):
                     setting_input(
                         "Sequenza tentativi diretti",
                         "settings.images.download_strategy_custom",
-                        ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
+                        ",".join(images.get("download_strategy_custom", [])),
                         help_text=(
                             "Usata solo con Personalizzata. `3000` e `1740` sono tentativi espliciti; "
                             "`max` prova `full/max`."
