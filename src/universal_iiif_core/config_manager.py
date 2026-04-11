@@ -10,7 +10,6 @@ packaged (e.g., stlite-desktop). It stores user-editable values in a local
 from __future__ import annotations
 
 import json
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -22,7 +21,6 @@ from .logger import get_logger
 from .network_policy import (
     DEFAULT_NETWORK_SETTINGS,
     OBSOLETE_SETTING_KEYS,
-    migrate_legacy_network_settings,
     normalize_network_settings,
 )
 
@@ -62,7 +60,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "theme_preset": "rosewater",
             "theme_primary_color": "#7B8CC7",
             "theme_accent_color": "#E8A6B6",
-            "theme_color": "#E8A6B6",
             "items_per_page": 12,
             "toast_duration": 3000,
             "studio_recent_max_items": 8,
@@ -74,7 +71,6 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
         "images": {
             "download_strategy_mode": "balanced",
             "download_strategy_custom": ["3000", "1740", "max"],
-            "download_strategy": ["3000", "1740", "max"],
             "stitch_mode_default": "auto_fallback",
             "iiif_quality": "default",
             "probe_remote_max_resolution": True,
@@ -165,6 +161,7 @@ DEFAULT_CONFIG_JSON: dict[str, Any] = {
             "jpeg_quality": 70,
             "page_size": 48,
             "page_size_options": [24, 48, 72, 96],
+            "studio_page_size_max": 72,
         },
         "housekeeping": {
             "temp_cleanup_days": 7,
@@ -254,6 +251,63 @@ def _deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
     return dst
 
 
+def _migrate_legacy_keys_once(data: dict[str, Any]) -> None:
+    """One-shot migration of legacy config keys to canonical locations.
+
+    Converts old keys in-place so existing user configs keep working.
+    Migrated keys are removed from the source location to keep configs clean.
+    """
+    settings = data.get("settings")
+    if not isinstance(settings, dict):
+        return
+
+    # --- system.* → network.* ---
+    system = settings.get("system")
+    if isinstance(system, dict):
+        network = settings.setdefault("network", {})
+        global_net = network.setdefault("global", {})
+        download_net = network.setdefault("download", {})
+
+        if "max_concurrent_downloads" in system and "max_concurrent_download_jobs" not in global_net:
+            global_net["max_concurrent_download_jobs"] = system["max_concurrent_downloads"]
+        if "download_workers" in system and "default_workers_per_job" not in download_net:
+            download_net["default_workers_per_job"] = system["download_workers"]
+        if "request_timeout" in system:
+            timeout = system["request_timeout"]
+            if "read_timeout_s" not in global_net:
+                global_net["read_timeout_s"] = timeout
+            if "connect_timeout_s" not in global_net:
+                global_net["connect_timeout_s"] = timeout
+
+        del settings["system"]
+
+    # --- pdf.render_dpi → pdf.viewer_dpi / pdf.ocr_dpi ---
+    pdf = settings.get("pdf")
+    if isinstance(pdf, dict) and "render_dpi" in pdf:
+        pdf.setdefault("viewer_dpi", pdf["render_dpi"])
+        pdf.setdefault("ocr_dpi", pdf["render_dpi"])
+        del pdf["render_dpi"]
+
+    # --- images.viewer_quality → pdf.viewer_jpeg_quality ---
+    images = settings.get("images")
+    pdf = settings.get("pdf")
+    if isinstance(images, dict) and isinstance(pdf, dict):
+        if "viewer_quality" in images and "viewer_jpeg_quality" not in pdf:
+            pdf["viewer_jpeg_quality"] = images["viewer_quality"]
+        images.pop("viewer_quality", None)
+
+    # --- ui.theme_color → ui.theme_accent_color ---
+    ui = settings.get("ui")
+    if isinstance(ui, dict) and "theme_color" in ui:
+        if "theme_accent_color" not in ui:
+            ui["theme_accent_color"] = ui["theme_color"]
+        del ui["theme_color"]
+
+    # --- images.download_strategy (remove, computed at runtime) ---
+    if isinstance(images, dict):
+        images.pop("download_strategy", None)
+
+
 def _log_validation_report(data: dict[str, Any]) -> None:
     issues = validate_config(data, schema=DEFAULT_CONFIG_JSON)
     if not issues:
@@ -335,23 +389,7 @@ class ConfigManager:
             except OSError as exc:
                 logger.warning("Unable to create default config.json at %s: %s", cfg_path, exc)
 
-        # Back-compat: older configs may have a single `pdf.render_dpi`.
-        pdf_cfg = data.get("settings", {}).get("pdf")
-        if isinstance(pdf_cfg, dict):
-            legacy = pdf_cfg.get("render_dpi")
-            if legacy is not None:
-                pdf_cfg.setdefault("viewer_dpi", legacy)
-                pdf_cfg.setdefault("ocr_dpi", legacy)
-                # Keep the in-memory config clean; it will disappear on next save.
-                with suppress(KeyError):
-                    del pdf_cfg["render_dpi"]
-
-        settings_node = data.get("settings")
-        if not isinstance(settings_node, dict):
-            data["settings"] = {}
-            settings_node = data["settings"]
-        migrate_legacy_network_settings(settings_node)
-
+        _migrate_legacy_keys_once(data)
         _log_validation_report(data)
 
         return cls(path=cfg_path, _data=data)
@@ -374,12 +412,11 @@ class ConfigManager:
         return backup_path
 
     def normalize_runtime_settings(self) -> None:
-        """Normalize runtime settings and keep legacy/network compatibility in sync."""
+        """Normalize runtime settings."""
         settings_node = self._data.setdefault("settings", {})
         if not isinstance(settings_node, dict):
             self._data["settings"] = {}
             settings_node = self._data["settings"]
-        migrate_legacy_network_settings(settings_node)
         normalize_network_settings(settings_node)
 
     def prune_obsolete_settings(self, *, create_backup: bool = True) -> tuple[list[str], Path | None]:

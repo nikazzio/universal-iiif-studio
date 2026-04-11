@@ -413,55 +413,6 @@ def normalize_network_settings(settings_node: dict[str, Any]) -> None:
     network["libraries"] = normalized_libraries
 
 
-def _migrate_legacy_system_keys(settings_node: dict[str, Any]) -> list[str]:
-    migrated: list[str] = []
-    network = ensure_network_defaults(settings_node)
-    system = settings_node.get("system")
-    if not isinstance(system, dict):
-        return migrated
-
-    global_node = _dict_or_empty(network.get("global"))
-    global_defaults = DEFAULT_NETWORK_SETTINGS["global"]
-    download_node = _dict_or_empty(network.get("download"))
-    download_defaults = DEFAULT_NETWORK_SETTINGS["download"]
-
-    if (
-        "max_concurrent_downloads" in system
-        and global_node.get("max_concurrent_download_jobs") == global_defaults["max_concurrent_download_jobs"]
-    ):
-        global_node["max_concurrent_download_jobs"] = system.get("max_concurrent_downloads")
-        migrated.append(
-            "settings.system.max_concurrent_downloads -> settings.network.global.max_concurrent_download_jobs"
-        )
-
-    if (
-        "download_workers" in system
-        and download_node.get("default_workers_per_job") == download_defaults["default_workers_per_job"]
-    ):
-        download_node["default_workers_per_job"] = system.get("download_workers")
-        migrated.append("settings.system.download_workers -> settings.network.download.default_workers_per_job")
-
-    if "request_timeout" in system:
-        timeout = system.get("request_timeout")
-        if global_node.get("read_timeout_s") == global_defaults["read_timeout_s"]:
-            global_node["read_timeout_s"] = timeout
-            migrated.append("settings.system.request_timeout -> settings.network.global.read_timeout_s")
-        if global_node.get("connect_timeout_s") == global_defaults["connect_timeout_s"]:
-            global_node["connect_timeout_s"] = timeout
-            migrated.append("settings.system.request_timeout -> settings.network.global.connect_timeout_s")
-
-    network["global"] = global_node
-    network["download"] = download_node
-    return migrated
-
-
-def migrate_legacy_network_settings(settings_node: dict[str, Any]) -> list[str]:
-    """Migrate legacy system network keys to `settings.network` and normalize."""
-    migrated = _migrate_legacy_system_keys(settings_node)
-    normalize_network_settings(settings_node)
-    return migrated
-
-
 def resolve_library_network_policy(settings_node: dict[str, Any], library: str | None) -> dict[str, Any]:
     """Return the effective runtime network policy for a given library name."""
     normalize_network_settings(settings_node)

@@ -154,7 +154,6 @@ class PageDownloader:
         images = {
             "download_strategy_mode": self.cm.get_setting("images.download_strategy_mode", "balanced"),
             "download_strategy_custom": self.cm.get_setting("images.download_strategy_custom", []),
-            "download_strategy": self.cm.get_setting("images.download_strategy", ["3000", "1740", "max"]),
         }
         return resolve_download_strategy(
             images,

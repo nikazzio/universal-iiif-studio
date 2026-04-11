@@ -153,7 +153,6 @@ def base_layout(title: str, content, active_page: str = "") -> Html:
             "theme_preset": get_setting("ui.theme_preset", ""),
             "theme_primary_color": get_setting("ui.theme_primary_color", ""),
             "theme_accent_color": get_setting("ui.theme_accent_color", ""),
-            "theme_color": get_setting("ui.theme_color", ""),
         }
     )
     primary = theme["primary"]

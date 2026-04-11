@@ -614,7 +614,6 @@ def _build_general_pane(cm, s):
                 theme["accent"],
                 help_text="Accento UI (tab attivo, focus, slider, call to action).",
             ),
-            Input(type="hidden", name="settings.ui.theme_color", value=theme["accent"]),
             cls="grid grid-cols-1 md:grid-cols-2 gap-4",
         ),
         Div(H3("Defaults & Behaviour", cls="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 mt-6")),
@@ -1228,7 +1227,7 @@ def _build_images_pane(cm, s):
                     setting_input(
                         "Sequenza tentativi diretti",
                         "settings.images.download_strategy_custom",
-                        ",".join(images.get("download_strategy_custom", images.get("download_strategy", []))),
+                        ",".join(images.get("download_strategy_custom", [])),
                         help_text=(
                             "Usata solo con Personalizzata. `3000` e `1740` sono tentativi espliciti; "
                             "`max` prova `full/max`."

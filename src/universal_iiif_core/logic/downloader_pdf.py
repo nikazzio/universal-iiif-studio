@@ -126,13 +126,7 @@ def _extract_pages_from_pdf(
 
     self._clear_existing_scans()
     viewer_dpi = int(self.cm.get_setting("pdf.viewer_dpi", 150) or 150)
-    viewer_quality = int(
-        self.cm.get_setting(
-            "pdf.viewer_jpeg_quality",
-            self.cm.get_setting("images.viewer_quality", 90),
-        )
-        or 90
-    )
+    viewer_quality = int(self.cm.get_setting("pdf.viewer_jpeg_quality", 95) or 95)
     ok, message = downloader_module.convert_pdf_to_images(
         pdf_path=pdf_path,
         output_dir=self.scans_dir,
