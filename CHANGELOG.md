@@ -30,6 +30,21 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.25.2 (2026-04-12)
+
+### Bug Fixes
+
+- Address PR review — restore html.unescape, harden IIIF v3 label/metadata, narrow error handling
+  ([#140](https://github.com/nikazzio/universal-iiif-studio/pull/140),
+  [`434f7b6`](https://github.com/nikazzio/universal-iiif-studio/commit/434f7b64032b4335dc1e6246a960d5d26b752923))
+
+### Refactoring
+
+- Decompose discovery.py into resolvers/search/ subpackage
+  ([#140](https://github.com/nikazzio/universal-iiif-studio/pull/140),
+  [`434f7b6`](https://github.com/nikazzio/universal-iiif-studio/commit/434f7b64032b4335dc1e6246a960d5d26b752923))
+
+
 ## v0.25.1 (2026-04-12)
 
 ### Bug Fixes
