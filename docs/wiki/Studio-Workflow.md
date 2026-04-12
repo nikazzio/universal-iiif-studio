@@ -29,6 +29,21 @@ Studio supports **two viewing modes** for the Mirador viewer:
 - **AMBER**: Remote mode (fetching from original server)
 - **GREEN**: Local mode (using downloaded images)
 
+## Keyboard Shortcuts
+
+Press `?` in Studio to see the shortcuts overlay. Summary:
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Previous / next page |
+| `Ctrl+S` / `⌘+S` | Save transcription |
+| `Ctrl+Enter` | Run OCR on current page |
+| `T` / `S` / `H` / `V` / `I` | Switch tabs |
+| `?` | Toggle shortcuts help |
+| `Escape` | Close overlay |
+
+Single-key shortcuts are disabled while typing in the transcription editor.
+
 ## Download Manager and Staging
 
 - Download cards show queue/running/pausing/paused/cancelling/cancelled states with page counters.

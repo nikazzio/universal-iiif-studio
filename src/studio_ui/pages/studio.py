@@ -146,6 +146,15 @@ def studio_layout(
                                 ),
                                 cls="flex-1 min-w-0",
                             ),
+                            Span(
+                                "Press ? for shortcuts",
+                                cls=(
+                                    "hidden md:inline-block text-[10px] text-slate-400 dark:text-slate-500 "
+                                    "font-mono mt-2 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 "
+                                    "transition-colors"
+                                ),
+                                onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))",
+                            ),
                             cls="flex items-start justify-between",
                         ),
                         cls="px-6 py-8 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50",

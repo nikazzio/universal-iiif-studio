@@ -21,45 +21,17 @@
     return evt.ctrlKey || evt.metaKey;
   }
 
-  /* ── page navigation via Mirador SET_CANVAS ────────────────────
-   * Dispatch the same Redux action that viewer.py uses internally.
-   * The existing Redux subscriber in viewer.py will detect the canvas
-   * change and fire mirador:page-changed, which studio.py handles
-   * (URL update, tab refresh, context save).  We do nothing else.
+  /* ── page navigation ─────────────────────────────────────────────
+   * Click Mirador's own prev/next buttons programmatically.
+   * This is the most reliable approach — Mirador handles canvas change,
+   * OSD image loading, and the existing Redux subscriber fires
+   * mirador:page-changed for the tab/URL update.
    * ─────────────────────────────────────────────────────────────── */
 
-  function goToPage(newPage) {
-    if (newPage < 1) return;
-    var mi = window.miradorInstance;
-    if (!mi || !mi.store) return;
-
-    var state = mi.store.getState();
-    var winIds = Object.keys(state.windows || {});
-    if (!winIds.length) return;
-    var winId = winIds[0];
-    var win = state.windows[winId];
-    var manifestData = state.manifests[win.manifestId];
-    if (!manifestData || !manifestData.json) return;
-
-    // Resolve canvas ID — handle both IIIF v2 (sequences) and v3 (items)
-    var mj = manifestData.json;
-    var canvases;
-    if (mj.sequences) {
-      canvases = ((mj.sequences || [{}])[0] || {}).canvases || [];
-    } else {
-      canvases = mj.items || [];
-    }
-    if (newPage > canvases.length) return;
-
-    var canvas = canvases[newPage - 1];
-    var canvasId = canvas["@id"] || canvas.id;
-    if (!canvasId) return;
-
-    mi.store.dispatch({
-      type: "mirador/SET_CANVAS",
-      windowId: winId,
-      canvasId: canvasId,
-    });
+  function clickMiradorNav(direction) {
+    var cls = direction === "next" ? "mirador-next-canvas-button" : "mirador-previous-canvas-button";
+    var btn = document.querySelector("." + cls);
+    if (btn && !btn.disabled) btn.click();
   }
 
   /* ── save transcription ─────────────────────────────────────────── */
@@ -123,10 +95,6 @@
 
   /* ── main handler ───────────────────────────────────────────────── */
 
-  function currentPage() {
-    return parseInt(new URL(window.location.href).searchParams.get("page") || "1", 10);
-  }
-
   document.addEventListener("keydown", function (evt) {
     if (isMod(evt) && evt.key === "s") { evt.preventDefault(); saveTranscription(); return; }
     if (isMod(evt) && evt.key === "Enter") { evt.preventDefault(); runOcr(); return; }
@@ -134,8 +102,8 @@
     if (isTyping(evt)) return;
 
     switch (evt.key) {
-      case "ArrowLeft":  evt.preventDefault(); goToPage(currentPage() - 1); break;
-      case "ArrowRight": evt.preventDefault(); goToPage(currentPage() + 1); break;
+      case "ArrowLeft":  evt.preventDefault(); clickMiradorNav("prev"); break;
+      case "ArrowRight": evt.preventDefault(); clickMiradorNav("next"); break;
       case "t": switchTab("transcription"); break;
       case "s": switchTab("snippets"); break;
       case "h": switchTab("history"); break;

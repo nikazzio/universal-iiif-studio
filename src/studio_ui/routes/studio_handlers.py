@@ -2515,7 +2515,7 @@ def run_ocr_async(doc_id: str, library: str, page: int, engine: str, model: str 
                 "timestamp": time.time(),
             }
 
-    def _ocr_task(progress_callback=None):
+    def _ocr_task(progress_callback=None, **_kwargs):
         _ocr_worker()
         return None
 
@@ -2551,19 +2551,35 @@ def check_ocr_status(doc_id: str, library: str, page: int):
     if job_state and not is_loading and job_state.get("status") in {"completed", "error"}:
         OCR_JOBS_STATE.pop((doc_id, page_idx), None)
 
-    panel = Div(
-        build_studio_tab_content(
-            doc_id,
-            library,
-            page_idx,
-            is_ocr_loading=is_loading,
-            ocr_error=error_msg,
-            history_message=error_msg,
-        ),
-        id="studio-right-panel",
-        cls="flex-1 overflow-hidden h-full",
-    )
-    return [panel, toast] if toast else panel
+    # While loading: return spinner overlay that continues polling
+    if is_loading:
+        panel = Div(
+            build_studio_tab_content(
+                doc_id,
+                library,
+                page_idx,
+                is_ocr_loading=True,
+                ocr_error=error_msg,
+                history_message=error_msg,
+            ),
+            id="studio-right-panel",
+            cls="flex-1 overflow-hidden h-full",
+        )
+        return [panel, toast] if toast else panel
+
+    # Completed or error: use HX-Redirect to reload the Studio page cleanly.
+    # This ensures SimpleMDE and all JS re-initialise properly.
+    from starlette.responses import Response
+
+    encoded_doc = quote(doc_id, safe="")
+    encoded_lib = quote(library, safe="")
+    redirect_url = f"/studio?doc_id={encoded_doc}&library={encoded_lib}&page={page_idx}&tab=transcription"
+
+    headers = {"HX-Redirect": redirect_url}
+    if toast:
+        # Can't send OOB toast with redirect, but the page reload will show fresh state
+        pass
+    return Response(status_code=200, content="", headers=headers)
 
 
 def restore_transcription(doc_id: str, library: str, page: int, timestamp: str):
