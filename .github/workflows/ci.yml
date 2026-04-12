@@ -43,8 +43,6 @@ jobs:
         ruff check . --ignore C901,D417
 
   test:
-    # Matrix strategy: run fast and slow test lanes in parallel from a
-    # single job definition to avoid setup drift between the two.
     if: |
       github.event_name != 'push' ||
       (
@@ -77,8 +75,80 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest pytest-timeout
+        pip install pytest pytest-timeout pytest-cov pytest-xdist
 
     - name: Run ${{ matrix.lane }} tests
       run: |
-        pytest -v --tb=short -m "${{ matrix.marker }}"
+        pytest -v --tb=short -m "${{ matrix.marker }}" \
+          -n auto \
+          --cov=src --cov-report=xml:coverage-${{ matrix.lane }}.xml \
+          --cov-report=term-missing
+
+    - name: Upload coverage to Codecov
+      if: always()
+      uses: codecov/codecov-action@v5
+      with:
+        files: coverage-${{ matrix.lane }}.xml
+        flags: ${{ matrix.lane }}
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload .coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-data-${{ matrix.lane }}
+        path: .coverage
+        include-hidden-files: true
+
+  coverage-badge:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install coverage
+      run: pip install coverage
+
+    - name: Download fast coverage data
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage-data-fast
+        path: cov-fast
+
+    - name: Download slow coverage data
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage-data-slow
+        path: cov-slow
+
+    - name: Combine coverage and generate JSON
+      run: |
+        cp cov-fast/.coverage .coverage.fast
+        cp cov-slow/.coverage .coverage.slow
+        coverage combine .coverage.fast .coverage.slow
+        coverage json -o coverage.json --include="src/*"
+
+    - name: Update coverage.json and push
+      run: |
+        if [ -f coverage.json ]; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          if git diff --cached --quiet; then
+            echo "No coverage changes to commit"
+          else
+            git commit -m "chore: update coverage.json [skip ci]"
+            git push
+          fi
+        fi

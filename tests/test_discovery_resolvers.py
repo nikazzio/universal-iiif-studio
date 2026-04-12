@@ -169,3 +169,40 @@ def test_archive_org_resolver_identifier_details_and_manifest_url():
     assert manifest_url3 == "https://iiif.archive.org/iiif/b29000427_0001/manifest.json"
     assert doc_id3 == "b29000427_0001"
     assert not resolver.can_resolve("https://notarchive.org/details/b29000427_0001")
+
+
+def test_oxford_trailing_slash_and_variants():
+    """Oxford resolver should handle legacy URLs with trailing slashes and .json suffix."""
+    uuid = "cb1df5f1-7435-468b-8860-d56db988b929"
+    urls = [
+        uuid,
+        f"https://digital.bodleian.ox.ac.uk/objects/{uuid}",
+        f"https://digital.bodleian.ox.ac.uk/objects/{uuid}/",
+        f"{uuid}.json",
+    ]
+    for u in urls:
+        m_url, d_id = resolve_shelfmark("Bodleian (Oxford)", u)
+        assert m_url is not None, f"Failed for input: {u}"
+        assert uuid in m_url, f"UUID not in manifest URL for input: {u}"
+
+
+def test_vatican_cross_protection_rejects_oxford_uuid():
+    """Vatican resolver should reject Oxford UUIDs (returns None, None)."""
+    uuid = "cb1df5f1-7435-468b-8860-d56db988b929"
+    m_url, d_id = resolve_shelfmark("Vaticana", uuid)
+    assert m_url is None
+    assert d_id is None
+
+
+def test_vatican_normalization_extended_edge_cases():
+    """Vatican shelfmark normalization handles dashes and extra whitespace."""
+    assert normalize_shelfmark("urb   lat   123") == "MSS_Urb.lat.123"
+    assert normalize_shelfmark("urb-lat-123") == "MSS_Urb.lat.123"
+    assert normalize_shelfmark("MSS_Urb.lat.123") == "MSS_Urb.lat.123"
+
+
+def test_gallica_bpt_identifier():
+    """Gallica resolver should accept BPT identifiers."""
+    bpt_id = "bpt6k9761787t"
+    m_url, _d_id = resolve_shelfmark("Gallica (BnF)", bpt_id)
+    assert m_url is not None and bpt_id in m_url
