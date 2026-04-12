@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from fasthtml.common import H3, Button, Div, P, Span
+from fasthtml.common import H3, Button, Div, Input, P, Span
 
 from .pdf_inventory import _bytes_label
 from .thumbnails import render_export_thumbnails_loading_shell, render_export_thumbnails_panel
@@ -102,6 +102,43 @@ def _render_export_pages_subtab(
                 thumb_page_size=thumb_page_size,
             ),
             cls="space-y-2",
+        ),
+        Div(
+            Div(
+                Button(
+                    "☑ Tutte",
+                    type="button",
+                    id="studio-export-pages-select-all",
+                    cls="app-btn app-btn-neutral text-xs",
+                ),
+                Button(
+                    "☐ Nessuna",
+                    type="button",
+                    id="studio-export-pages-clear",
+                    cls="app-btn app-btn-neutral text-xs",
+                ),
+                Div(
+                    Input(
+                        type="text",
+                        id="studio-export-pages-range",
+                        placeholder="es. 1-10,12,20-25",
+                        cls="app-field text-xs w-36",
+                    ),
+                    Button(
+                        "Applica",
+                        type="button",
+                        id="studio-export-pages-apply-range",
+                        cls="app-btn app-btn-accent text-xs",
+                    ),
+                    cls="flex items-center gap-1.5",
+                ),
+                Span(
+                    "0 pagine selezionate",
+                    cls="studio-export-selected-count text-xs text-slate-500 dark:text-slate-400",
+                ),
+                cls="flex flex-wrap items-center gap-2",
+            ),
+            cls=("p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80"),
         ),
         Div(
             Div(
