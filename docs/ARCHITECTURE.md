@@ -1,162 +1,147 @@
-# 🏗️ Project Architecture
+# Project Architecture
 
 ## Overview
 
-Universal IIIF Downloader & Studio separates a **FastHTML/htmx-based UI shell** (`studio_ui/`) from the pure Python core (`universal_iiif_core/`). The UI renders HTML elements, wires HTMX for asynchronous swaps, and embeds Mirador, while the back-end keeps all metadata, storage, OCR logic, and network resolution untouchable.
+Universal IIIF Downloader & Studio separates a Python UI shell from reusable core services:
 
-## System Layers
+- `studio_ui/` renders the FastHTML and HTMX interface.
+- `universal_iiif_core/` owns provider resolution, storage, download orchestration, export logic, OCR services, and runtime policy.
+- `universal_iiif_cli/` exposes the CLI entrypoint on top of the same core services.
 
-The application is strictly divided into two main layers. The **UI Layer** depends on the **Core Layer**, never the other way around.
+The UI depends on the core layer. The core layer does not depend on UI modules.
 
-### 1. Presentation Layer (`studio_ui/`)
+## Current UI Structure
 
-* **Pages**: Layout builders (`studio_layout`, Mirador wiring).
-* **Components**: Reusable UI parts (tab sets, toast holder, SimpleMDE-powered editor, Mirador viewer, snippet cards, professional status panel).
-* **Routes**:
-  * `studio_handlers.py`: Logic-heavy handlers for the editor, viewer, and OCR operations. Implements Mirador local/remote mode selection.
-  * `discovery_handlers.py`: Route entrypoints for search/add/download flows, delegating persistence helpers to `discovery_persistence.py`.
-  * `library_handlers.py`: Local Assets listing, cleanup, retry, and deletion actions.
-  * `library_query.py`: Shared filtering/query/view-model helpers for Library routes.
-* **Common**: Shared utilities (`build_toast`, htmx triggers, Mirador window presets).
-* **Status Panel**: Color-coded badges for technical status (read_source: AMBER for remote, GREEN for local; state, scans, staging, PDF info).
+The Studio-facing UI is now organized as focused packages rather than large single-file modules.
 
-### 2. Core Business Logic (`universal_iiif_core/`)
+### Routes And Workspace Helpers
 
-* **Discovery Module**:
-  * **Provider Registry**: A shared provider catalog drives web Discovery, settings options, and CLI direct resolution from the same metadata source.
-  * **Orchestrator package**: `universal_iiif_core.discovery` now owns typed contracts and orchestration policy (`contracts.py`, `orchestrator.py`) plus search strategy adapter mapping (`search_adapters.py`).
-  * **Resolvers**: Direct resolution still ends in provider-specific resolver classes, but registration happens through the provider registry rather than UI/CLI hardcoding.
-  * **Search Modes**: Each provider declares `search_mode` (`direct`, `fallback`, `search_first`) plus an optional `search_strategy`. This keeps the UX consistent while allowing provider-specific search adapters.
-  * **Search Coverage**: Current searchable providers are `Gallica`, `Vaticana`, `Institut de France`, `Internet Archive`, `Bodleian`, `e-codices`, `Cambridge`, `Heidelberg`, `Harvard`, and `Library of Congress`, but some adapters are intentionally hybrid. For example Cambridge and Heidelberg free-text can degrade to browser handoff results when the public site blocks scripted search or does not expose stable machine-readable hits.
-  * **Result Contract**: Provider adapters return canonical `SearchResult` payloads. `viewer_url` is the normalized field for source viewer links; `manifest_status` tracks async validation state (`ok`, `pending`, `unavailable`); `raw` remains available only for provider-specific extras.
-  * **Pagination**: Search adapters thread `max_results` (configurable, default 20) and `page` from the request payload through to provider functions. Providers with paginated APIs (Archive.org, LOC, Harvard, Gallica) support real server-side pagination via a "load more" HTMX flow. Non-paginatable providers (Vatican, Bodleian, Cambridge, Heidelberg, Institut, e-codices) accept the parameters but ignore `page`.
-  * **Async Manifest Probing**: Archive.org results are returned immediately with `manifest_status="pending"`. A dedicated `POST /api/discovery/probe_manifest` endpoint validates each manifest per-card via HTMX lazy-load, avoiding blocking the search response on slow IIIF servers.
-* **Downloader Logic**:
-  * Implements the **Golden Flow** (Native PDF check -> Extraction -> Fallback to IIIF).
-  * Manages threading and DB updates.
-  * Uses staged local pages in `temp_images/<doc_id>` before promoting validated files into `scans/`.
-  * Split across `logic/downloader.py` (orchestrator), `logic/downloader_pdf.py` (PDF/native pipeline), and `logic/downloader_runtime.py` (canvas/runtime pipeline).
-* **Network Layer (`utils.py`)**:
-  * Provides a resilient `requests.Session`.
-  * Handles WAF Bypass (Browser User-Agents, Dynamic Brotli).
-* **HTTP Client (`http_client.py`)**:
-  * Centralized HTTP client with automatic retry, exponential backoff, and per-host rate limiting.
-  * Per-library network policies (timeout, concurrency, backoff, rate limits).
-  * Metrics tracking for requests, retries, and timeouts.
-  * Sliding window rate limiter prevents overwhelming library servers (Gallica: 4 req/min, others: 20 req/min).
-  * Used by: downloader, IIIF tiles, resolution probing, manifest fetching, external catalog scraping.
-* **OCR Module**:
-  * Abstracts differences between local Kraken models and Cloud APIs (OpenAI/Anthropic).
-* **Storage**:
-  * `VaultManager`: SQLite interface for metadata and job tracking (`queued/running/partial/complete` states).
-  * `vault_snippets.py` and `vault_jobs.py` hold extracted repository-style methods attached to `VaultManager`.
+- `studio_ui/routes/studio.py` registers the Studio routes.
+- `studio_ui/routes/studio_handlers.py` acts as the public handler surface and orchestration entrypoint.
+- `studio_ui/routes/_studio/` contains focused helpers for:
+  - workspace context;
+  - manifest and read-source selection;
+  - thumbnail/export fragments;
+  - page-level job preferences;
+  - UI utility glue.
 
----
+This keeps the route surface stable while moving implementation detail into narrower modules.
 
-## Interactive Flows
+### Settings UI
 
-### 1. Discovery, Library Add, and Resolution
+- `studio_ui/components/settings/panes/` contains domain-specific settings panes.
+- The package is organized by responsibility such as general, images, network, PDF, system, viewer, and discovery settings.
 
-1. **User Input**: The user enters free text, shelfmark (e.g., "Urb.lat.1779"), an ID, or a URL.
-2. **Provider Lookup**: Discovery resolves the selected library through the shared provider registry.
-3. **Provider Resolution**: The provider decides whether to try direct resolution first, search first, or direct resolution with search fallback.
-4. **Normalization**: Provider resolvers convert "dirty" inputs into canonical IIIF Manifest URLs only when `can_resolve()` positively identifies the input as direct.
-5. **Search Adapter Stage**: `max_results` and `page` are read from config/payload. Optional provider-specific filters (e.g. Gallica type filter) are applied before invoking the search adapter.
-6. **Preview / Result List**: Search adapters return canonical `SearchResult` entries; direct resolution fetches manifest details for preview and lazy-checks native PDF availability. Results without a `manifest` are rendered as consult-only cards. Archive.org results with `manifest_status="pending"` are validated asynchronously via HTMX probe.
-7. **Load More**: For paginatable providers, a "Carica altri risultati" button at the bottom of the result list fetches the next page via `POST /api/discovery/load_more`.
-8. **Action Split**: From each result, the user can either add to local Library (`saved`) or add + enqueue download.
+### Studio Output UI
 
-### 2. Download Manager + Golden Flow
+- `studio_ui/components/studio/export/` owns the Output tab assembly.
+- The package is split into:
+  - PDF inventory rendering;
+  - page actions;
+  - thumbnail rendering;
+  - output tab assembly;
+  - client-side tab script generation.
 
-Downloads are queued in a DB-backed manager with bounded concurrency (`settings.network.global.max_concurrent_download_jobs`).
-Queued jobs are promoted FIFO (with optional prioritization) and each running worker follows this flow:
+## Core Services
 
-1. **Check Native PDF**: Does the manifest provide a download link?
-    * **YES + `settings.pdf.prefer_native_pdf=true`**: Download the PDF. Then, **EXTRACT** pages to high-quality JPGs in `scans/` (Critical for Studio compatibility).
-    * **NO**: Fallback to downloading IIIF tiles/canvases one by one into staging (`temp_images/<doc_id>`), then promote validated pages into `scans/`.
-2. **Optional Compiled PDF**: If (and only if) no native PDF was used **AND** `settings.pdf.create_pdf_from_images=true`, generate a PDF from the downloaded images.
-3. **Completion**: Update DB status and manuscript `asset_state` (`complete` or `partial`).
-4. **Segmented Resume Safety**: Retry/range runs count already-staged validated pages together with current-run pages before promotion, so partial batches converge without deadlock.
+### Discovery
 
-### 3. Studio & OCR
+Discovery uses a shared provider registry and typed orchestration in `universal_iiif_core.discovery`.
 
-0. **Entry Point**: Library is the canonical selector; `/studio` without `doc_id/library` renders the Studio recent hub (`Riprendi lavoro`) using server-side persisted contexts.
-1. **Async Request**: Clicking "Run OCR" sends an HTMX POST to `/api/run_ocr_async`.
-2. **Job State**: The server spawns a thread and tracks progress in `ocr_state.py`.
-3. **Polling**: The UI shows an overlay that polls `/api/check_ocr_status` every 2 seconds.
-4. **Completion**: Text is saved to `transcription.json` and the History table.
+Responsibilities:
 
-### 4. Mirador Viewing Modes
+- classify user input;
+- resolve direct provider inputs;
+- route free-text search to provider search adapters;
+- normalize results into the shared search contract;
+- support provider-specific filters and pagination where available.
 
-Studio supports **two distinct viewing modes** for the Mirador viewer, automatically selected based on download completeness:
+### Downloading
 
-* **REMOTE MODE** (for incomplete/paused downloads):
-  - Mirador loads the **original manifest** from the library server (e.g., `gallica.bnf.fr`).
-  - Displays **ALL pages** by fetching images on-demand from the remote server.
-  - Useful for previewing documents before full download completes.
-  - Requires internet connection.
-  - User can force this mode with `?allow_remote_preview=true` URL parameter.
+Download orchestration is handled by core services and a job manager backed by local state.
 
-* **LOCAL MODE** (for completed downloads):
-  - Mirador loads the **local manifest** (`/iiif/manifest/...`) served by Studio.
-  - Displays **only downloaded pages** using local images from `scans/`.
-  - Works completely offline.
-  - Default mode when `viewer.mirador.require_complete_local_images=true` (default) and all pages are available locally.
+Runtime behavior includes:
 
-**Mode Selection Logic** (`studio_handlers.py`):
-- `_resolve_studio_read_source_mode()`: Determines if local images are sufficient or remote preview is needed.
-- `_select_studio_manifest_url()`: Returns appropriate manifest URL (local or remote) based on mode.
-- Config setting: `viewer.mirador.require_complete_local_images` (default: `true`) gates local viewer until download completes.
-- User override: `?allow_remote_preview=true` URL parameter forces remote mode regardless of settings.
+- native PDF-first strategy when configured;
+- IIIF image fallback;
+- staged page validation before promotion;
+- resume and retry safety across partial runs.
 
----
+### Storage
 
-## UI & Configuration Details
+`VaultManager` and related storage modules keep track of:
 
-* **Viewer Config**: The `config.json` (`settings.viewer`) section directly controls Mirador's behavior (Zoom levels, viewing modes) and the Visual Tab's default image filters.
-* **Mirador Modes**: Automatic switching between remote preview (incomplete downloads) and local-only (complete downloads) based on `viewer.mirador.require_complete_local_images` setting.
-* **State Persistence**:
-  * **Server-side**: SQLite (`vault.db`) and JSON files (`data/local/`).
-  * **Client-side**: Sidebar state (collapsed/expanded) is saved in `localStorage`.
-* **Visual Feedback**:
-  * **Toasts**: Floating notifications anchored to the top-right viewport.
-  * **Progress**: Real-time queue/running status driven by DB polling in the Download Manager side panel.
-  * **Studio page jobs**: per-page `Hi/Std` actions are stored as `studio_export_page` jobs and rendered in Discovery as a compact auxiliary section, not as full document download cards.
-  * **Status Panel**: Professional color-coded badges for technical status (read_source, state, scans, staging, PDF info).
+- manuscripts and metadata;
+- download and export jobs;
+- UI preferences and local working state;
+- snippet and OCR-related local records.
 
-## Key Design Decisions
+### Export
 
-1. **Scans as Operational Source + Temp Staging**: `scans/` is the operational source for Viewer/OCR/Cropper, but runtime can stage validated pages in `temp_images/<doc_id>` before promotion. Promotion policy can stay strict (`never`) or happen on pause (`settings.storage.partial_promotion_mode=on_pause`), with overwrite of existing scans enabled only for explicit refresh/redownload flows.
-2. **Zero Legacy**: Deprecated APIs are removed or stubbed. All legacy HTTP shims (`get_request_session`, `get_json`) have been retired from `utils.py`; the deprecated `config.py` tripwire module has been deleted. All HTTP calls now go through `HTTPClient` (singleton via `get_http_client()`).
-3. **Network Resilience**: The system assumes library servers are hostile (rate limits, firewalls) and uses aggressive retry logic, header mimicking, and centralized HTTP client with per-host rate limiting.
-4. **Pure HTTP Front-end**: No heavy client-side frameworks (React/Vue). The UI logic is driven by Python via FastHTML and HTMX.
-5. **Studio PR3 route scope (decision log, 2026-03-05)**: do not add dedicated `/studio/partial/viewer` and `/studio/partial/availability` routes for now. Keep viewer gating and availability in the main `/studio` flow to avoid route surface growth and duplicated state logic. Re-evaluate only if measured UI payload/latency or independent refresh requirements justify a split.
-6. **Centralized HTTP Client (Issue #71, 2026-03-09; completed #107, 2026-03-27)**: Eliminated ~200+ lines of duplicate retry/backoff logic by introducing `HTTPClient` class with automatic retry, exponential backoff, per-host rate limiting, and metrics. All core IIIF modules and discovery provider search surfaces now use this client. The only remaining raw `requests.Session` usage is the Vatican search flow, which requires an isolated cookie session.
-7. **Current Discovery Refactor Boundary (2026-03-14)**: discovery orchestration and search adapter dispatch are now extracted in `universal_iiif_core.discovery`, and UI rendering is split into dedicated modules (`discovery_form`, `discovery_results`, `discovery_download_panel`, `discovery_page`) with a compatibility aggregator. Remaining technical debt is mostly inside provider-specific parser/search code still hosted in `universal_iiif_core.resolvers.discovery`.
+Export services manage:
 
-## Local Data & Cleanup
+- PDF inventory discovery;
+- profile-driven export jobs;
+- local and temporary remote high-resolution image sourcing;
+- cleanup and retention policies.
 
-- Runtime directories (`downloads/`, `data/local/*`, `logs/`, `temp_images/`) are resolved via `universal_iiif_core.config_manager` and treated as regenerable data. Do not store config assets or secrets in these directories.
-- `scripts/clean_user_data.py` uses the manager to resolve paths and supports `--dry-run`, `--yes`, `--include-data-local`, and `--extra` while preserving `config.json`.
-- For full build/test/debug cycles, clean runtime data first (recommended: `--dry-run`, then `--yes`, `pytest tests/`, `ruff check . --select C901`, `ruff format .`) and register new runtime paths in `.gitignore`.
+### OCR
 
-## Engineering Rationale and Governance
+OCR services abstract local and remote engines behind a common workflow, while the UI handles asynchronous job feedback.
 
-This section centralizes design rationale that is intentionally excluded from `AGENTS.md`.
+### Networking
 
-1. **`src/`-only source layout**
-   - Keeps import behavior explicit and avoids root-level script drift.
-   - Reduces ambiguity between package code and tooling scripts.
-2. **ConfigManager as single runtime path/config authority**
-   - Prevents path fragmentation and hidden assumptions in handlers/services.
-   - Ensures local/user data locations are environment-resolved consistently.
-3. **Scans-first runtime model**
-   - `scans/` remains the operational source for viewer, OCR, and crop tools.
-   - `temp_images/<doc_id>` is a staging layer for validated pages and segmented retries.
-   - Native PDF support is an ingestion strategy, not a runtime storage replacement.
-4. **Complexity ceiling (C901 <= 10)**
-   - Enforces decomposition into testable single-purpose helpers.
-   - Reduces regression risk in flow-heavy services (download, OCR, resolvers).
-5. **Procedural policy split**
-   - `AGENTS.md`: procedural rules and required command flows only.
-   - `docs/ARCHITECTURE.md`: rationale, tradeoffs, and system-level decisions.
+The centralized HTTP client is the primary transport layer for runtime network operations.
+
+Responsibilities:
+
+- retry and backoff policy;
+- per-library network customization;
+- concurrency and rate limiting;
+- metrics and request hygiene around hostile or fragile upstream services.
+
+## End-To-End Flow
+
+### 1. Discovery To Library
+
+1. The user submits a URL, identifier, shelfmark, or query.
+2. Discovery resolves or searches through the provider registry.
+3. Results are normalized into the shared search contract.
+4. `Add item` writes local metadata without forcing a full download.
+
+### 2. Download To Local Working State
+
+1. A download job starts through the job manager.
+2. The runtime prefers native PDF when available and configured.
+3. Otherwise it downloads IIIF images and validates them in staging.
+4. Validated output is promoted into local scans when the promotion policy allows it.
+
+### 3. Library To Studio
+
+1. The user opens a local item from Library.
+2. Studio builds a workspace context from local records and manifest state.
+3. The viewer chooses remote or local mode based on completeness and policy.
+4. The user works across transcription, history, metadata, image actions, and output.
+
+### 4. Output And Export
+
+1. The Output tab reads current PDF inventory.
+2. The user selects an export profile or uses a page-level refresh action.
+3. Export jobs run through the storage-backed job system.
+4. Output artifacts are persisted under runtime-managed paths.
+
+## Design Rules
+
+1. `docs/` is the documentation source of truth; wiki pages are derived publish targets.
+2. Runtime paths are resolved through `ConfigManager`, not hardcoded strings.
+3. `scans/` is the operational image source for local study workflows.
+4. Staging and retry behavior must remain safe for partial and resumed downloads.
+5. UI package structure should reflect responsibility boundaries, not just file size limits.
+
+## Current Hotspots For Contributors
+
+- Discovery orchestration and provider search behavior.
+- Studio workspace and read-source selection.
+- Output tab assembly and thumbnail/page-action rendering.
+- Settings panes for network, PDF, viewer, and system behavior.
+- Config reference and runtime validation alignment.

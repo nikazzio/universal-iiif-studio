@@ -1,330 +1,176 @@
-# 📘 Universal IIIF Downloader & Studio – Guida Completa
-
-## 1. Introduzione
-
-Universal IIIF Downloader & Studio è una piattaforma modulare per lo studio di materiali IIIF (manoscritti e libri a stampa).
-L'architettura separa nettamente il backend (Python core) dall'interfaccia (FastHTML/HTMX).
-L'esperienza utente è quella di una SPA (Single Page Application): `Libreria` è il punto di accesso ai documenti locali e `Studio` è il workspace con Mirador a sinistra e pannelli operativi (Trascrizione, Snippets, History, Visual) a destra.
-
-## 2. Configurazione Dettagliata (`config.json`)
-
-Il file `config.json` è la singola fonte di verità.
-
-### ⚙️ Sistema e Download
-
-Parametri **sempre globali** (valgono per tutte le biblioteche):
-* `settings.network.global.max_concurrent_download_jobs`: Numero massimo di download documento in esecuzione contemporanea (default: 2). Gli altri job restano in coda.
-* `settings.network.global.connect_timeout_s`: timeout apertura connessione HTTP.
-* `settings.network.global.read_timeout_s`: timeout lettura risposta HTTP.
-* `settings.network.global.transport_retries`: retry trasporto lato client HTTP.
-
-Parametri **override per biblioteca** (attivi solo con `settings.network.libraries.<lib>.use_custom_policy=true`):
-* `workers_per_job`, `min_delay_s`, `max_delay_s`, `retry_max_attempts`, `backoff_base_s`, `backoff_cap_s`, `respect_retry_after`.
-
-* `settings.images.tile_stitch_max_ram_gb`: Limite RAM per l'assemblaggio di immagini IIIF giganti (Tile Stitching).
-* `settings.images.probe_remote_max_resolution`: mantiene il probing `info.json` usato dalla riga informativa `Remote` nelle miniature Studio; non cambia la strategia di download.
-* `settings.images.download_strategy_mode`: Preset operativo (`balanced`, `quality_first`, `fast`, `archival`, `custom`) che definisce l'ordine dei tentativi diretti IIIF prima dell'eventuale stitch.
-* `settings.images.download_strategy_custom`: Strategia custom (lista size, es. `3000,1740,max`) usata solo quando `mode=custom`. E un ordine di tentativi, non una classifica assoluta di qualità.
-* `settings.images.stitch_mode_default`: decide se il download standard puo fare fallback automatico a stitch (`auto_fallback`), restare solo diretto (`direct_only`) o usare solo stitch (`stitch_only`).
-* `settings.images.iiif_quality`: Segmento quality nelle URL IIIF (`.../quality.jpg`). In generale lasciare `default`; usare `gray/bitonal` solo per casi specifici.
-* `settings.images.local_optimize.max_long_edge_px`: lato lungo massimo usato da `Ottimizza scans locali`.
-* `settings.images.local_optimize.jpeg_quality`: qualità JPEG usata da `Ottimizza scans locali`.
-
-### 📄 Opzioni PDF (Core + UI Config)
-
-* `settings.pdf.prefer_native_pdf` (default: `true`): se il manifest IIIF espone un PDF nativo (`rendering`), il downloader lo usa come sorgente primaria.
-* `settings.pdf.create_pdf_from_images` (default: `false`): se non viene usato un PDF nativo, crea un PDF compilato dalle immagini scaricate.
-* `settings.pdf.viewer_dpi` (default: `150`): DPI usati per estrarre le immagini JPG dal PDF nativo per il viewer.
-* `settings.pdf.viewer_jpeg_quality` (default: `95`): qualità JPEG usata solo nella rasterizzazione dei PDF nativi in scans locali.
-* `settings.pdf.profiles`: catalogo preset PDF avanzati (`balanced`, `high_quality`, `archival_highres`, `lightweight`) con supporto custom globale.
-* `settings.pdf.profiles.catalog.<profilo>.image_source_mode`: definisce la sorgente immagini del profilo (`local_balanced`, `local_highres`, `remote_highres_temp`).
-* `settings.pdf.profiles.catalog.<profilo>.max_parallel_page_fetch`: limite di fetch parallelo quando il profilo usa il remoto high-res temporaneo.
-* `settings.storage.highres_temp_retention_hours`: retention dei file high-res temporanei usati per export avanzati.
-* `settings.storage.exports_retention_days`: retention globale degli export PDF salvati.
-* `settings.storage.thumbnails_retention_days`: retention della cache miniature usata nel tab Output.
-* `settings.storage.auto_prune_on_startup`: se attivo, applica pruning retention all'avvio (export + temp high-res).
-* `settings.storage.partial_promotion_mode`: gestione promozione pagine validate da `temp_images` a `scans` (`never` oppure `on_pause`).
-* `settings.storage.remote_cache.max_bytes`, `retention_hours`, `max_items`: limiti cache persistente risoluzioni remote.
-* `settings.viewer.source_policy.saved_mode`: policy sorgente Studio per item `saved` (`remote_first|local_first`).
-
-Nel pannello **Settings > PDF Export** trovi i controlli con help text esplicativi:
-* sub-tab **Predefiniti e copertina**:
-  - **Prefer Native PDF**: priorita al PDF della biblioteca se disponibile.
-  - **Create PDF from Images**: attiva/disattiva la generazione del PDF compilato in fallback.
-  - **PDF Viewer DPI**: qualità estrazione da PDF nativo.
-  - **Default PDF Profile**: preset operativo globale.
-  - metadati copertina (logo, curatore, descrizione) e default formato/compressione.
-* sub-tab **Catalogo Profili**:
-  - selettore unico profili con voce `Nuovo profilo...` per creare preset custom;
-  - editor completo del profilo (cover/colophon, compression, source mode, lato lungo max, JPEG quality, parallel fetch);
-  - toggle **Imposta come default globale**;
-  - pulsante rosso **Elimina Profilo**;
-  - dopo create/delete/update la pagina viene ricaricata per riallineare subito il catalogo disponibile in Output.
+# User Guide
 
-Nel pannello **Settings > Viewer**:
-* sub-tab **Zoom**, **Defaults**, **Presets** per separare parametri OpenSeadragon e filtri visivi.
-
-Nel pannello **Settings > Paths & System**:
-* sub-tab **Paths & Logging** per directory runtime e logging base;
-* sub-tab **Storage & Security** per retention, pruning, test live e CORS.
+Universal IIIF Downloader & Studio supports a single working flow:
 
-Nel tab **Studio > Output**:
-* in alto visualizzi sempre l'inventario PDF locale gia presente per il documento;
-* usi i sub-tab `Crea PDF` / `Pagine` / `Job` per separare configurazione, visualizzazione miniature e monitoraggio coda;
-* nel sub-tab `Crea PDF` il blocco principale e:
-  - **Profilo PDF** + pulsante **Gestisci profili** nella stessa riga;
-  - pannello override a scomparsa (**Personalizza override per questo job**) da aprire solo quando serve.
-* il pulsante finale **Crea PDF** usa:
-  - il profilo selezionato;
-  - eventuali override compilati nel pannello espanso;
-  - lo scope selezionato (`Tutte le pagine` oppure `Solo selezione`).
-* nel sub-tab `Pagine`:
-  - la griglia miniature mostra per ogni pagina **Locale** e **Remote**; se una dimensione diretta è stata verificata da un download reale, compare un pallino verde accanto a `Locale`;
-  - azione puntuale **Hi** per forzare un refresh diretto `full/max` della singola pagina;
-  - azione puntuale **Std** per usare la stessa strategia standard del volume (tentativi diretti + stitch solo come fallback);
-  - pulsante **Ottimizza scans locali** per ridurre lo spazio occupato dalle scans locali con ottimizzazione lossy (resize + compressione JPEG configurabile via `settings.images.local_optimize.max_long_edge_px` e `settings.images.local_optimize.jpeg_quality`).
-    - **Nota di sicurezza**: l'ottimizzazione valida tutti i percorsi file per prevenire attacchi di path traversal via symlink. Solo i file all'interno della directory downloads vengono processati.
+1. Find or resolve an item in `Discovery`.
+2. Save or download it into `Library`.
+3. Open it in `Studio`.
+4. Export PDFs or refresh single pages from `Output`.
 
-### 🤖 Motori OCR
+This guide describes the current product behavior as implemented now.
 
-Le API key vanno in `api_keys`: `openai`, `anthropic`, `google_vision`, `huggingface`.
+## Core Navigation
 
-* `settings.ocr.ocr_engine`: Seleziona il motore attivo (es. `"openai"` o `"kraken"`).
-* `settings.ocr.kraken_enabled`: abilita l'uso esplicito del backend Kraken quando selezionato.
+- `Discovery` resolves direct inputs and provider-backed search.
+- `Library` is the canonical entrypoint for local items.
+- `Studio` is the document workspace.
+- `Output` is the export surface inside Studio.
+- `/studio` without `doc_id` and `library` opens the recent-work hub.
 
-### 🎨 Preferenze UI
+## Discovery
 
-* `settings.ui.theme_color`: Colore d’accento per l'interfaccia.
-* `settings.ui.toast_duration`: Durata in ms delle notifiche a scomparsa.
+Discovery accepts:
 
-## 3. Discovery e Download (Novità v0.7)
+- direct manifest URLs;
+- provider item URLs;
+- shelfmarks or IDs supported by a provider;
+- free-text queries for providers with search adapters.
 
-Il sistema di download è stato completamente riscritto per essere intelligente e resiliente.
+Current behavior:
 
-### 🔌 HTTP Client Centralizzato (v0.7.0)
+- `Add item` performs a lightweight prefetch and saves local metadata.
+- Full image download does not start until the user explicitly starts a download.
+- Search results use canonical fields such as `manifest`, `library`, `id`, and optional `manifest_status`.
+- Providers with real pagination expose `Load more` in the result list.
 
-Il nuovo `HTTPClient` centralizzato elimina oltre 200 righe di codice duplicato per retry e backoff:
-* **Retry automatico** con backoff esponenziale configurabile per biblioteca.
-* **Rate limiting per host** con algoritmo sliding window (Gallica: 4 req/min, altre: 20 req/min).
-* **Policy di rete per biblioteca** con timeout, concurrency e backoff personalizzabili.
-* **Metriche di tracciamento** (richieste, retry, timeout).
-* **Thread-safe** con semafori per limitare richieste parallele per host.
+## Library
 
-Moduli migrati: downloader, IIIF tiles, resolution probe, manifest fetch, catalogo esterno.
+Library is the local asset catalog for saved and downloaded material.
 
-Config chiavi: `settings.network.global.*` (globale) e `settings.network.libraries.<library>.*` (per-biblioteca).
+Typical actions:
 
-### 🧭 Discovery separata da Download Manager
+- open an item in Studio;
+- review local or partial status;
+- retry missing pages;
+- clean partial data;
+- remove an item and related runtime state.
 
-La pagina Discovery è divisa in due aree:
-* **Sinistra**: ricerca/risoluzione manifest e anteprime.
-* **Destra**: **Download Manager** con coda, job in esecuzione, errori e retry.
-* I job pagina generati da `Hi` / `Std` nello Studio non sporcano più la lista principale: vengono mostrati in una sezione compatta separata (`Attività Immagini Studio`) con solo testo e azione `Annulla` o `Rimuovi`.
+Local runtime data is stored under the paths resolved by `ConfigManager`, not by hardcoded directory assumptions.
 
-Questo permette di continuare a cercare nuovi manoscritti mentre uno o più download sono in corso.
+## Studio
 
-Prefetch light:
-* `Aggiungi item` salva entry DB + `metadata.json` + `manifest.json` locali.
-* non avvia il download completo delle scansioni.
+Studio combines the document viewer and operational panels for transcription, history, visual inspection, metadata, images, and output.
 
-### 🔎 Ricerca libera + filtri opzionali
+### Recent-work Hub
 
-La barra di ricerca Discovery è pensata in stile "standard":
-* campo testo ampio (supporta query lunghe, segnature, ID, URL);
-* select biblioteca;
-* filtro opzionale specifico per Gallica:
-  * `Tutti i materiali` (default),
-  * `Solo manoscritti`,
-  * `Solo libri a stampa`.
+If `/studio` is opened without a document context, the app shows a recent-work hub instead of an empty editor. This is expected behavior and is backed by persisted server-side context.
 
-Il numero massimo di risultati per provider è configurabile da **Settings > Discovery** (default: 20, range 1-50).
+### Viewing Modes
 
-Per i provider con API paginate (Archive.org, Harvard, Library of Congress, Gallica), un pulsante **"Carica altri risultati"** in fondo alla lista permette di caricare le pagine successive senza ricaricare la pagina.
+Studio uses two viewing modes for Mirador:
 
-I risultati di Archive.org mostrano anche descrizione, volume e lingua quando disponibili. La validazione del manifest IIIF avviene in modo asincrono per ogni card (badge "Verifica manifest…" → "✓ Manifesto disponibile" / "✗ Non disponibile").
+- `Remote mode` for incomplete downloads or explicit remote-preview requests.
+- `Local mode` for fully available local page sets.
 
-Nota: su Gallica i filtri per tipologia vengono applicati localmente sui metadati (`dc:type`) estratti dai record SRU, perché i filtri CQL diretti su `dc.type` non sono sempre affidabili.
+Mode selection is driven by:
 
-### 🛰️ Smart Resolvers
+- local page availability;
+- `settings.viewer.mirador.require_complete_local_images`;
+- the `allow_remote_preview=1` query override.
 
-Il campo di ricerca accetta input "sporchi". Il sistema normalizza automaticamente:
+Use remote mode when you need to inspect an item before the local download is complete. Use local mode when you need offline-safe study with only local assets.
 
-* **Vaticana**: `Urb. lat. 123` → `MSS_Urb.lat.123`
-* **Gallica**: Accetta Short ID (`bpt6k...`), ARK completi e URL di visualizzazione.
-  * Ricerca testuale libera di default.
-  * Filtri opzionali per restringere a manoscritti o libri a stampa.
-* **Oxford**: Riconosce UUID (case-insensitive) e URL del portale `digital.bodleian`.
+### OCR And Editing
 
-### ⚡ Il "Golden Flow" di Download
+- OCR runs asynchronously.
+- Studio tracks job state and exposes progress in the UI.
+- Transcription saving avoids unnecessary writes when content has not changed.
+- History remains available as document-level working context.
 
-Quando avvii un download, il sistema decide la strategia migliore:
+## Output
 
-1. **Controllo PDF Nativo**: Cerca se la biblioteca offre un PDF ufficiale.
-   * **Se c'è** e `settings.pdf.prefer_native_pdf=true`: lo scarica e **estrae automaticamente** le pagine in immagini JPG ad alta risoluzione (nella cartella `scans/`). Questo garantisce che lo Studio funzioni anche con i PDF.
-   * **Se non c'è**: Scarica le immagini dai server IIIF una per una in area temporanea (`temp_images/{doc_id}`), valida i file e poi li promuove in `scans/` quando la condizione di completezza e soddisfatta.
-1. **Generazione PDF opzionale**: Se (e solo se) il download è avvenuto per immagini sciolte, il sistema genera un PDF compilativo solo con `settings.pdf.create_pdf_from_images=true`.
+The `Output` tab is split into a few related responsibilities:
 
-### 🧪 Strategia immagini: come leggere davvero le opzioni
+- PDF inventory for the current item;
+- PDF generation with profile selection;
+- thumbnail-level page actions;
+- export job monitoring.
 
-Per ogni pagina, il downloader prova una sequenza di size IIIF e solo in fallback passa al tile stitching:
+### PDF Profiles
 
-* `balanced`: `3000 -> 1740 -> max`
-* `quality_first`: `max -> 3000 -> 1740`
-* `fast`: `1740 -> 1200 -> max`
-* `archival`: `max`
-* `custom`: usa `settings.images.download_strategy_custom`
+Profiles define how exports are produced. Typical modes include:
 
-La variabile `settings.images.iiif_quality` non cambia la size: cambia il **profilo cromatico richiesto** nel segmento finale URL (`default/color/gray/bitonal/native`).
+- balanced local export;
+- higher-detail local export;
+- temporary remote high-resolution export.
 
-Indicazioni pratiche:
-* usa `default` per la maggior parte dei manoscritti;
-* usa `gray` o `bitonal` solo quando serve ridurre peso o forzare B/N per workflow OCR specifici;
-* se un server IIIF non supporta una quality, il downloader applica retry/fallback tramite la stessa pipeline di download.
+Use profile selection for the default export decision. Use per-job overrides only for exceptions.
 
-### 🧩 Strategia consigliata per manoscritti molto grandi
+### Page-Level Actions
 
-Per collezioni con pagine molto pesanti, il flusso consigliato e:
-* mantieni nel repository locale una copia **bilanciata** per lavorare veloce in viewer e trascrizione;
-* usa il confronto **Locale / Remote** nel tab `Studio > Output` per capire subito dove il dato dichiarato dal servizio IIIF differisce dal locale;
-* usa **Hi** solo per forzare il miglior diretto disponibile sulla singola pagina;
-* usa **Std** quando vuoi riallineare una pagina alla stessa strategia standard usata dal download automatico del volume;
-* quando serve un PDF finale ad altissima qualita, usa un profilo con `image_source_mode=remote_highres_temp`;
-* abilita `cleanup_temp_after_export` nel profilo per eliminare in automatico i temporanei high-res a fine export.
+The page grid exposes single-page actions such as:
 
-### 🗂️ Staging locale (`temp_images` -> `scans`)
+- direct high-detail refresh;
+- standard refresh using the same strategy as full downloads;
+- local scan optimization when enabled by configuration.
 
-Comportamento runtime attuale:
-* le pagine validate possono essere tenute in `temp_images/{doc_id}` finche il documento non e completo;
-* i retry segmentati (`Retry missing` / `Retry range`) conteggiano anche le pagine gia validate in temp, quindi il sistema converge correttamente alla promozione finale;
-* la policy `settings.storage.partial_promotion_mode` controlla una promozione anticipata:
-  - `never` (default): promozione solo quando il gate di completezza e soddisfatto;
-  - `on_pause`: quando metti in pausa un job running, le pagine validate vengono promosse in `scans`; le scansioni esistenti vengono sovrascritte solo nei flussi espliciti di refresh/ridownload.
+These actions are intended to avoid re-running a full-volume workflow when only a small subset of pages needs attention.
 
-Resume:
-* il resume considera sia `scans/` sia `temp_images/{doc_id}` per capire cosa manca davvero;
-* questo evita duplicazioni e riparte solo dalle pagine effettivamente mancanti.
+## Download And Storage Model
 
-### 📚 Libreria Locale (Local Assets)
+The downloader follows a practical fallback strategy:
 
-Nuova sezione `Libreria`:
-* vista **Grid/List** degli asset locali;
-* raggruppamento per **biblioteca** e **tipologia** (`manoscritto`, `libro a stampa`, `incunabolo`, `periodico`, `altro`);
-* stato per item: `Salvato`, `In download`, `Locale parziale`, `Locale completo`, `Errore`;
-* conteggio pagine locali/temporanee sempre visibile nelle card.
-
-Azioni principali:
-* **Delete** documento locale;
-* **Clean partial** per ripulire download incompleti;
-* **Ottimizza scans locali** (lossy in-place su `scans/`, parametrizzata da Settings);
-* **Retry missing** (riprende solo le pagine mancanti);
-* **Retry range** (intervalli specifici, es. `1-10,15,30-35`).
+1. Prefer a native PDF when the manifest exposes one and configuration allows it.
+2. Extract local images for viewer compatibility when native PDF flow is used.
+3. Fall back to IIIF image download when native PDF is unavailable or not selected.
+4. Optionally build a PDF from images when configured to do so.
 
-### 🛡️ Resilienza di Rete
-
-Il downloader ora "imita" un browser reale (Firefox/Chrome) e gestisce le compressioni (Brotli/Gzip) per aggirare i blocchi (WAF) di biblioteche severe come Gallica.
+Current storage behavior:
 
-## 4. Funzionalità Studio
+- validated pages may remain staged in `temp_images/<doc_id>` before promotion;
+- completed local working pages live in `downloads/<Library>/<DocumentId>/scans/`;
+- PDF outputs live in the document `pdf/` folder;
+- metadata and job artifacts live in the document `data/` folder.
 
-Accesso consigliato:
-* apri un documento dalla pagina **Libreria** tramite "Apri Studio";
-* `/studio` senza `doc_id` e `library` apre il mini-hub **Riprendi lavoro** con gli ultimi contesti Studio persistiti lato server.
-
-### 🖼️ Viewer e Layout
-
-* **Mirador**: Configurato per "Deep Zoom" (`maxZoomLevel` aumentato) per analisi paleografiche dettagliate.
-* **Modalità Visualizzazione Dual-Mode**:
-  - **Modalità Remota** (download incompleti/pause): Mirador carica il manifest originale dal server biblioteca (es. `gallica.bnf.fr`) e mostra TUTTE le pagine, scaricando immagini on-demand. Utile per anteprima durante download. Parametro URL: `?allow_remote_preview=true`.
-  - **Modalità Locale** (download completi): Mirador carica il manifest locale (`/iiif/manifest/...`) e mostra solo le pagine scaricate usando immagini locali. Funziona offline. Default quando `viewer.mirador.require_complete_local_images=true` e tutte le pagine sono disponibili.
-* **Indicatore Stato**: Badge READ_SOURCE nel pannello stato: **AMBRA** per remoto, **VERDE** per locale.
-* **Sidebar**: Collassabile (tasto ☰), lo stato persiste tra le sessioni.
-* **Navigation**: Slider e pulsanti sincronizzati tra Viewer e Editor.
-* **Header stato asset**: in Studio vengono mostrati stato download e badge `Sorgente: Remota/Locale`.
-* **Pannello Stato Professionale**: Badge colorati per stato tecnico (read_source, state, scans, staging, info PDF) con design responsivo.
-
-### ℹ️ Tab Info (riordinato)
-
-Il tab `Info` e stato riorganizzato in sub-tab operative:
-* **Panoramica**: attributi principali documento (titolo, diritti, pagine, direzione lettura, ecc.).
-* **Pagina corrente**: metadati canvas e risorse per la pagina attiva.
-* **Metadati e fonti**: provider, `seeAlso`, endpoint manifesto/servizio IIIF.
-
-Dettagli UX attuali:
-* i link esterni sono resi con CTA esplicite (`Apri ... ↗`) e non mostrano URL lunghi in chiaro;
-* `Canvas ID` e cliccabile in `Pagina corrente` quando il valore e un URL valido;
-* `Diritti` in `Panoramica` e cliccabile se il manifest contiene un link licenza;
-* i blocchi `Vedi anche` sono responsivi e restano nel viewport anche su schermi stretti.
-
-### 🎚️ Visual Tab
-
-* **Filtri Real-time**: Slider per Luminosità, Contrasto, Saturazione, Tonalità e Inversione.
-* **Tecnologia**: I filtri sono applicati via CSS direttamente al Canvas di Mirador, senza modificare i file su disco.
-* **Preset**: Modalità "Notte", "Contrasto Elevato" e "Default".
-
-### ✍️ Trascrizione & OCR
-
-* **Editor**: SimpleMDE (Markdown) con toolbar personalizzata.
-* **OCR Asincrono**:
-  * Cliccando "Run OCR", un worker in background elabora l'immagine.
-  * L'overlay "AI in ascolto" fa polling sullo stato ogni 2 secondi.
-* **Salvataggio Intelligente**:
-  * Il tasto Salva (o Ctrl+S) invia il testo al server.
-  * Il sistema calcola il "Diff": se il testo non è cambiato, evita scritture inutili nel DB.
-  * Feedback visivo immediato tramite Toast.
-
-### 📜 History
-
-* **Versionamento**: Ogni salvataggio crea uno snapshot.
-* **Visualizzazione**: Badge colorati indicano il motore usato (es. "OpenAI", "Manual").
-* **Ripristino**: Il tasto `↺ Ripristina` riporta l'editor a una versione precedente.
-
-## 5. Snippets e Dati
-
-* **Snippet**: Ritagli salvati in `data/local/snippets` e indicizzati nel DB SQLite.
-* **File System**:
-  * `downloads/{Lib}/{ID}/scans/`: Immagini JPG (Sorgente di verità).
-  * `downloads/{Lib}/{ID}/data/`: Metadati JSON e trascrizioni.
-  * `data/local/temp_images/{ID}/`: staging locale delle pagine validate prima della promozione in `scans/`.
-  * `data/vault.db`: Database SQLite per lo stato dei job e ricerche globali.
-
-## 6. Troubleshooting
-
-* **Errore "Connection Reset" o 403 su Gallica**:
-  * Il tuo IP potrebbe essere stato bloccato temporaneamente. Il sistema ora include un sistema di "Backoff" (attesa esponenziale) con rate limiting per host (4 req/min per Gallica). Se il blocco persiste, prova a cambiare rete (es. Hotspot).
-* **Overlay OCR bloccato**:
-  * Controlla i log (`logs/app.log`). Se il worker Python crasha, l'overlay potrebbe non ricevere il segnale di stop. Ricarica la pagina.
-* **PDF scaricato ma Studio vuoto**:
-  * Verifica che l'estrazione delle immagini sia avvenuta. Controlla se la cartella `scans/` contiene file `pag_xxxx.jpg`.
-* **Pagine presenti solo in `temp_images`**:
-  * Comportamento possibile con `partial_promotion_mode=never`: il sistema sta mantenendo staging coerente.
-  * Se ti serve disponibilita immediata in Studio dopo pausa, imposta `settings.storage.partial_promotion_mode=on_pause`.
-* **Studio mostra immagini remote invece di locali**:
-  * Comportamento previsto se download incompleto e `viewer.mirador.require_complete_local_images=true` (default).
-  * Studio usa **Modalità Remota** automaticamente: Mirador carica manifest originale e scarica immagini on-demand dal server biblioteca.
-  * **Badge AMBRA** nel pannello stato indica modalità remota.
-  * Per forzare modalità remota: aggiungi `?allow_remote_preview=true` all'URL Studio.
-  * Per visualizzazione locale: completa il download o imposta `require_complete_local_images=false` in config.
-* **Come visualizzare anteprima manoscritto durante download?**:
-  * Usa `?allow_remote_preview=true` nell'URL Studio per forzare Modalità Remota.
-  * Mirador mostrerà TUTTE le pagine scaricando immagini on-demand dal server originale.
-* **Download Gallica più lenti di altre biblioteche?**:
-  * Comportamento previsto: HTTP Client applica rate limiting più stretto per Gallica (4 req/min vs 20 req/min default).
-  * Motivo: server Gallica usano WAF aggressivo e rate limiting. Limiti conservativi prevengono blocchi IP.
-  * Config: `settings.network.libraries.gallica.*` in `config.json`.
-* **`/studio` non apre subito il documento**:
-  * È comportamento previsto: senza contesto (`doc_id` + `library`) Studio mostra il mini-hub `Riprendi lavoro`.
-
-## 7. Developer Notes
-
-* **Architecture**: Vedi `docs/ARCHITECTURE.md` per il diagramma dei moduli.
-* **Network Layer**: Tutta la logica HTTP è centralizzata in `src/universal_iiif_core/http_client.py` (HTTPClient con retry, backoff, rate limiting) e `src/universal_iiif_core/utils.py` (Session legacy, Headers, WAF Bypass).
-* **HTTP Client**: Documentazione completa in `docs/HTTP_CLIENT.md` (implementation, configuration, migration guide).
-* **Testing**:
-  * Unit test offline (Discovery/Gallica): `pytest tests/test_search_gallica_unit.py tests/test_discovery_handlers_resolve_manifest.py`
-  * Live test (Rete richiesta): `pytest tests/test_live.py` (Abilitare in config).
-
-## 8. Gestione dei dati locali
-
-- I dati runtime (cartelle `downloads/`, `data/local/`, `logs/`, `temp_images/`) sono ritenuti rigenerabili e restano nel `.gitignore`. Il contenuto di `config.json` è invece trattato come fonte primaria e non viene mai cancellato automaticamente.
-- Per cancellare in tutta sicurezza i dati rigenerabili, usa lo script `scripts/clean_user_data.py`. Passa `--dry-run` per vedere cosa verrebbe rimosso, `--yes` per confermare la rimozione e `--include-data-local` solo se devi resettare anche `data/local/models`, `data/local/snippets` o altri componenti generati.
-- Lo script usa `universal_iiif_core.config_manager` per risolvere i percorsi configurati; se aggiungi nuove directory runtime, registra sempre il path tramite il manager e aggiornane `.gitignore`.
-- Come workflow consigliato prima di una PR: (1) `python scripts/clean_user_data.py --dry-run`, (2) `python scripts/clean_user_data.py --yes`, (3) `pytest tests/`, (4) `ruff check . --select C901` + `ruff format .`. Queste istruzioni sono ripetute anche in `AGENTS.md`.
+Promotion timing is controlled by `settings.storage.partial_promotion_mode`.
+
+## Configuration
+
+Runtime settings live in `config.json`.
+
+Use these documents together:
+
+- [Configuration Reference](CONFIG_REFERENCE.md) for the full keyspace.
+- [HTTP Client Notes](HTTP_CLIENT.md) for transport behavior.
+- [Architecture](ARCHITECTURE.md) for system boundaries and component responsibilities.
+
+Important settings families:
+
+- `settings.network.*`
+- `settings.images.*`
+- `settings.pdf.*`
+- `settings.storage.*`
+- `settings.viewer.*`
+- `settings.discovery.*`
+
+## Troubleshooting
+
+`iiif-studio: command not found`
+
+```bash
+source .venv/bin/activate
+pip install -e .
+```
+
+Studio shows remote images instead of local images:
+
+- This is expected when local page availability is incomplete and local-only gating is enabled.
+- Use remote preview intentionally, or complete the local download.
+
+Pages appear staged but not promoted:
+
+- Review `settings.storage.partial_promotion_mode`.
+- `never` keeps staged pages until completeness gates are satisfied.
+- `on_pause` promotes validated staged pages when a running job is paused.
+
+Gallica or other providers feel slow:
+
+- This can be expected under stricter per-library rate limiting and backoff rules.
+- Review `settings.network.global.*` and `settings.network.libraries.<library>.*`.
+
+## Related Docs
+
+- [Documentation Hub](index.md)
+- [Studio Workflow Wiki Page](wiki/Studio-Workflow.md)
+- [PDF Export Profiles Wiki Page](wiki/PDF-Export-Profiles.md)
+- [FAQ](wiki/FAQ.md)

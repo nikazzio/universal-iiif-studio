@@ -1,60 +1,69 @@
 # Wiki Maintenance Guide
 
-This project uses a "docs-as-source, wiki-as-publish" model.
+This repository uses a `docs-as-source, wiki-as-publish` model.
 
-## Why This Model
+## Source Of Truth
 
-- Documentation quality stays in the main repo (`docs/`) with PR review and CI checks.
-- GitHub Wiki stays lightweight for readers.
-- Sync avoids drift between technical docs and wiki pages.
+- Repository documentation in `docs/` is the primary source of truth.
+- GitHub Wiki content is derived from `docs/wiki/`.
+- The published wiki should remain shorter and more reader-friendly than the full repository documentation.
 
-## Source and Publish Paths
+## Publishing Rules
 
-- Wiki source files: `docs/wiki/`
+- Always edit wiki source pages in `docs/wiki/`.
+- Do not treat the GitHub Wiki as an editable source.
+- Keep wiki pages concise and link back to canonical repo docs for depth.
+- All documentation prose must be English-only.
+
+## Sync Tool
+
+- Source pages: `docs/wiki/`
 - Sync script: `scripts/sync_wiki.py`
-- GitHub Wiki remote: `<repo>.wiki.git`
+- Wiki remote: `<repo>.wiki.git`
+
+The sync script is responsible for more than file copy:
+
+- mirroring wiki source pages into the wiki repository;
+- rewriting links so published pages do not point to non-published local paths;
+- failing in dry-run when a wiki page contains an invalid or non-publishable link.
 
 ## Manual Sync
 
-1. Edit wiki pages under `docs/wiki/`.
-1. Commit and merge to `main`.
-1. Validate with dry-run:
+Dry-run first:
 
 ```bash
 python scripts/sync_wiki.py --repo owner/repo --dry-run
 ```
 
-1. Publish with:
+Publish when dry-run is clean:
 
 ```bash
 python scripts/sync_wiki.py --repo owner/repo --push
 ```
 
-Notes:
+## CI Model
 
-- `Home.md` is required in `docs/wiki/`.
-- By default, sync runs with prune enabled and removes wiki files not present in source.
+The repository already contains a dedicated wiki workflow.
 
-## Automated Sync in CI
+Expected behavior:
 
-A workflow can publish from `main`:
+- `Wiki Sync` runs a dry-run validation first.
+- Publishing only happens after the dry-run job succeeds.
+- The workflow uses `GITHUB_TOKEN` with `contents: write`.
 
-- Trigger on pushes affecting wiki sources.
-- Run a dry-run smoke test first.
-- If dry-run passes, run `scripts/sync_wiki.py --push`.
-- Use `GITHUB_TOKEN` with `contents: write`.
+## Authoring Guidelines
 
-## Script Options
+- Keep page titles stable.
+- Prefer task-oriented headings.
+- Use links to canonical docs instead of duplicating full technical detail.
+- Keep internal wiki links relative within `docs/wiki/`.
+- Use absolute GitHub links only for documents that are not published into the wiki.
 
-```bash
-python scripts/sync_wiki.py --help
-```
+## Required Wiki Pages
 
-Most useful flags:
-
-- `--repo owner/repo`
-- `--source-root docs/wiki`
-- `--wiki-dir /tmp/iiif-wiki-sync`
-- `--dry-run`
-- `--push`
-- `--no-prune`
+- `Home.md`
+- `Getting-Started.md`
+- `Configuration.md`
+- `Studio-Workflow.md`
+- `PDF-Export-Profiles.md`
+- `FAQ.md`

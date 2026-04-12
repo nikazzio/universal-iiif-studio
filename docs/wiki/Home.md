@@ -1,8 +1,8 @@
-# Universal IIIF Studio Wiki
+# Universal IIIF Downloader & Studio Wiki
 
-This wiki is maintained from repository sources under `docs/wiki/`.
+This wiki is published from repository-managed source files under `docs/wiki/`.
 
-## Pages
+## Start Here
 
 - [Getting Started](Getting-Started.md)
 - [Configuration](Configuration.md)
@@ -10,8 +10,15 @@ This wiki is maintained from repository sources under `docs/wiki/`.
 - [PDF Export Profiles](PDF-Export-Profiles.md)
 - [FAQ](FAQ.md)
 
-## Maintenance Policy
+## Canonical Repository Docs
 
-- Source of truth for wiki pages: `docs/wiki/`.
-- Sync tool: `python scripts/sync_wiki.py`.
-- Recommended publication flow: merge docs changes to `main`, then sync wiki from CI.
+- [Documentation Hub](../index.md)
+- [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
+- [Architecture](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
+- [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
+
+## Maintenance Model
+
+- Repository docs are the source of truth.
+- Wiki pages are curated publish targets.
+- Edit wiki source files in `docs/wiki/`, not the GitHub Wiki directly.

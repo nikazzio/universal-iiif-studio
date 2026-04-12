@@ -1,74 +1,44 @@
 # Configuration
 
-Runtime settings live in `config.json` and are managed through `universal_iiif_core.config_manager`.
+Runtime settings live in `config.json` and are resolved through `universal_iiif_core.config_manager`.
 
-## Essential Sections
+## Main Sections
 
-- `paths`: runtime directories (`downloads`, `exports`, `temp`, `logs`, `models`, `snippets`).
-- `settings.network.global`: global HTTP transport (timeout, retries, max concurrent jobs).
-- `settings.network.download`: default download policies (workers, delays, retry, backoff).
-- `settings.network.libraries.<library>`: per-library network policies for HTTPClient (rate limiting, concurrency, backoff - e.g., Gallica has stricter limits).
-- `settings.images`: IIIF fetch strategy, local optimization, and stitch limits.
-- `settings.pdf`: native PDF behavior, export defaults, and profile catalog.
-- `settings.storage`: retention and staging-to-scans promotion policy.
-- `settings.viewer`: mirador gating/source policy and OpenSeadragon tuning.
+- `paths` for runtime directories.
+- `security` for allowed origins.
+- `api_keys` for OCR and remote service credentials.
+- `settings.network.*` for transport behavior.
+- `settings.images.*` for page download strategy and local optimization.
+- `settings.pdf.*` for native PDF behavior and export profiles.
+- `settings.storage.*` for retention and staged-page promotion.
+- `settings.viewer.*` for read-source policy and Mirador behavior.
+- `settings.discovery.*` for search result sizing.
 
-## Essential PDF Keys
+## High-Impact Keys
 
+- `settings.network.global.max_concurrent_download_jobs`
+- `settings.network.global.connect_timeout_s`
+- `settings.network.global.read_timeout_s`
+- `settings.network.global.transport_retries`
+- `settings.network.global.per_host_concurrency`
+- `settings.network.download.default_retry_max_attempts`
+- `settings.images.download_strategy_mode`
+- `settings.images.stitch_mode_default`
 - `settings.pdf.prefer_native_pdf`
 - `settings.pdf.create_pdf_from_images`
-- `settings.pdf.viewer_dpi`
-- `settings.pdf.viewer_jpeg_quality`
 - `settings.pdf.profiles.default`
-- `settings.pdf.profiles.catalog.<profile>.image_source_mode`
-- `settings.pdf.profiles.catalog.<profile>.max_parallel_page_fetch`
+- `settings.storage.partial_promotion_mode`
+- `settings.viewer.mirador.require_complete_local_images`
 
-## Essential Storage/Viewer Keys
+## Practical Notes
 
-- `settings.storage.partial_promotion_mode` (`never|on_pause`)
-- `settings.storage.remote_cache.max_bytes|retention_hours|max_items`
-- `settings.viewer.mirador.require_complete_local_images` (default: `true` - gates viewer until complete; set `false` or use `?allow_remote_preview=true` for remote preview mode)
-- `settings.viewer.source_policy.saved_mode` (`remote_first|local_first`)
-
-## Essential Network/HTTP Client Keys
-
-- `settings.network.global.max_concurrent_download_jobs` (default: `2`)
-- `settings.network.global.connect_timeout_s` / `read_timeout_s` (global timeout for all libraries)
-- `settings.network.download.default_retry_max_attempts` / `default_backoff_base_s` (default retry/backoff)
-- `settings.network.libraries.<library>.use_custom_policy` (enable per-library overrides)
-- `settings.network.libraries.<library>.burst_max_requests` / `burst_window_s` (rate limiting - e.g., Gallica: 4 req/60s)
-- `settings.network.libraries.<library>.per_host_concurrency` (max parallel requests per host - e.g., Gallica: 2, others: 4)
-
-## Essential Local Optimization Keys
-
-- `settings.images.local_optimize.max_long_edge_px`
-- `settings.images.local_optimize.jpeg_quality`
-
-## Essential Image Strategy Keys
-
-- `settings.images.download_strategy_mode`
-- `settings.images.download_strategy_custom`
-- `settings.images.stitch_mode_default`
-- `settings.images.iiif_quality`
-- `settings.images.tile_stitch_max_ram_gb`
-
-## Notes
-
-- `settings.network.global.*` is always shared across libraries (no per-library timeout/concurrency override).
-- `settings.network.libraries.<library>.*` applies only when `use_custom_policy=true`.
-- HTTPClient automatically applies per-library rate limiting and backoff (Gallica: 4 req/min, others: 20 req/min).
-- Keep local scans balanced by default for speed and storage.
-- Use export profiles for job-level quality decisions instead of changing global defaults frequently.
-- `download_strategy_custom` is an ordered attempt list (`3000`, `1740`, `max`), not a guarantee that `max` is the largest actual image a server will return.
-- `stitch_mode_default` controls whether the standard page downloader can fall back to tile stitching after direct IIIF attempts.
-- `iiif_quality` changes the IIIF URL quality segment only; it does not decide the requested size.
-- Staged downloads can live in `temp_images/<doc_id>` before promotion to `scans/`.
-- Segmented retries/range downloads count previously staged validated pages before final promotion.
-- With `partial_promotion_mode=on_pause`, promotion on pause keeps existing scans by default and overwrites only for explicit refresh/redownload flows.
-- Mirador viewing modes: Remote Mode (incomplete downloads, fetches images on-demand) vs Local Mode (complete downloads, offline-capable).
+- Keep local workflows balanced by default.
+- Use export profiles for quality changes instead of repeatedly editing global settings.
+- Treat `download_strategy_custom` as an ordered attempt list, not a promise that one value is always the largest real image.
+- Remote preview and local-only viewing behavior are controlled by the combination of local availability, config policy, and explicit URL override.
 
 ## Canonical References
 
-- Main user guide: [DOCUMENTAZIONE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-- Full key reference: [CONFIG_REFERENCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
-- Architecture notes: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
+- [Documentation Hub](../index.md)
+- [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
+- [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
