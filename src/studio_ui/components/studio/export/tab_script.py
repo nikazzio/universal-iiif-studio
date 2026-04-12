@@ -55,7 +55,7 @@ def _export_tab_script() -> Script:
                     const selected = parseSelection(hidden.value);
                     const counters = panel.querySelectorAll('.studio-export-selected-count');
                     counters.forEach((node) => {
-                        node.textContent = `${selected.size} pagine selezionate`;
+                        node.textContent = `${selected.size} selezionate`;
                     });
                 }
 
@@ -158,7 +158,6 @@ def _export_tab_script() -> Script:
                     const subtabPages = panel.querySelector('#studio-export-subtab-pages');
                     const subtabJobs = panel.querySelector('#studio-export-subtab-jobs');
                     const optimizeBtn = panel.querySelector('#studio-export-optimize-btn');
-                    const optimizeSelectedBtn = panel.querySelector('#studio-export-optimize-selected-btn');
                     const openBuildBtn = panel.querySelector('#studio-export-open-build');
                     const openPagesBtn = panel.querySelector('#studio-export-open-pages-custom');
                     const buildSubtabHidden = panel.querySelector('#studio-export-build-subtab-state');
@@ -414,51 +413,54 @@ def _export_tab_script() -> Script:
                         });
                     }
 
-                    if (rangeBtn && rangeBtn.dataset.bound !== '1') {
-                        rangeBtn.dataset.bound = '1';
-                        rangeBtn.addEventListener('click', () => {
-                            if (!hidden || !rangeInput) return;
-                            const parsed = parseSelection(rangeInput.value || '');
+                    // Shared selection helpers — used by both Build tab and Pages toolbar
+                    function bindBtn(el, fn) {
+                        if (el && el.dataset.bound !== '1') {
+                            el.dataset.bound = '1';
+                            el.addEventListener('click', fn);
+                        }
+                    }
+                    const selectAllHandler = () => {
+                        if (!hidden) return;
+                        hidden.value = serializeSelection(availablePages(panel));
+                        setSelectionScope('all');
+                        applySelectionToVisible(panel);
+                        syncSelectionStore(panel);
+                    };
+                    const clearHandler = () => {
+                        if (!hidden) return;
+                        hidden.value = '';
+                        setSelectionScope('custom');
+                        applySelectionToVisible(panel);
+                        syncSelectionStore(panel);
+                    };
+                    function applyRangeHandler(input) {
+                        return () => {
+                            if (!hidden || !input) return;
+                            const parsed = parseSelection(input.value || '');
                             hidden.value = serializeSelection(parsed);
                             setSelectionScope('custom');
                             applySelectionToVisible(panel);
                             syncSelectionStore(panel);
-                        });
+                        };
                     }
 
-                    if (allBtn && allBtn.dataset.bound !== '1') {
-                        allBtn.dataset.bound = '1';
-                        allBtn.addEventListener('click', () => {
-                            if (!hidden) return;
-                            hidden.value = serializeSelection(availablePages(panel));
-                            setSelectionScope('all');
-                            applySelectionToVisible(panel);
-                            syncSelectionStore(panel);
-                        });
-                    }
+                    // Build tab controls
+                    bindBtn(allBtn, selectAllHandler);
+                    bindBtn(clearBtn, clearHandler);
+                    bindBtn(rangeBtn, applyRangeHandler(rangeInput));
 
-                    if (clearBtn && clearBtn.dataset.bound !== '1') {
-                        clearBtn.dataset.bound = '1';
-                        clearBtn.addEventListener('click', () => {
-                            if (!hidden) return;
-                            hidden.value = '';
-                            setSelectionScope('custom');
-                            applySelectionToVisible(panel);
-                            syncSelectionStore(panel);
-                        });
-                    }
+                    // Pages toolbar controls
+                    const pagesRangeInput = panel.querySelector('#studio-export-pages-range');
+                    bindBtn(panel.querySelector('#studio-export-pages-select-all'), selectAllHandler);
+                    bindBtn(panel.querySelector('#studio-export-pages-clear'), clearHandler);
+                    const pagesRangeBtn = panel.querySelector('#studio-export-pages-apply-range');
+                    bindBtn(pagesRangeBtn, applyRangeHandler(pagesRangeInput));
 
                     if (optimizeBtn && optimizeBtn.dataset.bound !== '1') {
                         optimizeBtn.dataset.bound = '1';
                         optimizeBtn.addEventListener('click', () => {
                             if (subtabStateHidden) subtabStateHidden.value = 'pages';
-                        });
-                    }
-                    if (optimizeSelectedBtn && optimizeSelectedBtn.dataset.bound !== '1') {
-                        optimizeSelectedBtn.dataset.bound = '1';
-                        optimizeSelectedBtn.addEventListener('click', () => {
-                            if (subtabStateHidden) subtabStateHidden.value = 'pages';
-                            setSelectionScope('custom');
                         });
                     }
 

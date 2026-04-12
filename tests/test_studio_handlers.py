@@ -638,7 +638,7 @@ def test_studio_optimize_scans_updates_metadata_and_feedback(tmp_path):
         result = studio_handlers.optimize_studio_export_scans(doc_id, library, thumb_page=1, page_size=24)
         rendered = repr(result)
         assert "Ottimizzazione completata" in rendered
-        assert "Ultimo run:" in rendered
+        assert "Ultimo:" in rendered
 
         row = vm.get_manuscript(doc_id) or {}
         assert int(row.get("local_optimized") or 0) == 1
@@ -697,13 +697,13 @@ def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
     finally:
         cm.set_downloads_dir(str(old_downloads))
     rendered = repr(panel)
+    assert "studio-thumb-download-btn" in rendered
     assert "studio-thumb-highres-btn" in rendered
-    assert "studio-thumb-stitch-btn" in rendered
-    assert "studio-thumb-action-inner" in rendered
-    assert "studio-thumb-action-label" in rendered
+    assert "studio-thumb-opt-btn" in rendered
     assert "studio-thumb-progress-" in rendered
     assert 'hx-target="#studio-thumb-card-1"' in rendered
     assert "/api/studio/export/page_stitch" in rendered
+    assert "/api/studio/export/page_highres" in rendered
     assert "/api/studio/export/page_optimize" in rendered
     assert "studio-thumb-progress htmx-indicator" not in rendered
 
@@ -747,7 +747,7 @@ def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_pa
             optimize_scope="selected",
         )
         rendered = repr(result)
-        assert "Ultimo run: (selezione)" in rendered
+        assert "Ultimo: (sel.)" in rendered
 
         row = vm.get_manuscript(doc_id) or {}
         meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
@@ -797,8 +797,8 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
 
         result = studio_handlers.download_highres_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
         rendered = repr(result)
-        assert "⬇ Hi" in rendered
-        assert "🧩 St" in rendered
+        assert 'aria-label="Hi-res"' in rendered
+        assert 'aria-label="Scarica"' in rendered
         assert "studio-thumb-progress-active" in rendered
         assert isinstance(result, list)
         assert 'hx-swap-oob="outerHTML:#studio-export-live-state-poller"' in rendered
@@ -850,7 +850,7 @@ def test_studio_stitch_queue_persists_page_job_without_toast(tmp_path, monkeypat
 
         result = studio_handlers.download_stitch_export_page(doc_id, library, page=1, thumb_page=1, page_size=24)
         rendered = repr(result)
-        assert "🧩 St" in rendered
+        assert 'aria-label="Scarica"' in rendered
         assert "studio-thumb-progress-active" in rendered
         assert isinstance(result, list)
         assert 'hx-swap-oob="outerHTML:#studio-export-live-state-poller"' in rendered
@@ -1025,13 +1025,14 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
         panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=3, page_size=1)
         rendered = repr(panel)
         assert "Pag. 3" in rendered
-        assert "⬇ Hi" in rendered
-        assert "🧩 St" in rendered
-        assert "⚙ Opt" in rendered
+        assert 'aria-label="Hi-res"' in rendered
+        assert 'aria-label="Scarica"' in rendered
+        assert 'aria-label="Ottimizza"' in rendered
         assert "studio-thumb-progress-active" in rendered
         assert "studio-thumb-progress-done" in rendered
+        # All buttons disabled when busy
         assert re.search(
-            r"<button[^>]*(?:studio-thumb-highres-btn[^>]*disabled|disabled[^>]*studio-thumb-highres-btn)",
+            r"<button[^>]*(?:studio-thumb-download-btn[^>]*disabled|disabled[^>]*studio-thumb-download-btn)",
             rendered,
         )
         assert re.search(
@@ -1429,8 +1430,9 @@ def test_export_thumbs_preserves_running_highres_when_preferred_source_is_highre
         panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
         rendered = repr(panel)
         assert re.search(r'id="studio-thumb-progress-hi-1"[^>]*studio-thumb-progress-active', rendered)
+        # All buttons disabled when hi-res job is active
         assert re.search(
-            r"<button[^>]*(?:studio-thumb-highres-btn[^>]*disabled|disabled[^>]*studio-thumb-highres-btn)",
+            r"<button[^>]*(?:studio-thumb-download-btn[^>]*disabled|disabled[^>]*studio-thumb-download-btn)",
             rendered,
         )
     finally:

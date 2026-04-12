@@ -736,10 +736,10 @@ def _style_tag():
         "gap: 0.35rem; width: 100%; min-width: 0; }\n",
         ".studio-thumb-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; "
         "white-space: nowrap; line-height: 1; }\n",
-        ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
+        ".studio-thumb-download-btn { white-space: nowrap; font-size: 0.72rem !important; "
         "padding: 0.34rem 0.44rem !important; flex: 1 1 0; min-width: 0; justify-content: flex-start !important; "
         "overflow: hidden; }\n",
-        ".studio-thumb-stitch-btn { white-space: nowrap; font-size: 0.72rem !important; "
+        ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
         "padding: 0.34rem 0.44rem !important; flex: 1 1 0; min-width: 0; justify-content: flex-start !important; "
         "overflow: hidden; }\n",
         ".studio-thumb-opt-btn { white-space: nowrap; font-size: 0.72rem !important; "

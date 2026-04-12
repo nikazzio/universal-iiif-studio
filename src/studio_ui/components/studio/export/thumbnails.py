@@ -125,6 +125,7 @@ def render_export_thumbnail_card(
     card_attrs = {"id": card_id}
     if hx_swap_oob:
         card_attrs["hx_swap_oob"] = hx_swap_oob
+
     return Div(
         select_btn,
         Div(
@@ -150,16 +151,34 @@ def render_export_thumbnail_card(
             ),
             Div(
                 Button(
-                    Div(
-                        Span("⬇ Hi", cls="studio-thumb-action-label text-[11px] font-semibold"),
-                        Span(
-                            "",
-                            id=f"studio-thumb-progress-hi-{page}",
-                            cls=f"studio-thumb-progress {hi_progress_cls}",
-                            style=f"--progress:{hi_progress_percent}%;",
-                            aria_hidden="true",
-                        ),
-                        cls="studio-thumb-action-inner",
+                    "⬇",
+                    Span(
+                        "",
+                        id=f"studio-thumb-progress-stitch-{page}",
+                        cls=f"studio-thumb-progress {stitch_progress_cls}",
+                        style=f"--progress:{stitch_progress_percent}%;",
+                        aria_hidden="true",
+                    ),
+                    type="button",
+                    hx_post=stitch_url,
+                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                    hx_indicator=f"#studio-thumb-progress-stitch-{page}",
+                    hx_target=f"#{card_id}",
+                    hx_swap="outerHTML",
+                    disabled=is_busy,
+                    cls="app-btn app-btn-neutral studio-thumb-download-btn",
+                    data_page=str(page),
+                    aria_label="Scarica",
+                    title="Scarica — strategia progressiva del volume (3000 → 1740 → max, con stitching se necessario)",
+                ),
+                Button(
+                    "⬇",
+                    Span(
+                        "",
+                        id=f"studio-thumb-progress-hi-{page}",
+                        cls=f"studio-thumb-progress {hi_progress_cls}",
+                        style=f"--progress:{hi_progress_percent}%;",
+                        aria_hidden="true",
                     ),
                     type="button",
                     hx_post=highres_url,
@@ -170,45 +189,17 @@ def render_export_thumbnail_card(
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-highres-btn",
                     data_page=str(page),
-                    title="Riscarica la pagina con fetch diretto max, senza fallback stitching",
+                    aria_label="Hi-res",
+                    title="Hi-res — fetch diretto alla risoluzione massima dalla biblioteca, senza fallback",
                 ),
                 Button(
-                    Div(
-                        Span("🧩 Std", cls="studio-thumb-action-label text-[11px] font-semibold"),
-                        Span(
-                            "",
-                            id=f"studio-thumb-progress-stitch-{page}",
-                            cls=f"studio-thumb-progress {stitch_progress_cls}",
-                            style=f"--progress:{stitch_progress_percent}%;",
-                            aria_hidden="true",
-                        ),
-                        cls="studio-thumb-action-inner",
-                    ),
-                    type="button",
-                    hx_post=stitch_url,
-                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#studio-thumb-progress-stitch-{page}",
-                    hx_target=f"#{card_id}",
-                    hx_swap="outerHTML",
-                    disabled=is_busy,
-                    cls="app-btn app-btn-neutral studio-thumb-stitch-btn",
-                    data_page=str(page),
-                    title=(
-                        "Riscarica la pagina usando la strategia standard del volume "
-                        "(es. 3000 -> 1740 -> max, con fallback stitch se serve)"
-                    ),
-                ),
-                Button(
-                    Div(
-                        Span("⚙ Opt", cls="studio-thumb-action-label text-[11px] font-semibold"),
-                        Span(
-                            "",
-                            id=f"studio-thumb-progress-opt-{page}",
-                            cls=f"studio-thumb-progress {opt_progress_cls}",
-                            style=f"--progress:{opt_progress_percent}%;",
-                            aria_hidden="true",
-                        ),
-                        cls="studio-thumb-action-inner",
+                    "⚙",
+                    Span(
+                        "",
+                        id=f"studio-thumb-progress-opt-{page}",
+                        cls=f"studio-thumb-progress {opt_progress_cls}",
+                        style=f"--progress:{opt_progress_percent}%;",
+                        aria_hidden="true",
                     ),
                     type="button",
                     hx_post=optimize_url,
@@ -219,7 +210,8 @@ def render_export_thumbnail_card(
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-opt-btn",
                     data_page=str(page),
-                    title="Ottimizza solo questa pagina",
+                    aria_label="Ottimizza",
+                    title="Opt — comprimi il file locale senza perdita di qualità visiva",
                 ),
                 cls="studio-thumb-action",
             ),
@@ -356,6 +348,7 @@ def render_export_thumbnails_panel(
             "hx_get": _thumb_page_url(doc_id=doc_id, library=library, thumb_page=prev_page, page_size=page_size),
             "hx_target": "#studio-export-thumbs-slot",
             "hx_swap": "outerHTML",
+            "hx_indicator": "#studio-export-thumbs-loading",
         }
     )
     next_attrs = (
@@ -365,6 +358,7 @@ def render_export_thumbnails_panel(
             "hx_get": _thumb_page_url(doc_id=doc_id, library=library, thumb_page=next_page, page_size=page_size),
             "hx_target": "#studio-export-thumbs-slot",
             "hx_swap": "outerHTML",
+            "hx_indicator": "#studio-export-thumbs-loading",
         }
     )
 
@@ -382,6 +376,14 @@ def render_export_thumbnails_panel(
                 f"Miniature: pagina {thumb_page}/{thumb_page_count} · {total_pages} pagine totali",
                 cls="text-xs text-slate-500 dark:text-slate-400",
             ),
+            Span(
+                "",
+                id="studio-export-thumbs-loading",
+                cls=(
+                    "htmx-indicator inline-block h-4 w-4 border-2 "
+                    "border-slate-300 border-t-cyan-500 rounded-full animate-spin"
+                ),
+            ),
             Div(
                 Select(
                     *[
@@ -398,6 +400,7 @@ def render_export_thumbnails_panel(
                     hx_trigger="change",
                     hx_target="#studio-export-thumbs-slot",
                     hx_swap="outerHTML",
+                    hx_indicator="#studio-export-thumbs-loading",
                     cls="app-field w-32 text-xs",
                 ),
                 Button(
