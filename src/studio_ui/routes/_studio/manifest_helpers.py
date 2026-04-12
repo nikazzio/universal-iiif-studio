@@ -35,8 +35,12 @@ def _resolve_initial_canvas(manifest_json: dict, page: int) -> str | None:
 
 def _load_manifest_payload(manifest_path: Path, page: int) -> tuple[dict, str | None]:
     """Load manifest JSON from disk and resolve initial canvas."""
-    with manifest_path.open(encoding="utf-8") as f:
-        manifest_json = json.load(f)
+    try:
+        with manifest_path.open(encoding="utf-8") as f:
+            manifest_json = json.load(f)
+    except (OSError, json.JSONDecodeError, TypeError) as exc:
+        logger.warning("Failed to load local manifest from %s: %s", manifest_path, exc)
+        return {}, None
     return manifest_json, _resolve_initial_canvas(manifest_json, page)
 
 

@@ -28,7 +28,7 @@ def _build_general_pane(cm, s):
                 "api_keys.anthropic",
                 api.get("anthropic", ""),
                 "password",
-                "Key per Anthopic.",
+                "Key per Anthropic.",
             ),
             setting_input(
                 "Google Vision API Key",

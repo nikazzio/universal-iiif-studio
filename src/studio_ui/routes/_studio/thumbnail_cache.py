@@ -180,8 +180,11 @@ def _prune_remote_cache(
         kept.items(),
         key=lambda item: int(item[1].get("last_access_ts") or item[1].get("updated_ts") or 0),
     )
+    current_size = _cache_payload_size(kept)
     for page_key, _entry in ordered_oldest:
+        entry_size = len(json.dumps({page_key: _entry}))
         kept.pop(page_key, None)
-        if _cache_payload_size(kept) <= max_bytes:
+        current_size -= entry_size
+        if current_size <= max_bytes:
             break
     return kept
