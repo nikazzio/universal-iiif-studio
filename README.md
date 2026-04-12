@@ -52,7 +52,7 @@ flowchart LR
 ```
 
 | Tab | What it does |
-|-----|-------------|
+| --- | --- |
 | **Discovery** | Resolve URLs, IDs, shelfmarks. Search 10+ IIIF libraries. |
 | **Library** | Browse and manage your local manuscript collection. |
 | **Studio** | Document workspace — Mirador viewer, OCR transcription, page actions. |
@@ -77,7 +77,7 @@ Any IIIF-compliant manifest URL works directly.
 ## Documentation
 
 | | |
-|---|---|
+| --- | --- |
 | 📘 [User Guide](docs/DOCUMENTAZIONE.md) | 🏗️ [Architecture](docs/ARCHITECTURE.md) |
 | ⚙️ [Config Reference](docs/CONFIG_REFERENCE.md) | 🌐 [HTTP Client](docs/HTTP_CLIENT.md) |
 | 📖 [Wiki](docs/wiki/Home.md) | 🗂️ [All Docs](docs/index.md) |
