@@ -30,6 +30,25 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.25.1 (2026-04-12)
+
+### Bug Fixes
+
+- Address PR review — tighten types, deduplicate helpers, harden handler lookup
+  ([#139](https://github.com/nikazzio/universal-iiif-studio/pull/139),
+  [`d111c70`](https://github.com/nikazzio/universal-iiif-studio/commit/d111c70d71046f1181af8decd0b23acab342732a))
+
+### Refactoring
+
+- Decouple provider registry from direct resolver imports
+  ([#139](https://github.com/nikazzio/universal-iiif-studio/pull/139),
+  [`d111c70`](https://github.com/nikazzio/universal-iiif-studio/commit/d111c70d71046f1181af8decd0b23acab342732a))
+
+- Decouple provider registry from direct resolver imports (#104)
+  ([#139](https://github.com/nikazzio/universal-iiif-studio/pull/139),
+  [`d111c70`](https://github.com/nikazzio/universal-iiif-studio/commit/d111c70d71046f1181af8decd0b23acab342732a))
+
+
 ## v0.25.0 (2026-04-12)
 
 ### Bug Fixes
