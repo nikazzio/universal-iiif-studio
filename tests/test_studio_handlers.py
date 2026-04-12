@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from studio_ui.common.title_utils import truncate_title
 from studio_ui.routes import studio_handlers
+from studio_ui.routes._studio import scan_resolution as _scan_resolution_mod
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.storage.vault_manager import VaultManager
@@ -1081,7 +1082,7 @@ def test_export_thumbs_done_state_does_not_force_remote_probe_every_refresh(tmp_
             calls["count"] += 1
             return 3200, 2400, "https://example.org/iiif/page-1"
 
-        monkeypatch.setattr(studio_handlers, "probe_remote_max_dimensions", _fake_probe)
+        monkeypatch.setattr(_scan_resolution_mod, "probe_remote_max_dimensions", _fake_probe)
 
         _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
         _ = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
@@ -1192,7 +1193,7 @@ def test_export_thumbs_live_returns_oob_card_updates_only(tmp_path, monkeypatch)
         )
 
         monkeypatch.setattr(
-            studio_handlers,
+            _scan_resolution_mod,
             "probe_remote_max_dimensions",
             lambda _manifest_json, _page_num: (3200, 2400, "https://example.org/iiif/page"),
         )
@@ -1522,7 +1523,7 @@ def test_export_thumbs_show_iiif_and_verified_dimensions_separately(tmp_path, mo
         )
 
         monkeypatch.setattr(
-            studio_handlers,
+            _scan_resolution_mod,
             "probe_remote_max_dimensions",
             lambda _manifest_json, _page_num: (1447, 1896, "https://example.org/iiif/page-1"),
         )
