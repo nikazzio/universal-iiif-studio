@@ -1,14 +1,38 @@
 # Universal IIIF Downloader & Studio
 
-[![CI](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml)
-[![Release](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/release.yml/badge.svg)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/release.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Lint: Ruff](https://img.shields.io/badge/lint-ruff-46a2f1?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
+[![CI](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml)
+[![Docs CI](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&style=for-the-badge&label=Docs)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml)
+[![Wiki Sync](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/wiki-sync.yml?branch=main&style=for-the-badge&label=Wiki)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/wiki-sync.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-0f172a?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-0b7285?style=for-the-badge)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=for-the-badge)](https://github.com/nikazzio/universal-iiif-studio/releases)
 
-Developer-focused toolkit for downloading IIIF manuscripts and working with them via:
-- a FastHTML/HTMX web studio (`iiif-studio`)
-- a command-line interface (`iiif-cli`)
+![Universal IIIF Downloader & Studio hero](docs/assets/readme-hero.svg)
+
+Download IIIF material, keep local working copies under control, and move from discovery to study to export without leaving one toolchain.
+
+## Why This Project
+
+Universal IIIF Downloader & Studio combines two workflows that are usually split apart:
+
+- `iiif-studio` for Discovery, Library, Studio, and PDF export.
+- `iiif-cli` for direct manifest-driven downloads and scripting.
+- Shared provider resolution, storage, and configuration for both entrypoints.
+
+The project is optimized for manuscript-heavy research workflows where you need fast iteration, reproducible local storage, and enough control over remote IIIF servers to avoid brittle ad-hoc tooling.
+
+```mermaid
+flowchart LR
+    A[Discovery] --> B[Library]
+    B --> C[Studio]
+    C --> D[Output]
+    D --> E[PDF Export]
+
+    A -. resolve/search .-> X[(Provider Registry)]
+    B -. local assets .-> Y[(Vault + Downloads)]
+    C -. manifests/scans .-> Y
+    E -. profiles/cache/jobs .-> Y
+```
 
 ## Quickstart
 
@@ -21,32 +45,22 @@ pip install -e .
 iiif-studio
 ```
 
-Open: `http://127.0.0.1:8000`
+Open `http://127.0.0.1:8000`.
 
-Smoke test CLI:
+CLI smoke test:
 
 ```bash
 iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ```
 
-## Features
+## Feature Highlights
 
-- IIIF manifest resolution and page download pipeline
-- **Centralized HTTP client** with automatic retry, exponential backoff, and per-host rate limiting
-- Discovery with shared provider registry for web + CLI
-- Discovery with free-text search plus provider-specific filters (currently Gallica type filter with labels `Tutti i materiali`, `Solo manoscritti`, `Solo libri a stampa`)
-- Discovery internals split into typed orchestrator/search adapters (`universal_iiif_core.discovery`) and modular UI components (`studio_ui.components.discovery_*`)
-- **Configurable search results**: `settings.discovery.max_results_per_provider` (default 20, editable from Settings > Discovery tab)
-- **Async manifest probing**: Archive.org results appear immediately; manifest validity is checked per-card via HTMX lazy-load
-- **Load-more pagination**: paginatable providers (Archive.org, Harvard, LOC, Gallica) support "Carica altri risultati" for additional pages
-- Native PDF-first workflow (configurable)
-- Canvas/image fallback with optional compiled PDF generation
-- Local Library + Studio workflow: select in Library, analyze in Studio
-- Studio Output tab with PDF profiles, source-mode selection (`Locale` / `Remoto temporaneo`) and job monitor
-- **Mirador dual viewing modes**: remote preview for incomplete downloads, local-only for offline work
-- Thumbnail-level page controls in Studio Output (`Hi`, `Std`, `Opt`) with resolution transparency (`Locale`, `Remote`, verified-direct indicator)
-- Professional status panel with color-coded technical indicators
-- `src/` package layout with separated `core`, `ui`, and `cli` modules
+- Shared provider registry for web and CLI resolution.
+- Search adapters for major IIIF sources plus direct manifest handling.
+- Local-first study workflow with Library, Studio workspace, and Output tab.
+- Remote preview vs local-only viewing modes in Mirador.
+- PDF profile system with local and temporary remote high-resolution export modes.
+- Centralized HTTP client with retries, backoff, and per-library policies.
 
 ## Run Modes
 
@@ -62,188 +76,57 @@ Alternative entrypoint:
 python3 src/studio_app.py
 ```
 
-Navigation model:
-- `Discovery` supports free text/shelfmark/ID/URL search and provider-specific filters when available.
-- `Aggiungi item` in Discovery performs a light prefetch (`metadata.json` + `manifest.json`) without full scans.
-- `Library` is the canonical entrypoint for local documents.
-- `Studio` is a document workspace (`/studio?doc_id=...&library=...`).
-- `Export` is a dedicated hub for batch/single exports (`/export`).
-- In Studio, the right tab is now `Output` (renamed from `Export`).
-- `/studio` without context opens the `Riprendi lavoro` recent hub (server-side persisted contexts).
-
 ### CLI
 
 ```bash
 iiif-cli "<manifest-url>"
 ```
 
-Direct resolution is shared across web and CLI for these providers:
-- Vaticana
-- Gallica
-- Institut de France
-- Bodleian
-- Heidelberg
-- Cambridge
-- e-codices
-- Harvard
-- Library of Congress
-- Internet Archive
+## Documentation Map
 
-Current discovery search coverage:
-- `search_first`: Gallica, Internet Archive
-- `fallback`: Vaticana, Institut de France
-- `direct + search adapter`: Bodleian, e-codices, Heidelberg, Cambridge, Harvard, Library of Congress
-- `direct only`: generic direct manifest URLs
+- [Documentation Hub](docs/index.md)
+- [User Guide](docs/DOCUMENTAZIONE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Configuration Reference](docs/CONFIG_REFERENCE.md)
+- [HTTP Client Notes](docs/HTTP_CLIENT.md)
+- [Wiki Maintenance](docs/WIKI_MAINTENANCE.md)
+- [GitHub Wiki Source](docs/wiki/Home.md)
 
-Provider behavior summary:
+## Current Product Shape
 
-| Provider | Direct resolution | Free-text search | Notes |
-| --- | --- | --- | --- |
-| Vaticana | Yes | Yes | Hybrid flow: shelfmark heuristics first, DigiVatLib manuscripts search fallback for free text |
-| Gallica | Yes | Yes | Uses SRU search and optional type filter |
-| Institut de France | Yes | Yes | HTML search + manifest enrichment |
-| Bodleian | Yes | Yes | JSON-LD search surface |
-| Heidelberg | Yes | Yes (browser handoff when needed) | Direct ID/URL works; also normalizes inputs like `Cod. Pal. germ. 123` -> `cpg123`; generic queries can degrade to browser handoff |
-| Cambridge | Yes | Yes (browser handoff when blocked) | Signature/URL resolution works directly; blocked free-text queries return a browser handoff result that opens CUDL search |
-| e-codices | Yes | Yes | HTML search surface |
-| Harvard | Yes | Yes (hybrid) | Shows all catalog results; records without IIIF manifest are marked as consultazione online only |
-| Library of Congress | Yes | Yes | JSON API search; live manifest fetch may still be host-blocked in some environments |
-| Internet Archive | Yes | Yes | `advancedsearch.php` + IIIF manifest validation |
-| Altro / URL Diretto | Yes | No | Generic direct manifest resolution |
+- `Discovery` resolves URLs, IDs, shelfmarks, and provider-specific free-text search.
+- `Library` is the canonical entrypoint for local items.
+- `Studio` opens a document workspace and falls back to a recent-work hub when no item is selected.
+- `Output` handles PDF inventory, thumbnail-level page actions, and export jobs.
 
-Search result contract:
-- discovery providers return canonical `SearchResult` items with `manifest`, `library`, `id`, and optional `manifest_status`
-- `manifest_status` can be `"ok"`, `"pending"`, or `"unavailable"` — Archive.org results start as `"pending"` and are validated asynchronously via HTMX probe
-- providers should populate `viewer_url` when they know the source viewer URL
-- `raw` is still available for provider-specific metadata, but UI code should not depend on `raw["viewer_url"]` anymore
+## Troubleshooting
 
-## Configuration
+`iiif-studio: command not found`
 
-Runtime configuration is read from `config.json` through `universal_iiif_core.config_manager`.
-
-Key PDF settings:
-
-```json
-{
-  "settings": {
-    "images": {
-      "download_strategy_mode": "balanced",
-      "download_strategy_custom": ["3000", "1740", "max"],
-      "iiif_quality": "default"
-    },
-    "pdf": {
-      "viewer_dpi": 150,
-      "viewer_jpeg_quality": 95,
-      "prefer_native_pdf": true,
-      "create_pdf_from_images": false,
-      "profiles": {
-        "default": "balanced"
-      }
-    }
-  }
-}
+```bash
+source .venv/bin/activate
+pip install -e .
 ```
 
-Meaning:
-- `prefer_native_pdf`: if manifest `rendering` contains a native PDF, native flow is attempted first
-- `create_pdf_from_images`: when native PDF is not used, build a PDF from downloaded images only if `true`
-- `viewer_dpi`: DPI used when extracting JPG pages from native PDF for the web viewer
-- `viewer_jpeg_quality`: JPEG quality used only when rasterizing a native PDF into local scans
-- `images.download_strategy_mode`: preset ordering for direct IIIF attempts before stitch fallback (`balanced|quality_first|fast|archival|custom`)
-- `images.download_strategy_custom`: size list used when `mode=custom`; it is an ordered attempt list, not a “quality ranking”
-- `images.stitch_mode_default`: fallback policy for the standard downloader (`auto_fallback|direct_only|stitch_only`)
-- `images.iiif_quality`: IIIF quality segment in image URLs (recommended `default`)
-- `images.local_optimize.max_long_edge_px`: in-place optimization max edge for local scans
-- `images.local_optimize.jpeg_quality`: in-place optimization JPEG quality for local scans
-- `pdf.profiles.default`: default export profile (`balanced`, `high_quality`, `archival_highres`, `lightweight`)
-- `pdf.profiles.catalog.<profile>.max_parallel_page_fetch`: parallel fetch cap for remote high-res temp exports
-- `storage.partial_promotion_mode`: controls if validated staged pages are promoted from temp to scans (`never|on_pause`)
-- `storage.remote_cache.max_bytes|retention_hours|max_items`: persistent remote-resolution cache limits (Studio Output)
-- `viewer.mirador.require_complete_local_images`: when `true`, Studio viewer is gated until local page availability is complete (set to `false` or use `?allow_remote_preview=true` URL parameter to enable remote preview mode)
-- `viewer.source_policy.saved_mode`: policy for `saved` items in Studio (`remote_first|local_first`)
-- `network.global.*`: global HTTP transport settings (timeout, retries, max concurrent jobs)
-- `network.libraries.<library>.*`: per-library network policies for rate limiting and backoff (e.g., Gallica has stricter limits: 4 req/min)
-- PDF profiles are created/edited in `Settings > PDF Export`; item Output tab selects a profile per job
+`ruff: command not found`
 
-## Output Layout
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
 
-For each manuscript:
-- `downloads/<Library>/<DocumentId>/scans/`: page images (`pag_XXXX.jpg`)
-- `downloads/<Library>/<DocumentId>/pdf/`: native and/or compiled PDF outputs
-- `downloads/<Library>/<DocumentId>/data/`: metadata and processing JSON artifacts
-- `data/local/temp_images/<DocumentId>/`: staging area for validated pages before final promotion to `scans/`
+Port `8000` already in use:
 
-Prefetch-light behavior:
-- `Aggiungi item` creates/updates `downloads/<Library>/<DocumentId>/data/metadata.json` and `manifest.json`.
-- Full page images are not downloaded until explicit `download_full`/`start_download`.
+- Stop the conflicting process and start `iiif-studio` again.
 
-All runtime paths are resolved via `ConfigManager`.
+Studio opens without a document:
 
-Download staging behavior:
-- runtime validates pages in `temp_images/<DocumentId>` and promotes to `scans/` when completeness gates are satisfied.
-- segmented/retry runs are supported: previously staged validated pages are counted together with current-run pages.
-- optional pause-time promotion is controlled by `settings.storage.partial_promotion_mode`.
-- with `on_pause`, staged pages are promoted when a running job is paused; existing scans are overwritten only for explicit refresh/redownload flows.
-- Studio page actions (`Hi`/`Std`) can overwrite a single local scan immediately without waiting for full-manuscript completeness.
+- Expected behavior. Open an item from `Library`, or resume from the recent-work hub at `/studio`.
 
-## Dev Commands
+## Development Commands
 
 ```bash
 pytest tests/
 ruff check . --select C901
 ruff format .
 ```
-
-## Troubleshooting
-
-`iiif-studio: command not found`
-- Ensure virtualenv is active and reinstall editable package:
-  ```bash
-  source .venv/bin/activate
-  pip install -e .
-  ```
-
-`ruff: command not found`
-- Install dev dependencies:
-  ```bash
-  pip install -r requirements-dev.txt
-  ```
-
-`Address already in use` on startup
-- Port `8000` is already in use. Stop the conflicting process, then rerun `iiif-studio`.
-
-Studio loads but pages are missing
-- Check `downloads/<Library>/<DocumentId>/scans/` for `pag_XXXX.jpg` files.
-- Check `data/local/temp_images/<DocumentId>/` for staged pages.
-- If pages are intentionally kept staged, use `settings.storage.partial_promotion_mode=on_pause` to promote on pause.
-- Verify `config.json` PDF flags (`prefer_native_pdf`, `create_pdf_from_images`).
-- For incomplete downloads, use `?allow_remote_preview=true` URL parameter to view all pages via remote preview mode (Mirador fetches images on-demand from original server).
-
-Mirador viewer shows "remote" or no images for incomplete download
-- **Expected behavior**: By default (`viewer.mirador.require_complete_local_images=true`), Studio gates the viewer until all pages are downloaded locally.
-- **Remote preview mode**: Add `?allow_remote_preview=true` to the Studio URL to enable remote mode, where Mirador loads the original manifest and fetches images on-demand from the library server.
-- **Local-only mode**: Once download is complete, Studio automatically switches to local mode using only downloaded images (works offline).
-- See `docs/wiki/Studio-Workflow.md` for detailed explanation of viewing modes.
-
-No results in Discovery for a known Gallica title
-- Keep the `Gallica` filter on `All materials` for broad lookup.
-- Use `Manuscripts` or `Printed books` only when you want to narrow down result type.
-
-`/studio` opens the recent hub instead of the editor
-- Expected behavior: without `doc_id` + `library`, Studio shows `Riprendi lavoro`.
-- Open a document from Library via "Apri Studio", or use "Riprendi ultimo" in `/studio`.
-
-`config.json` changes not applied
-- Validate JSON shape under `settings`.
-- Restart the running process.
-- Compare with `config.example.json`.
-
-## Documentation
-
-- User/feature guide: `docs/DOCUMENTAZIONE.md`
-- Architecture: `docs/ARCHITECTURE.md`
-- HTTP Client implementation: `docs/HTTP_CLIENT.md`
-- Config reference (single source for `config.json` keys): `docs/CONFIG_REFERENCE.md`
-- Wiki maintenance model and sync workflow: `docs/WIKI_MAINTENANCE.md`
-- Issue triage and governance policy: `docs/ISSUE_TRIAGE_POLICY.md`
-- Contributor/agent rules: `AGENTS.md`

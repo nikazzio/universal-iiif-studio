@@ -15,6 +15,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+MARKDOWN_LINK_RE = re.compile(r"(!?\[[^\]]*]\()([^)]+)(\))")
+
 
 def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
@@ -61,19 +63,108 @@ def _iter_source_files(source_root: Path) -> list[Path]:
     return sorted(path for path in source_root.rglob("*") if path.is_file())
 
 
-def _sync_files(*, source_root: Path, wiki_dir: Path, prune: bool) -> tuple[int, int]:
+def _split_target(target: str) -> tuple[str, str]:
+    if "#" in target:
+        base, anchor = target.split("#", 1)
+        return base, f"#{anchor}"
+    return target, ""
+
+
+def _is_external_link(target: str) -> bool:
+    lowered = target.lower()
+    return lowered.startswith(("http://", "https://", "mailto:", "#"))
+
+
+def _repo_relative_path(path: Path, repo_root: Path) -> str:
+    return path.relative_to(repo_root).as_posix()
+
+
+def _rewrite_markdown_links(
+    *,
+    content: str,
+    src: Path,
+    source_root: Path,
+    repo_root: Path,
+    repo_slug: str,
+    repo_ref: str,
+) -> tuple[str, list[str]]:
+    failures: list[str] = []
+
+    def replace(match: re.Match[str]) -> str:
+        prefix, target, suffix = match.groups()
+        if _is_external_link(target):
+            return match.group(0)
+
+        base, anchor = _split_target(target.strip())
+        if not base:
+            return match.group(0)
+
+        resolved = (src.parent / base).resolve()
+        if not resolved.exists():
+            failures.append(f"{src}: link target does not exist: {target}")
+            return match.group(0)
+
+        try:
+            wiki_rel = resolved.relative_to(source_root)
+            new_base = os.path.relpath(wiki_rel.as_posix(), start=src.parent.relative_to(source_root).as_posix())
+            return f"{prefix}{new_base}{anchor}{suffix}"
+        except ValueError:
+            try:
+                repo_rel = _repo_relative_path(resolved, repo_root)
+            except ValueError:
+                failures.append(f"{src}: link target is outside repository root: {target}")
+                return match.group(0)
+            absolute = f"https://github.com/{repo_slug}/blob/{repo_ref}/{repo_rel}{anchor}"
+            return f"{prefix}{absolute}{suffix}"
+
+    rewritten = MARKDOWN_LINK_RE.sub(replace, content)
+    return rewritten, failures
+
+
+def _sync_files(
+    *,
+    source_root: Path,
+    wiki_dir: Path,
+    repo_root: Path,
+    repo_slug: str,
+    repo_ref: str,
+    prune: bool,
+) -> tuple[int, int]:
     copied = 0
     removed = 0
     keep_rel_paths: set[Path] = set()
+    failures: list[str] = []
 
     for src in _iter_source_files(source_root):
         rel = src.relative_to(source_root)
         keep_rel_paths.add(rel)
         dst = wiki_dir / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if src.suffix.lower() == ".md":
+            content = src.read_text(encoding="utf-8")
+            rendered, rewrite_failures = _rewrite_markdown_links(
+                content=content,
+                src=src,
+                source_root=source_root,
+                repo_root=repo_root,
+                repo_slug=repo_slug,
+                repo_ref=repo_ref,
+            )
+            failures.extend(rewrite_failures)
+            current = dst.read_text(encoding="utf-8") if dst.exists() else None
+            if current != rendered:
+                dst.write_text(rendered, encoding="utf-8")
+                copied += 1
+            continue
+
         if not dst.exists() or src.read_bytes() != dst.read_bytes():
             shutil.copy2(src, dst)
             copied += 1
+
+    if failures:
+        details = "\n".join(f"- {item}" for item in failures)
+        raise SystemExit(f"Wiki source validation failed:\n{details}")
 
     if prune:
         for path in sorted(wiki_dir.rglob("*"), reverse=True):
@@ -109,6 +200,11 @@ def _parse_args() -> argparse.Namespace:
         "--wiki-dir",
         default=".cache/wiki-sync",
         help="Local clone directory for the wiki repo.",
+    )
+    parser.add_argument(
+        "--repo-ref",
+        default="main",
+        help="Repository ref used when rewriting absolute GitHub links.",
     )
     parser.add_argument(
         "--commit-message",
@@ -156,8 +252,9 @@ def _resolve_repo_slug(explicit_repo: str | None) -> str:
     return repo_slug
 
 
-def _print_run_context(*, repo_slug: str, source_root: Path, wiki_dir: Path) -> None:
+def _print_run_context(*, repo_slug: str, source_root: Path, wiki_dir: Path, repo_ref: str) -> None:
     print(f"Repository: {repo_slug}")
+    print(f"Repository ref: {repo_ref}")
     print(f"Source root: {source_root}")
     print(f"Wiki dir: {wiki_dir}")
 
@@ -213,17 +310,25 @@ def main() -> int:
     """Run wiki synchronization from local source files to the wiki git repository."""
     args = _parse_args()
 
-    source_root = Path(args.source_root).resolve()
+    repo_root = Path(__file__).resolve().parent.parent
+    source_root = (repo_root / args.source_root).resolve()
     wiki_dir = Path(args.wiki_dir).resolve()
     _validate_source_root(source_root)
     repo_slug = _resolve_repo_slug(args.repo)
-    _print_run_context(repo_slug=repo_slug, source_root=source_root, wiki_dir=wiki_dir)
+    _print_run_context(repo_slug=repo_slug, source_root=source_root, wiki_dir=wiki_dir, repo_ref=args.repo_ref)
 
     token = os.getenv("GITHUB_TOKEN")
     remote_url = _build_wiki_remote(repo_slug, token)
     _clone_or_update_wiki_or_exit(remote_url=remote_url, wiki_dir=wiki_dir)
 
-    copied, removed = _sync_files(source_root=source_root, wiki_dir=wiki_dir, prune=bool(args.prune))
+    copied, removed = _sync_files(
+        source_root=source_root,
+        wiki_dir=wiki_dir,
+        repo_root=repo_root,
+        repo_slug=repo_slug,
+        repo_ref=str(args.repo_ref),
+        prune=bool(args.prune),
+    )
 
     if args.dry_run:
         return _handle_dry_run(wiki_dir=wiki_dir, copied=copied, removed=removed, push_requested=args.push)

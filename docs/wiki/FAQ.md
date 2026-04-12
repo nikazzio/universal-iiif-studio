@@ -1,9 +1,8 @@
 # FAQ
 
-## 1) `iiif-studio: command not found`
+## `iiif-studio: command not found`
 
-**Probable cause**: the virtual environment is not active or the project is not installed in editable mode.  
-**Quick fix**:
+Activate the virtual environment and reinstall in editable mode:
 
 ```bash
 source .venv/bin/activate
@@ -11,134 +10,63 @@ pip install -e .
 iiif-studio
 ```
 
-More details: [README.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/README.md)
+## Studio opens without a document
 
-## 2) Port `8000` is already in use
+This is expected. Opening `/studio` without `doc_id` and `library` shows the recent-work hub.
 
-**Probable cause**: another process is already bound to the web port.  
-**Quick fix**: stop the conflicting process, then rerun `iiif-studio`.
+## Studio shows remote images instead of local images
 
-More details: [README troubleshooting](https://github.com/nikazzio/universal-iiif-studio/blob/main/README.md)
+This is expected when local page availability is incomplete and local-only gating is enabled.
 
-## 3) Manifest cannot be resolved
+Review:
 
-**Probable cause**: wrong URL, temporary provider outage, or access restrictions.  
-**Quick fix**:
-- verify the manifest URL in the browser first,
-- retry after a few minutes,
-- switch provider if available.
-
-More details: [DOCUMENTAZIONE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-
-## 4) Download stops midway
-
-**Probable cause**: network timeout or remote rate limiting.  
-**Quick fix**:
-- retry after a short wait,
-- reduce concurrency if your network is unstable,
-- avoid starting multiple heavy jobs at once.
-
-More details: [CONFIG_REFERENCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
-
-## 5) Studio opens but pages are missing
-
-**Probable cause**: scans were not extracted/downloaded as expected.  
-**Quick fix**:
-- check the document folder under `downloads/...`,
-- check staging under `data/local/temp_images/<doc_id>/`,
-- verify scans are present before opening Studio,
-- retry extraction/download for missing pages.
-
-If pages are staged but not promoted yet, review:
-- `settings.storage.partial_promotion_mode` (`never|on_pause`)
 - `settings.viewer.mirador.require_complete_local_images`
+- the `allow_remote_preview=1` query override
+- current local page availability in the item workspace
 
-More details: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
+## Why are pages still in staging?
 
-## 6) Pause works, but why are some pages still in temp?
+`settings.storage.partial_promotion_mode` controls when validated staged pages are promoted into local scans.
 
-**Behavior**:
-- with `partial_promotion_mode=never`, validated pages can remain in staging until completeness gate is satisfied;
-- with `partial_promotion_mode=on_pause`, pausing promotes validated staged pages to `scans/`; existing scans are overwritten only in explicit refresh/redownload flows.
+- `never` keeps them staged until completeness gates are satisfied.
+- `on_pause` promotes validated staged pages when a running job is paused.
 
-Segmented retries (`retry_missing` / `retry_range`) still converge correctly because completeness checks count previously staged validated pages.
+## Which PDF source is used?
 
-## 7) Native PDF vs generated PDF: which one is used?
+- Native PDF is preferred when the manifest exposes one and `settings.pdf.prefer_native_pdf=true`.
+- Otherwise the workflow falls back to image-based download.
+- Image-based PDF generation depends on `settings.pdf.create_pdf_from_images`.
 
-**Behavior**:
-- if the manifest exposes a native PDF and `settings.pdf.prefer_native_pdf=true`, native flow is preferred;
-- otherwise images are used, and PDF generation depends on `settings.pdf.create_pdf_from_images`.
+## Can I export higher quality without keeping everything high resolution locally?
 
-More details: [CONFIG_REFERENCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
+Yes. Use a PDF profile that fetches temporary remote high-resolution images for the export job.
 
-## 8) Can I export very high quality PDF without keeping everything high-res locally?
+## Why do some providers feel slower than others?
 
-Yes. Use an export profile with `image_source_mode=remote_highres_temp`.
-High-res pages are fetched for that job and cleaned after export when enabled.
+Per-library rate limiting and backoff settings can be stricter for fragile upstream services. Review `settings.network.global.*` and `settings.network.libraries.<library>.*`.
 
-More details: [PDF-Export-Profiles](PDF-Export-Profiles.md)
+## Wiki sync ran, but the wiki did not update
 
-## 9) Wiki sync ran, but wiki was not updated
-
-**Probable cause**: push not enabled, wiki disabled, or missing permissions.  
-**Quick fix**:
-- run dry-run first to verify delta:
+Run a dry-run first:
 
 ```bash
 python scripts/sync_wiki.py --repo owner/repo --dry-run
 ```
 
-- then publish with `--push`,
-- ensure CI has `contents: write` and wiki is enabled.
+Then publish:
 
-More details: [WIKI_MAINTENANCE.md](../WIKI_MAINTENANCE.md)
+```bash
+python scripts/sync_wiki.py --repo owner/repo --push
+```
 
-## 10) Where should I edit wiki pages?
+Also confirm that the repository wiki is enabled and that the workflow token has `contents: write`.
 
-Always edit source pages in `docs/wiki/` inside the main repository.  
-The GitHub wiki is a publish target, not the source of truth.
+## Where should I edit wiki pages?
 
-More details: [WIKI_MAINTENANCE.md](../WIKI_MAINTENANCE.md)
+Always edit source pages in `docs/wiki/` inside the main repository. The GitHub Wiki is a publish target, not the source of truth.
 
-## 11) Where is the complete configuration reference?
+## Read Next
 
-Use the canonical docs:
-- full keys: [CONFIG_REFERENCE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
-- user flow: [DOCUMENTAZIONE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-- architecture: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
-
-## 12) Why does Studio show remote images instead of local ones?
-
-**Probable cause**: Download is incomplete or `viewer.mirador.require_complete_local_images=true` (default).  
-**Behavior**: Studio automatically uses **Remote Mode** when local pages are not fully available. Mirador loads the original manifest and fetches images on-demand from the library server.  
-**Quick fix**:
-- Complete the download to automatically switch to Local Mode.
-- Or add `?allow_remote_preview=true` to Studio URL to explicitly enable Remote Mode.
-- Or set `viewer.mirador.require_complete_local_images=false` in config to prefer remote preview by default.
-
-**Status indicator**: Check the READ_SOURCE badge in the status panel:
-- **AMBER badge**: Remote mode (fetching from original server)
-- **GREEN badge**: Local mode (using downloaded images)
-
-More details: [Studio-Workflow.md](Studio-Workflow.md)
-
-## 13) How do I preview a manuscript while it's still downloading?
-
-**Solution**: Use Remote Mode by adding `?allow_remote_preview=true` to the Studio URL.  
-**Behavior**: Mirador will load the original manifest from the library server and display ALL pages, fetching images on-demand as you navigate.  
-**Limitation**: Requires internet connection; images are not cached locally in this mode.
-
-More details: [Studio-Workflow.md](Studio-Workflow.md)
-
-## 14) Why do downloads to Gallica seem slower than other libraries?
-
-**Expected behavior**: Gallica has stricter rate limits configured in the HTTP client.  
-**Rate limits**:
-- Gallica: 4 requests per minute (burst window)
-- Other libraries: 20 requests per minute (default)
-
-**Rationale**: Gallica servers use aggressive WAF (Web Application Firewall) and rate limiting. The system automatically applies conservative limits to avoid IP blocks.
-
-**Config location**: `settings.network.libraries.gallica.*` in `config.json`.
-
-More details: [HTTP_CLIENT.md](../HTTP_CLIENT.md)
+- [Studio Workflow](Studio-Workflow.md)
+- [Configuration](Configuration.md)
+- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)

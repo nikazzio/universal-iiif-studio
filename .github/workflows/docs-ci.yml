@@ -55,6 +55,10 @@ jobs:
         run: |
           python scripts/check_docs_language.py
 
+      - name: Check docs integrity
+        run: |
+          python scripts/check_docs_integrity.py
+
       - name: Check changelog policy
         run: |
           python scripts/check_changelog_policy.py

@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when a markdown document mixes English and Italian significantly.
-
-Policy:
-- Most markdown files are expected to be English.
-- `docs/DOCUMENTAZIONE.md` is expected to be Italian.
-- A file fails if both language scores are significant, or if dominant language
-  does not match the file expectation.
-"""
+"""Fail when markdown documentation is not predominantly English prose."""
 
 from __future__ import annotations
 
@@ -15,15 +8,12 @@ import sys
 from pathlib import Path
 
 DOC_FILES = [
-    *sorted(Path("docs").glob("*.md")),
     Path("README.md"),
+    *sorted(Path("docs").rglob("*.md")),
+    Path("tests/README.md"),
     Path("AGENTS.md"),
     Path("CHANGELOG.md"),
 ]
-
-EXPECTED_LANGUAGE: dict[str, str] = {
-    "docs/DOCUMENTAZIONE.md": "it",
-}
 
 EN_WORDS = {
     "the",
@@ -44,12 +34,15 @@ EN_WORDS = {
     "added",
     "changed",
     "fixed",
+    "guide",
+    "local",
+    "viewer",
+    "profile",
 }
 
 IT_WORDS = {
     "e",
     "con",
-    # "per" removed - highly ambiguous with English (per-host, per-library, per-instance, etc.)
     "questo",
     "questa",
     "deve",
@@ -64,6 +57,9 @@ IT_WORDS = {
     "corretto",
     "cartella",
     "pagina",
+    "lavoro",
+    "remota",
+    "locale",
 }
 
 
@@ -71,8 +67,10 @@ class ValidationError(RuntimeError):
     """Raised when language policy is violated."""
 
 
-def _strip_code_blocks(text: str) -> str:
-    return re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+def _strip_code(text: str) -> str:
+    without_fenced = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    without_inline = re.sub(r"`[^`]+`", " ", without_fenced)
+    return without_inline
 
 
 def _tokenize(text: str) -> list[str]:
@@ -84,12 +82,11 @@ def _score(tokens: list[str], lexicon: set[str]) -> int:
 
 
 def _is_mixed(en_score: int, it_score: int) -> bool:
-    # Significant counts for both dictionaries implies mixed-language prose.
     return en_score >= 6 and it_score >= 6
 
 
 def main() -> int:
-    """Validate language consistency in markdown files."""
+    """Validate that project docs are English-only prose."""
     cli_paths = [Path(p) for p in sys.argv[1:]]
     targets = cli_paths if cli_paths else DOC_FILES
     failures: list[str] = []
@@ -99,24 +96,18 @@ def main() -> int:
             continue
 
         text = path.read_text(encoding="utf-8")
-        normalized = _strip_code_blocks(text)
+        normalized = _strip_code(text)
         tokens = _tokenize(normalized)
 
         en_score = _score(tokens, EN_WORDS)
         it_score = _score(tokens, IT_WORDS)
 
-        expected = EXPECTED_LANGUAGE.get(path.as_posix(), "en")
+        if _is_mixed(en_score, it_score):
+            failures.append(f"{path}: mixed language detected (en_score={en_score}, it_score={it_score}).")
+            continue
 
-        if expected == "en":
-            if _is_mixed(en_score, it_score):
-                failures.append(f"{path}: mixed language detected (en_score={en_score}, it_score={it_score}).")
-                continue
-            if it_score >= 6 and it_score > en_score:
-                failures.append(f"{path}: expected English but Italian appears dominant.")
-
-        if expected == "it" and en_score >= 12 and en_score > int(it_score * 1.8):
-            # Italian docs naturally include technical English terms - be more permissive
-            failures.append(f"{path}: expected Italian but English appears dominant.")
+        if it_score >= 6 and it_score > en_score:
+            failures.append(f"{path}: expected English but Italian appears dominant.")
 
     if failures:
         details = "\n".join(f"- {item}" for item in failures)

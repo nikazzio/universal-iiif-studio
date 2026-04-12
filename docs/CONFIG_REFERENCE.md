@@ -93,6 +93,8 @@ Global network settings used by the centralized `HTTPClient` for all HTTP operat
   - Read timeout for HTTP responses (used by HTTPClient)
 - `settings.network.global.transport_retries` (`int`, default: `3`)
   - Transport-level retries for HTTP adapter
+- `settings.network.global.per_host_concurrency` (`int`, default: `4`)
+  - Default per-host concurrency used when library-specific policy does not override it
 
 **Note**: These settings apply to ALL libraries and cannot be overridden per-library. For per-library customization, use `settings.network.libraries.<library>.*` fields.
 

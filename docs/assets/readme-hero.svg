@@ -1,0 +1,59 @@
+<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Universal IIIF Downloader and Studio banner</title>
+  <desc id="desc">Stylized banner showing the Discovery, Library, Studio, and Export workflow.</desc>
+  <rect width="1600" height="520" rx="28" fill="#07111F"/>
+  <rect x="18" y="18" width="1564" height="484" rx="22" fill="url(#bg)"/>
+  <path d="M104 412C221 297 348 250 498 274C648 298 688 382 854 390C1020 398 1106 282 1284 256C1395 240 1494 257 1542 278V488H104V412Z" fill="url(#wave)" opacity="0.85"/>
+  <circle cx="1314" cy="116" r="118" fill="url(#orb)" opacity="0.45"/>
+  <circle cx="1272" cy="132" r="62" fill="#D8F3FF" opacity="0.28"/>
+  <text x="92" y="138" fill="white" font-size="54" font-family="Arial, Helvetica, sans-serif" font-weight="700">Universal IIIF Downloader &amp; Studio</text>
+  <text x="92" y="188" fill="#C6D4E1" font-size="24" font-family="Arial, Helvetica, sans-serif">Discovery-to-export workflow for IIIF manuscripts, local study copies, and profile-driven PDF output.</text>
+
+  <g transform="translate(90 278)">
+    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#3ABFF8" stroke-width="2"/>
+    <text x="26" y="42" fill="#8BE9FD" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">DISCOVERY</text>
+    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Resolve, search, prefetch</text>
+  </g>
+
+  <g transform="translate(390 278)">
+    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#5EEAD4" stroke-width="2"/>
+    <text x="26" y="42" fill="#99F6E4" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">LIBRARY</text>
+    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Track local assets</text>
+  </g>
+
+  <g transform="translate(690 278)">
+    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#F59E0B" stroke-width="2"/>
+    <text x="26" y="42" fill="#FCD34D" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">STUDIO</text>
+    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Read, annotate, inspect</text>
+  </g>
+
+  <g transform="translate(990 278)">
+    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#FB7185" stroke-width="2"/>
+    <text x="26" y="42" fill="#FDA4AF" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">OUTPUT</text>
+    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Profiles, jobs, PDF export</text>
+  </g>
+
+  <path d="M342 332H388" stroke="#82E9FF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M642 332H688" stroke="#82F3D4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M942 332H988" stroke="#FCD34D" stroke-width="4" stroke-linecap="round"/>
+  <path d="M374 318L392 332L374 346" stroke="#82E9FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M674 318L692 332L674 346" stroke="#82F3D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M974 318L992 332L974 346" stroke="#FCD34D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <defs>
+    <linearGradient id="bg" x1="106" y1="36" x2="1486" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1628"/>
+      <stop offset="0.52" stop-color="#0C2037"/>
+      <stop offset="1" stop-color="#0C1728"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="104" y1="260" x2="1542" y2="454" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.45" stop-color="#0891B2"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1314 116) rotate(90) scale(118)">
+      <stop stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

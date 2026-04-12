@@ -1,6 +1,6 @@
 # Getting Started
 
-Quick setup for running Universal IIIF Studio locally.
+Use this page for the shortest path to a working local install.
 
 ## Quick Start
 
@@ -21,20 +21,17 @@ Open `http://127.0.0.1:8000`.
 iiif-cli "<manifest-url>"
 ```
 
-## Main Navigation (Web Studio)
+## Main Navigation
 
-- `Discovery`: resolve and queue downloads.
-  - `Aggiungi item` performs light prefetch (`metadata.json` + `manifest.json`) without full scans.
-- `Library`: local assets entrypoint.
-- `Studio`: document workspace.
-  - **Note**: Opening `/studio` without query parameters (`doc_id` and `library`) shows the **Riprendi lavoro** (Recent Documents) hub, which displays server-side persisted document contexts for quick access to recently viewed items.
-- `Export`: batch/single export hub.
-  - Inside Studio, the per-item tab is named `Output`.
+- `Discovery` resolves provider inputs and search results.
+- `Library` is the canonical entrypoint for local items.
+- `Studio` is the working workspace for a selected document.
+- `Output` is the export surface inside Studio.
 
-If a download is paused/incomplete, pages may temporarily stay in `data/local/temp_images/<doc_id>` before promotion to `downloads/<library>/<doc_id>/scans/`, depending on `settings.storage.partial_promotion_mode`.
+If `/studio` is opened without `doc_id` and `library`, the app shows the recent-work hub instead of an empty editor.
 
-## Canonical Docs
+## Read Next
 
-- Full setup and troubleshooting: [README.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/README.md)
-- User guide: [DOCUMENTAZIONE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-- Architecture details: [ARCHITECTURE.md](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
+- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)
+- [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
+- [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
