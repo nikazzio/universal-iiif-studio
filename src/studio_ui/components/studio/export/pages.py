@@ -23,18 +23,21 @@ def render_export_pages_summary(
     attrs = {"id": "studio-export-pages-summary"}
     if hx_swap_oob:
         attrs["hx_swap_oob"] = hx_swap_oob
+    files_count = int(scan_summary.get("files_count") or 0)
+    bytes_total = int(scan_summary.get("bytes_total") or 0)
+    bytes_avg = int(scan_summary.get("bytes_avg") or 0)
+    bytes_max = int(scan_summary.get("bytes_max") or 0)
     return Div(
         Span(
-            (
-                f"Pagine {thumb_total_pages} · File {int(scan_summary.get('files_count') or 0)} · "
-                f"Locale {_bytes_label(int(scan_summary.get('bytes_total') or 0))} · "
-                f"Media {_bytes_label(int(scan_summary.get('bytes_avg') or 0))} · "
-                f"Max {_bytes_label(int(scan_summary.get('bytes_max') or 0))}"
-            ),
+            f"{thumb_total_pages} pagine · {files_count} file scaricati · {_bytes_label(bytes_total)} totali",
             cls="text-xs font-mono text-slate-700 dark:text-slate-200",
         ),
         Span(
-            f"Thumb page {thumb_page}/{thumb_page_count} · {thumb_page_size} per pagina",
+            (
+                f"Media {_bytes_label(bytes_avg)}/file · "
+                f"Max {_bytes_label(bytes_max)}/file · "
+                f"Miniature: pag. {thumb_page} di {thumb_page_count}, {thumb_page_size}/pag."
+            ),
             cls="text-[11px] text-slate-500 dark:text-slate-400",
         ),
         cls=(
@@ -97,7 +100,10 @@ def _render_export_pages_subtab(
             cls="px-1",
         )
         if has_optimize_feedback
-        else None
+        else Span(
+            "Nessuna ottimizzazione eseguita.",
+            cls="text-[11px] text-slate-400 dark:text-slate-500 px-1",
+        )
     )
 
     return Div(
@@ -131,57 +137,38 @@ def _render_export_pages_subtab(
                     id="studio-export-pages-clear",
                     cls="app-btn app-btn-neutral text-xs",
                 ),
-                Div(
-                    Input(
-                        type="text",
-                        id="studio-export-pages-range",
-                        placeholder="es. 1-10,12,20-25",
-                        cls="app-field text-xs w-36",
-                    ),
-                    Button(
-                        "Applica",
-                        type="button",
-                        id="studio-export-pages-apply-range",
-                        cls="app-btn app-btn-accent text-xs",
-                    ),
-                    cls="flex items-center gap-1.5",
-                ),
                 Span(
-                    "0 pagine selezionate",
-                    cls="studio-export-selected-count text-xs text-slate-500 dark:text-slate-400",
+                    "0 selezionate",
+                    cls="studio-export-selected-count text-xs font-mono text-slate-600 dark:text-slate-300",
                 ),
                 cls="flex flex-wrap items-center gap-2",
             ),
-            # Row 2: Bulk actions
+            # Row 2: Range selection
             Div(
-                Span("Azioni:", cls="text-[11px] font-semibold text-slate-600 dark:text-slate-300"),
-                Button(
-                    Div(
-                        Span("⚙ Ottimizza sel."),
-                        Span(
-                            "…",
-                            id="studio-export-optimize-selected-indicator",
-                            cls="htmx-indicator text-xs",
-                        ),
-                        cls="flex items-center gap-1",
-                    ),
-                    type="button",
-                    id="studio-export-optimize-selected-btn",
-                    hx_post=optimize_url,
-                    hx_vals='{"optimize_scope":"selected"}',
-                    hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator="#studio-export-optimize-selected-indicator",
-                    hx_target="#studio-export-panel",
-                    hx_swap="outerHTML",
-                    hx_disabled_elt="this",
-                    cls="app-btn app-btn-neutral text-xs",
+                Span("Range:", cls="text-[11px] text-slate-500 dark:text-slate-400"),
+                Input(
+                    type="text",
+                    id="studio-export-pages-range",
+                    placeholder="es. 1-10, 12, 20-25",
+                    maxlength="100",
+                    cls="app-field text-xs w-36",
                 ),
                 Button(
+                    "Seleziona range",
+                    type="button",
+                    id="studio-export-pages-apply-range",
+                    cls="app-btn app-btn-neutral text-xs",
+                ),
+                cls="flex flex-wrap items-center gap-1.5",
+            ),
+            # Row 3: Optimize + feedback
+            Div(
+                Button(
                     Div(
-                        Span("⚙ Ottimizza tutte"),
+                        Span("⚙ Ottimizza"),
                         Span(
                             "…",
-                            id="studio-export-optimize-all-indicator",
+                            id="studio-export-optimize-indicator",
                             cls="htmx-indicator text-xs",
                         ),
                         cls="flex items-center gap-1",
@@ -189,17 +176,37 @@ def _render_export_pages_subtab(
                     type="button",
                     id="studio-export-optimize-btn",
                     hx_post=optimize_url,
-                    hx_vals='{"optimize_scope":"all"}',
-                    hx_include="#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator="#studio-export-optimize-all-indicator",
+                    hx_vals='{"optimize_scope":"selected"}',
+                    hx_include=("#studio-export-selected-pages,#studio-export-thumb-page,#studio-export-page-size"),
+                    hx_indicator="#studio-export-optimize-indicator",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     hx_disabled_elt="this",
                     cls="app-btn app-btn-neutral text-xs",
+                    title="Comprimi i file delle pagine selezionate",
                 ),
+                optimize_feedback_el,
                 cls="flex flex-wrap items-center gap-2",
             ),
-            *([] if optimize_feedback_el is None else [optimize_feedback_el]),
+            # Legenda pulsanti card
+            Div(
+                P(
+                    Span("⬇ Scarica", cls="font-semibold"),
+                    " — riscarica con la strategia progressiva del volume (es. 3000 → 1740 → max, con stitching)",
+                    cls="text-[11px] font-mono text-slate-500 dark:text-slate-400",
+                ),
+                P(
+                    Span("⬇ Hi", cls="font-semibold"),
+                    " — fetch diretto alla risoluzione massima dichiarata dalla biblioteca, senza fallback",
+                    cls="text-[11px] font-mono text-slate-500 dark:text-slate-400",
+                ),
+                P(
+                    Span("⚙ Opt", cls="font-semibold"),
+                    " — comprimi il file già scaricato in locale senza perdita di qualità visiva",
+                    cls="text-[11px] font-mono text-slate-500 dark:text-slate-400",
+                ),
+                cls="space-y-0.5",
+            ),
             cls=(
                 "space-y-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 "
                 "bg-white/80 dark:bg-slate-900/80"
@@ -229,9 +236,9 @@ def _render_export_pages_subtab(
         ),
         Div(
             Span(
-                "0 pagine selezionate",
+                "0 selezionate",
                 id="studio-export-selected-count",
-                cls="studio-export-selected-count text-xs text-slate-500 dark:text-slate-400",
+                cls="studio-export-selected-count text-xs font-mono text-slate-600 dark:text-slate-300",
             ),
             open_output_btn,
             cls=(
