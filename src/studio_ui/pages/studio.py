@@ -176,6 +176,16 @@ def studio_layout(
         ),
         # Modal placeholder
         Div(id="cropper-modal-container"),
+        # Shortcuts hint
+        Span(
+            "? shortcuts",
+            cls=(
+                "fixed bottom-3 right-3 z-50 text-[10px] font-mono px-2 py-1 rounded "
+                "bg-slate-800/70 text-slate-400 cursor-pointer hover:text-white "
+                "hover:bg-slate-700/90 transition-all backdrop-blur-sm"
+            ),
+            onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))",
+        ),
         Script(f"""
             (function() {{
                 if (window.__studioMiradorListenerBound) return;
@@ -220,5 +230,6 @@ def studio_layout(
                 }});
             }})();
         """),
+        Script(src="/static/shortcuts.js"),
         cls="flex flex-col h-screen overflow-hidden",
     )
