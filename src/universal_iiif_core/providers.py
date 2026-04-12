@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import types
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.resolvers.archive_org import ArchiveOrgResolver
@@ -14,6 +16,7 @@ from universal_iiif_core.resolvers.harvard import HarvardResolver
 from universal_iiif_core.resolvers.heidelberg import HeidelbergResolver
 from universal_iiif_core.resolvers.institut import InstitutResolver
 from universal_iiif_core.resolvers.loc import LOCResolver
+from universal_iiif_core.resolvers.models import SearchResult
 from universal_iiif_core.resolvers.oxford import OxfordResolver
 from universal_iiif_core.resolvers.vatican import VaticanResolver
 
@@ -60,6 +63,7 @@ class IIIFProvider:
     aliases: tuple[str, ...]
     resolver_cls: type[BaseResolver]
     search_strategy: SearchStrategy | None = None
+    search_fn: str | None = None
     search_mode: SearchMode = "direct"
     filters: tuple[ProviderFilter, ...] = ()
     not_found_hint: str = "Verifica la segnatura."
@@ -73,8 +77,8 @@ class IIIFProvider:
         return self.resolver_cls()
 
     def supports_search(self) -> bool:
-        """Return True when the provider exposes a search strategy."""
-        return self.search_strategy is not None
+        """Return True when the provider has both a search strategy and a wired handler."""
+        return self.search_strategy is not None and self.search_fn is not None
 
     def supports_direct_resolution(self) -> bool:
         """Return True when the provider has a dedicated resolver."""
@@ -99,6 +103,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("vaticana", "vaticana (bav)", "vatican"),
         resolver_cls=VaticanResolver,
         search_strategy="vatican",
+        search_fn="search_vatican",
         search_mode="fallback",
         not_found_hint=(
             "Verifica la segnatura. Prova formati come 'Urb.lat.1779' o inserisci solo il numero (es. '1223')."
@@ -112,6 +117,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("gallica", "gallica (bnf)", "bnf"),
         resolver_cls=GallicaResolver,
         search_strategy="gallica",
+        search_fn="smart_search",
         search_mode="search_first",
         filters=(_GALLICA_FILTER,),
         not_found_hint="Verifica l'ID ARK, l'URL o la ricerca testuale.",
@@ -124,6 +130,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("institut de france", "institut de france (bibnum)", "institut", "bibnum"),
         resolver_cls=InstitutResolver,
         search_strategy="institut",
+        search_fn="search_institut",
         search_mode="fallback",
         not_found_hint="Verifica la segnatura. Usa ID numerico (es. '17837'), URL viewer o una ricerca testuale.",
         placeholder="es. 17837",
@@ -135,6 +142,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("bodleian", "bodleian (oxford)", "oxford"),
         resolver_cls=OxfordResolver,
         search_strategy="bodleian",
+        search_fn="search_bodleian",
         not_found_hint="Verifica l'UUID o incolla un URL Digital Bodleian valido.",
         placeholder="es. 080f88f5-7586-4b8a-8064-63ab3495393c",
         sort_order=40,
@@ -145,6 +153,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("heidelberg", "universitaetsbibliothek heidelberg", "universitätsbibliothek heidelberg"),
         resolver_cls=HeidelbergResolver,
         search_strategy="heidelberg",
+        search_fn="search_heidelberg",
         search_mode="fallback",
         not_found_hint=(
             "Per ora la ricerca libera Heidelberg puo richiedere il browser del catalogo. "
@@ -166,6 +175,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("cambridge", "cambridge university digital library", "cudl"),
         resolver_cls=CambridgeResolver,
         search_strategy="cambridge",
+        search_fn="search_cambridge",
         search_mode="fallback",
         not_found_hint=(
             "Per ora la ricerca libera richiede il browser CUDL. "
@@ -185,6 +195,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("e-codices", "ecodices"),
         resolver_cls=EcodicesResolver,
         search_strategy="ecodices",
+        search_fn="search_ecodices",
         not_found_hint="Incolla un URL e-codices o un ID composto tipo 'csg-0001'.",
         placeholder="es. csg-0001",
         sort_order=70,
@@ -195,6 +206,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("harvard", "harvard university"),
         resolver_cls=HarvardResolver,
         search_strategy="harvard",
+        search_fn="search_harvard",
         search_mode="fallback",
         not_found_hint="Incolla un URL Harvard IIIF/Hollis con DRS ID.",
         placeholder="es. https://iiif.lib.harvard.edu/manifests/view/drs:12345678",
@@ -206,6 +218,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("library of congress", "loc"),
         resolver_cls=LOCResolver,
         search_strategy="loc",
+        search_fn="search_loc",
         search_mode="fallback",
         not_found_hint="Incolla un URL loc.gov/item/... valido.",
         placeholder="es. https://www.loc.gov/item/2021668145/",
@@ -217,6 +230,7 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         aliases=("archive.org", "internet archive", "archive"),
         resolver_cls=ArchiveOrgResolver,
         search_strategy="archive_org",
+        search_fn="search_archive_org",
         search_mode="search_first",
         not_found_hint="Incolla un URL archive.org/details/... o un manifest iiif.archive.org valido.",
         placeholder="es. https://archive.org/details/b29000427_0001",
@@ -300,12 +314,87 @@ def resolve_with_provider(value: str, *, include_generic: bool = True) -> tuple[
     return None, None, _PROVIDER_BY_KEY["Unknown"]
 
 
+# ---------------------------------------------------------------------------
+# Search handler construction (lazy-loaded from resolvers.discovery)
+# ---------------------------------------------------------------------------
+
+from universal_iiif_core.discovery.search_adapters import (  # noqa: E402
+    _max_results_from_payload,
+    _page_from_payload,
+)
+
+SearchHandlerFn = Callable[[str, dict[str, Any]], list[SearchResult]]
+
+
+def _make_standard_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandlerFn:
+    """Wrap a (query, max_results, page) search fn into the (query, payload) interface."""
+
+    def _adapter(query: str, payload: dict[str, Any]) -> list[SearchResult]:
+        return fn(query, _max_results_from_payload(payload), _page_from_payload(payload))
+
+    return _adapter
+
+
+def _make_gallica_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandlerFn:
+    """Wrap the Gallica smart_search fn, forwarding gallica_type_filter from payload."""
+
+    def _adapter(query: str, payload: dict[str, Any]) -> list[SearchResult]:
+        return fn(
+            query,
+            max_records=_max_results_from_payload(payload),
+            page=_page_from_payload(payload),
+            gallica_type_filter=str(payload.get("gallica_type") or "all"),
+        )
+
+    return _adapter
+
+
+_search_handlers_cache: types.MappingProxyType[str, SearchHandlerFn] | None = None
+
+
+def get_search_handlers() -> types.MappingProxyType[str, SearchHandlerFn]:
+    """Build the search-strategy dispatch dict from the provider registry.
+
+    Search functions are lazy-imported from ``resolvers.discovery`` to avoid
+    circular imports at module load time.  The result is cached after first call.
+    Returns a read-only mapping to prevent accidental mutation of the cache.
+    """
+    global _search_handlers_cache  # noqa: PLW0603
+    if _search_handlers_cache is not None:
+        return _search_handlers_cache
+
+    from universal_iiif_core.resolvers import discovery as _disc
+
+    handlers: dict[str, SearchHandlerFn] = {}
+    for provider in PROVIDERS:
+        if not provider.search_strategy or not provider.search_fn:
+            continue
+        raw_fn = getattr(_disc, provider.search_fn, None)
+        if raw_fn is None or not callable(raw_fn):
+            logger.warning(
+                "Provider %s declares search_fn=%r (strategy=%r) "
+                "but no matching callable found in resolvers.discovery — skipping",
+                provider.key,
+                provider.search_fn,
+                provider.search_strategy,
+            )
+            continue
+        if provider.search_strategy == "gallica":
+            handlers[provider.search_strategy] = _make_gallica_adapter(raw_fn)
+        else:
+            handlers[provider.search_strategy] = _make_standard_adapter(raw_fn)
+
+    _search_handlers_cache = types.MappingProxyType(handlers)
+    return _search_handlers_cache
+
+
 __all__ = [
     "IIIFProvider",
     "PROVIDERS",
     "ProviderFilter",
     "ProviderFilterOption",
     "get_provider",
+    "get_search_handlers",
     "is_known_provider",
     "iter_providers",
     "normalize_provider_value",

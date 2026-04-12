@@ -13,20 +13,12 @@ import requests
 from ..config_manager import get_config_manager
 from ..discovery.contracts import ProviderResolution
 from ..discovery.orchestrator import resolve_provider_input as resolve_provider_input_orchestrated
-from ..discovery.search_adapters import build_search_strategy_handlers
 from ..exceptions import ResolverError
 from ..http_client import HTTPClient, get_http_client
 from ..logger import get_logger
-from ..providers import IIIFProvider
-from .archive_org import ArchiveOrgResolver
-from .cambridge import CambridgeResolver
-from .ecodices import EcodicesResolver
-from .gallica import GallicaResolver
-from .heidelberg import HeidelbergResolver
-from .institut import InstitutResolver
-from .loc import LOCResolver
+from ..providers import IIIFProvider, get_provider, get_search_handlers
+from .base import BaseResolver
 from .models import SearchResult
-from .oxford import OxfordResolver
 from .parsers import GallicaXMLParser, IIIFManifestParser
 from .registry import resolve_shelfmark as registry_resolve
 
@@ -186,7 +178,7 @@ def smart_search(
 
     # 1. TENTATIVO RISOLUZIONE DIRETTA (ID o LINK)
     # Usiamo il resolver Gallica specifico per catturare short ID (es. bpt6k...)
-    gallica_resolver = GallicaResolver()
+    gallica_resolver = get_provider("Gallica").resolver()
 
     # Se sembra un link/ID Gallica valido
     if gallica_resolver.can_resolve(text):
@@ -246,7 +238,7 @@ def _search_with_provider(
         return []
 
     payload = dict(filters or {})
-    handler = _SEARCH_STRATEGY_HANDLERS.get(provider.search_strategy or "")
+    handler = get_search_handlers().get(provider.search_strategy or "")
     if not handler:
         return []
     return handler(text, payload)
@@ -270,7 +262,7 @@ def resolve_provider_input(
         library,
         user_input,
         filters=filters,
-        search_handlers=_SEARCH_STRATEGY_HANDLERS,
+        search_handlers=get_search_handlers(),
         resolve_shelfmark_fn=resolve_shelfmark,
         search_with_provider_fn=_search_with_provider,
     )
@@ -307,7 +299,7 @@ def search_gallica_by_id(doc_id: str) -> list[SearchResult]:
         )
         resp.raise_for_status()
 
-        resolver = GallicaResolver()
+        resolver = get_provider("Gallica").resolver()
         return GallicaXMLParser.parse_sru(resp.content, resolver)
 
     except (requests.RequestException, xml.etree.ElementTree.ParseError, ValueError) as exc:
@@ -378,7 +370,7 @@ def search_gallica(
     fetch_records = 50 if normalized_filter != "all" else requested_records
     maximum_records = str(fetch_records)
     start_record = (max(1, page) - 1) * requested_records + 1
-    resolver = GallicaResolver()
+    resolver = get_provider("Gallica").resolver()
     params = {
         "operation": "searchRetrieve",
         "version": "1.2",
@@ -432,7 +424,7 @@ def search_institut(query: str, max_results: int = 20, page: int = 1) -> list[Se
     if not candidates:
         return []
 
-    resolver = InstitutResolver()
+    resolver = get_provider("Institut de France").resolver()
     results: list[SearchResult] = []
     for doc_id, fallback_title in candidates:
         if len(results) >= max_results:
@@ -473,7 +465,7 @@ def search_archive_org(query: str, max_results: int = 20, page: int = 1) -> list
         return []
 
     docs = payload.get("response", {}).get("docs", [])
-    resolver = ArchiveOrgResolver()
+    resolver = get_provider("Archive.org").resolver()
     results: list[SearchResult] = []
 
     for doc in docs:
@@ -516,7 +508,7 @@ def search_bodleian(query: str, max_results: int = 20, page: int = 1) -> list[Se
         return []
 
     members = payload.get("member", [])
-    resolver = OxfordResolver()
+    resolver = get_provider("Bodleian").resolver()
     results: list[SearchResult] = []
 
     for member in members:
@@ -556,7 +548,7 @@ def search_ecodices(query: str, max_results: int = 20, page: int = 1) -> list[Se
         logger.error("e-codices search failed for query '%s': %s", q, exc, exc_info=True)
         return []
 
-    resolver = EcodicesResolver()
+    resolver = get_provider("e-codices").resolver()
     results: list[SearchResult] = []
     for chunk in _ECODICES_RESULT_SPLIT_RE.split(response.text):
         if not chunk.strip():
@@ -575,7 +567,7 @@ def search_cambridge(query: str, max_results: int = 20, page: int = 1) -> list[S
         return []
 
     requested_results = max(1, min(max_results, 20))
-    resolver = CambridgeResolver()
+    resolver = get_provider("Cambridge").resolver()
     direct_manifest_url, direct_id = resolver.get_manifest_url(q)
     if direct_manifest_url and direct_id:
         return [
@@ -725,7 +717,7 @@ def search_loc(query: str, max_results: int = 20, page: int = 1) -> list[SearchR
         logger.error("LOC search failed for query '%s': empty/invalid payload", q)
         return []
 
-    resolver = LOCResolver()
+    resolver = get_provider("Library of Congress").resolver()
     results: list[SearchResult] = []
     for entry in payload.get("results", []):
         if not isinstance(entry, dict):
@@ -761,7 +753,7 @@ def search_heidelberg(query: str, max_results: int = 20, page: int = 1) -> list[
         return []
 
     requested_results = max(1, min(max_results, 20))
-    resolver = HeidelbergResolver()
+    resolver = get_provider("Heidelberg").resolver()
     direct_manifest_url, direct_id = resolver.get_manifest_url(q)
     if direct_manifest_url and direct_id:
         viewer_url = f"https://digi.ub.uni-heidelberg.de/diglit/{direct_id}"
@@ -883,9 +875,7 @@ def _extract_institut_candidates(html: str, max_results: int) -> list[tuple[str,
     return candidates
 
 
-def _fetch_institut_manifest_result(
-    doc_id: str, fallback_title: str, resolver: InstitutResolver
-) -> SearchResult | None:
+def _fetch_institut_manifest_result(doc_id: str, fallback_title: str, resolver: BaseResolver) -> SearchResult | None:
     manifest_url, _ = resolver.get_manifest_url(doc_id)
     if not manifest_url:
         return None
@@ -1181,7 +1171,7 @@ def _first_text(values: Any) -> str:
     return _clean_html_text(str(values or ""))
 
 
-def _build_bodleian_result(member: dict[str, Any], resolver: OxfordResolver) -> SearchResult | None:
+def _build_bodleian_result(member: dict[str, Any], resolver: BaseResolver) -> SearchResult | None:
     viewer_url = str(member.get("id") or "").strip()
     manifest_url = str(member.get("manifest", {}).get("id") or "").strip()
     _, doc_id = resolver.get_manifest_url(viewer_url)
@@ -1230,7 +1220,7 @@ def _first_bodleian_thumbnail(value: Any) -> str:
     return ""
 
 
-def _build_ecodices_result(chunk: str, resolver: EcodicesResolver) -> SearchResult | None:
+def _build_ecodices_result(chunk: str, resolver: BaseResolver) -> SearchResult | None:
     facsimile_match = _ECODICES_FACSIMILE_RE.search(chunk)
     if not facsimile_match:
         return None
@@ -1313,13 +1303,13 @@ def search_vatican(query: str, max_results: int = 5, page: int = 1) -> list[Sear
     Returns:
         List of SearchResult for manifests that exist
     """
-    from .vatican import VaticanResolver, normalize_shelfmark
+    from .vatican import normalize_shelfmark
 
     normalized_query = (query or "").strip()
     if not normalized_query:
         return []
 
-    resolver = VaticanResolver()
+    resolver = get_provider("Vaticana").resolver()
     results: list[SearchResult] = []
 
     _append_normalized_candidate(results, normalized_query, resolver, normalize_shelfmark, max_results)
@@ -1526,20 +1516,6 @@ def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchR
     except (requests.RequestException, requests.Timeout) as exc:
         logger.debug("Vatican manifest check failed for %s: %s", ms_id, exc)
         return None
-
-
-_SEARCH_STRATEGY_HANDLERS: Final[dict[str, Any]] = build_search_strategy_handlers(
-    smart_search_fn=smart_search,
-    search_vatican_fn=search_vatican,
-    search_institut_fn=search_institut,
-    search_archive_org_fn=search_archive_org,
-    search_bodleian_fn=search_bodleian,
-    search_ecodices_fn=search_ecodices,
-    search_cambridge_fn=search_cambridge,
-    search_harvard_fn=search_harvard,
-    search_loc_fn=search_loc,
-    search_heidelberg_fn=search_heidelberg,
-)
 
 
 __all__ = [

@@ -142,7 +142,13 @@ def build_search_strategy_handlers(
     search_loc_fn: SearchWithLimitFn,
     search_heidelberg_fn: SearchWithLimitFn,
 ) -> dict[str, Callable[[str, dict[str, Any]], list[SearchResult]]]:
-    """Build provider search strategy handlers from injected adapter callables."""
+    """Build provider search strategy handlers from injected adapter callables.
+
+    .. deprecated::
+        Use :func:`universal_iiif_core.providers.get_search_handlers` instead.
+        This function is retained for backward-compatible test injection only
+        and will be removed when search functions are decomposed (#118).
+    """
     return {
         "archive_org": lambda query, payload: _search_archive_provider(
             query,
