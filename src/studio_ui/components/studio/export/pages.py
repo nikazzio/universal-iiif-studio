@@ -168,6 +168,7 @@ def _render_export_pages_subtab(
                     hx_indicator="#studio-export-optimize-selected-indicator",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
+                    hx_disabled_elt="this",
                     cls="app-btn app-btn-neutral",
                 ),
                 Button(
@@ -188,6 +189,7 @@ def _render_export_pages_subtab(
                     hx_indicator="#studio-export-optimize-all-indicator",
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
+                    hx_disabled_elt="this",
                     cls="app-btn app-btn-neutral",
                 ),
                 cls="flex flex-wrap items-center gap-2",
