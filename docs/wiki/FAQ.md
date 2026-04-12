@@ -1,13 +1,13 @@
 # FAQ
 
-## `iiif-studio: command not found`
+## `scriptoria: command not found`
 
 Activate the virtual environment and reinstall in editable mode:
 
 ```bash
 source .venv/bin/activate
 pip install -e .
-iiif-studio
+scriptoria
 ```
 
 ## Studio opens without a document

@@ -188,7 +188,7 @@ def health():
 
 def main():
     """Punto di ingresso per il comando iiif-studio."""
-    parser = argparse.ArgumentParser(description="Universal IIIF Studio web app")
+    parser = argparse.ArgumentParser(description="Scriptoria web app")
     parser.add_argument(
         "--reload",
         action="store_true",
@@ -197,7 +197,7 @@ def main():
     args = parser.parse_args()
     reload_enabled = bool(args.reload)
 
-    logger.info("🚀 Starting Universal IIIF Studio App (FastHTML + Mirador)")
+    logger.info("🚀 Starting Scriptoria")
     logger.info(f"📍 Downloads directory: {config.get_downloads_dir()}")
     logger.info(
         "Startup mode: %s",

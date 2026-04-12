@@ -4,7 +4,7 @@ This file is procedural only. For architectural rationale, see `docs/ARCHITECTUR
 
 ## Scope
 
-- Project: Universal IIIF Downloader & Studio
+- Project: Scriptoria
 - Supported front ends: FastHTML/HTMX UI and CLI
 - Package layout: `src/`
 
@@ -65,8 +65,8 @@ This file is procedural only. For architectural rationale, see `docs/ARCHITECTUR
 
 - Always use project tools from `.venv/bin/` when available (do not assume global executables).
 - Install: `pip install -e .`
-- Run web UI: `iiif-studio` (or `python3 src/studio_app.py`)
-- Run CLI: `iiif-cli "<manifest-url>"`
+- Run web UI: `scriptoria` (or `python3 src/studio_app.py`)
+- Run CLI: `scriptoria-cli "<manifest-url>"`
 - Run tests: `pytest tests/`
 - Lint/fix: `ruff check . --fix`
 - Complexity check: `ruff check . --select C901`
@@ -93,7 +93,7 @@ Pre-PR sequence:
 ## Verification Loop (Before PR)
 
 Run a compact verification loop for every non-trivial change:
-1. Build/start sanity check for touched surface (`iiif-studio` or relevant CLI path).
+1. Build/start sanity check for touched surface (`scriptoria` or relevant CLI path).
 2. Tests: targeted tests first, then `pytest tests/`.
 3. Lint/complexity/format: Ruff checks.
 4. Security spot-check: traversal/path safety, input validation, and secrets.

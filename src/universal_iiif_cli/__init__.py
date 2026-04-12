@@ -1,4 +1,4 @@
-"""CLI package for Universal IIIF Downloader."""
+"""CLI package for Scriptoria."""
 
 from __future__ import annotations
 

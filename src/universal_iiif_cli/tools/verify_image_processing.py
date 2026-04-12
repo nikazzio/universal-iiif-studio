@@ -32,7 +32,7 @@ def main() -> None:
     region/size transform to ensure the processing pipeline produces a valid
     JPEG output.
     """
-    parser = argparse.ArgumentParser(description="Verify image processing flow for Universal IIIF downloads.")
+    parser = argparse.ArgumentParser(description="Verify image processing flow for Scriptoria downloads.")
     parser.add_argument("--library", default="Vaticana", help="Library folder inside downloads/")
     parser.add_argument("--doc", default="Urb.lat.1779", help="Document identifier (folder name)")
     parser.add_argument("--page", type=int, default=7, help="1-based page index to inspect")

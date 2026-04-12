@@ -330,8 +330,8 @@ def _sidebar(active_page: str = "") -> Nav:
                 Div(
                     Img(src="/assets/morte_tamburo.png", cls="w-10 h-10 rounded-full border border-white/30 shadow-sm"),
                     Div(
-                        Div("Universal IIIF", cls="text-xl font-bold text-white leading-tight"),
-                        Div("Downloader & Studio", cls="text-xs uppercase tracking-[0.3em] text-gray-400"),
+                        Div("Scriptoria", cls="text-xl font-bold text-white leading-tight"),
+                        Div("IIIF Research Workbench", cls="text-xs uppercase tracking-[0.3em] text-gray-400"),
                         cls="flex flex-col leading-tight sidebar-brand-text",
                     ),
                     cls="flex items-center gap-3",

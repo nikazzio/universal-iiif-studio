@@ -411,7 +411,7 @@ def settings_page(request):
     is_hx = request.headers.get("HX-Request") == "true"
     if is_hx:
         return settings_content()
-    return base_layout(title="Impostazioni - Universal IIIF", content=settings_content(), active_page="settings")
+    return base_layout(title="Impostazioni - Scriptoria", content=settings_content(), active_page="settings")
 
 
 async def save_settings(request):

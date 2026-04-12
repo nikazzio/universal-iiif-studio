@@ -1,6 +1,6 @@
 # User Guide
 
-Universal IIIF Downloader & Studio supports a single working flow:
+Scriptoria supports a single working flow:
 
 1. Find or resolve an item in `Discovery`.
 2. Save or download it into `Library`.
