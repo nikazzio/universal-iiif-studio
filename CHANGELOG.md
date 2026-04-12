@@ -30,6 +30,39 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.25.0 (2026-04-12)
+
+### Bug Fixes
+
+- Arrow nav via Mirador buttons, OCR refresh, shortcut hint, docs
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+- Move shortcuts hint to fixed badge in bottom-right corner
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+- Rewrite arrow navigation — dispatch SET_CANVAS only, let subscriber handle the rest
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+- Use global navigateToPage for arrow key navigation
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+### Documentation
+
+- Fix markdown table lint (MD060 spacing)
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+### Features
+
+- Add keyboard shortcuts for Studio viewer
+  ([#135](https://github.com/nikazzio/universal-iiif-studio/pull/135),
+  [`adf8e29`](https://github.com/nikazzio/universal-iiif-studio/commit/adf8e29d450bcc65c8a8d96eb13b5cc67a812025))
+
+
 ## v0.24.3 (2026-04-11)
 
 ### Bug Fixes
