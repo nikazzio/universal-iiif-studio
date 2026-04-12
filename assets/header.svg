@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#0e4d6e"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="text-fill" x1="0" y1="80" x2="0" y2="130" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#7dd3fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" rx="16" fill="url(#bg)"/>
+
+  <!-- Subtle top accent line -->
+  <rect x="100" y="0" width="600" height="1.5" rx="1" fill="url(#accent)" opacity="0.6"/>
+
+  <!-- Decorative corner marks -->
+  <path d="M 30 30 L 30 15 L 45 15" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity="0.4"/>
+  <path d="M 770 30 L 770 15 L 755 15" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity="0.4"/>
+  <path d="M 30 170 L 30 185 L 45 185" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity="0.4"/>
+  <path d="M 770 170 L 770 185 L 755 185" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity="0.4"/>
+
+  <!-- Main title -->
+  <text x="400" y="105" text-anchor="middle" font-family="'Segoe UI', 'SF Pro Display', system-ui, sans-serif" font-size="58" font-weight="300" letter-spacing="12" fill="url(#text-fill)">SCRIPTORIA</text>
+
+  <!-- Subtitle -->
+  <text x="400" y="145" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'JetBrains Mono', monospace" font-size="13" letter-spacing="6" fill="#67e8f9" opacity="0.7">DISCOVERY · LIBRARY · STUDIO · OUTPUT</text>
+
+  <!-- Bottom accent line -->
+  <rect x="100" y="198.5" width="600" height="1.5" rx="1" fill="url(#accent)" opacity="0.6"/>
+</svg>

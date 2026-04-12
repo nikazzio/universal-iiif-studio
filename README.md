@@ -1,152 +1,128 @@
-# Universal IIIF Downloader & Studio
-
 <p align="center">
-  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
-  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml"><img alt="Docs CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&style=for-the-badge&label=Docs"></a>
-  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/wiki-sync.yml"><img alt="Wiki Sync" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/wiki-sync.yml?branch=main&style=for-the-badge&label=Wiki"></a>
-  <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0f172a?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/Lint-Ruff-1d4ed8?style=for-the-badge&logo=ruff&logoColor=white"></a>
-  <a href="https://github.com/nikazzio/universal-iiif-studio/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=for-the-badge"></a>
-  <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-0b7285?style=for-the-badge"></a>
+  <img src="assets/header.svg" alt="Scriptoria" width="100%">
 </p>
 
 <p align="center">
-  <img
-    src="https://capsule-render.vercel.app/api?type=soft&color=0:0f172a,35:1d4ed8,70:0b7285,100:99f6e4&height=220&section=header&text=UNIVERSAL%20IIIF%20STUDIO&fontSize=52&fontColor=ffffff&animation=fadeIn&desc=Discovery%20%E2%80%A2%20Library%20%E2%80%A2%20Studio%20%E2%80%A2%20Output&descSize=20&descAlignY=68"
-    alt="Universal IIIF Studio capsule header"
-    width="100%"
-  >
+  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml"><img alt="Docs" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&label=Docs&style=flat-square"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square&logo=python&logoColor=white"></a>
+  <a href="https://github.com/nikazzio/universal-iiif-studio/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=flat-square&color=0b7285"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <pre>
-██╗   ██╗███╗   ██╗██╗██╗   ██╗███████╗██████╗ ███████╗ █████╗ ██╗
-██║   ██║████╗  ██║██║██║   ██║██╔════╝██╔══██╗██╔════╝██╔══██╗██║
-██║   ██║██╔██╗ ██║██║██║   ██║█████╗  ██████╔╝███████╗███████║██║
-██║   ██║██║╚██╗██║██║╚██╗ ██╔╝██╔══╝  ██╔══██╗╚════██║██╔══██║██║
-╚██████╔╝██║ ╚████║██║ ╚████╔╝ ███████╗██║  ██║███████║██║  ██║███████╗
- ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝
-  </pre>
+  <em>A research workbench for IIIF manuscripts — discover, download, study, export.</em>
 </p>
 
-Download IIIF material, keep local working copies under control, and move from discovery to study to export without leaving one toolchain.
+---
 
-## Why This Project
+> **Web** &nbsp;`iiif-studio` → [127.0.0.1:8000](http://127.0.0.1:8000) &emsp;·&emsp;
+> **CLI** &nbsp;`iiif-cli "<manifest-url>"`
 
-Universal IIIF Downloader & Studio combines two workflows that are usually split apart:
-
-- `iiif-studio` for Discovery, Library, Studio, and PDF export.
-- `iiif-cli` for direct manifest-driven downloads and scripting.
-- Shared provider resolution, storage, and configuration for both entrypoints.
-
-The project is optimized for manuscript-heavy research workflows where you need fast iteration, reproducible local storage, and enough control over remote IIIF servers to avoid brittle ad-hoc tooling.
-
-```mermaid
-flowchart LR
-    A[Discovery] --> B[Library]
-    B --> C[Studio]
-    C --> D[Output]
-    D --> E[PDF Export]
-
-    A -. resolve/search .-> X[(Provider Registry)]
-    B -. local assets .-> Y[(Vault + Downloads)]
-    C -. manifests/scans .-> Y
-    E -. profiles/cache/jobs .-> Y
-```
+<!-- TODO: add real screenshots
+<p align="center">
+  <img src="assets/screenshot-discovery.png" width="32%" alt="Discovery">
+  <img src="assets/screenshot-studio.png" width="32%" alt="Studio">
+  <img src="assets/screenshot-export.png" width="32%" alt="Export">
+</p>
+-->
 
 ## Quickstart
 
 ```bash
 git clone https://github.com/nikazzio/universal-iiif-studio.git
 cd universal-iiif-studio
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 iiif-studio
 ```
 
-Open `http://127.0.0.1:8000`.
+## How It Works
 
-CLI smoke test:
+```mermaid
+flowchart LR
+    A[🔍 Discovery] --> B[📚 Library]
+    B --> C[📖 Studio]
+    C --> D[📤 Output]
+
+    A -. search/resolve .-> R[(Provider Registry)]
+    B -. local assets .-> V[(Vault)]
+    C -. manifests .-> V
+    D -. export jobs .-> V
+```
+
+| Tab | What it does |
+|-----|-------------|
+| **Discovery** | Resolve URLs, IDs, shelfmarks. Search 10+ IIIF libraries. |
+| **Library** | Browse and manage your local manuscript collection. |
+| **Studio** | Document workspace — Mirador viewer, OCR transcription, page actions. |
+| **Output** | PDF inventory, thumbnail-level actions, export job queue. |
+
+## Key Features
+
+- **10+ IIIF providers** — Vatican, Gallica, Harvard, Bodleian, Heidelberg, LoC, Archive.org, Cambridge, e-codices, Institut
+- **Provider registry** — shared resolution for web UI and CLI
+- **PDF export profiles** — local and remote high-res modes with quality presets
+- **Centralized HTTP** — retries, exponential backoff, per-library network policies
+- **Local-first workflow** — reproducible storage, no cloud dependencies
+
+## CLI
 
 ```bash
 iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ```
 
-## Feature Highlights
+Any IIIF-compliant manifest URL works directly.
 
-- Shared provider registry for web and CLI resolution.
-- Search adapters for major IIIF sources plus direct manifest handling.
-- Local-first study workflow with Library, Studio workspace, and Output tab.
-- Remote preview vs local-only viewing modes in Mirador.
-- PDF profile system with local and temporary remote high-resolution export modes.
-- Centralized HTTP client with retries, backoff, and per-library policies.
+## Documentation
 
-## Run Modes
+| | |
+|---|---|
+| 📘 [User Guide](docs/DOCUMENTAZIONE.md) | 🏗️ [Architecture](docs/ARCHITECTURE.md) |
+| ⚙️ [Config Reference](docs/CONFIG_REFERENCE.md) | 🌐 [HTTP Client](docs/HTTP_CLIENT.md) |
+| 📖 [Wiki](docs/wiki/Home.md) | 🗂️ [All Docs](docs/index.md) |
 
-### Web Studio
-
-```bash
-iiif-studio
-```
-
-Alternative entrypoint:
+## Development
 
 ```bash
-python3 src/studio_app.py
+pytest tests/                    # tests
+ruff check . --fix               # lint
+ruff format .                    # format
+ruff check . --select C901       # complexity
 ```
-
-### CLI
-
-```bash
-iiif-cli "<manifest-url>"
-```
-
-## Documentation Map
-
-- [Documentation Hub](docs/index.md)
-- [User Guide](docs/DOCUMENTAZIONE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Configuration Reference](docs/CONFIG_REFERENCE.md)
-- [HTTP Client Notes](docs/HTTP_CLIENT.md)
-- [Wiki Maintenance](docs/WIKI_MAINTENANCE.md)
-- [GitHub Wiki Source](docs/wiki/Home.md)
-
-## Current Product Shape
-
-- `Discovery` resolves URLs, IDs, shelfmarks, and provider-specific free-text search.
-- `Library` is the canonical entrypoint for local items.
-- `Studio` opens a document workspace and falls back to a recent-work hub when no item is selected.
-- `Output` handles PDF inventory, thumbnail-level page actions, and export jobs.
 
 ## Troubleshooting
 
-`iiif-studio: command not found`
+<details>
+<summary><code>iiif-studio: command not found</code></summary>
 
 ```bash
-source .venv/bin/activate
-pip install -e .
+source .venv/bin/activate && pip install -e .
 ```
+</details>
 
-`ruff: command not found`
+<details>
+<summary><code>ruff: command not found</code></summary>
 
 ```bash
-source .venv/bin/activate
-pip install -r requirements-dev.txt
+source .venv/bin/activate && pip install -r requirements-dev.txt
 ```
+</details>
 
-Port `8000` already in use:
+<details>
+<summary>Port 8000 already in use</summary>
 
-- Stop the conflicting process and start `iiif-studio` again.
+Stop the conflicting process and restart `iiif-studio`.
+</details>
 
-Studio opens without a document:
+<details>
+<summary>Studio opens without a document</summary>
 
-- Expected behavior. Open an item from `Library`, or resume from the recent-work hub at `/studio`.
+Expected. Open an item from Library, or use the recent-work hub at `/studio`.
+</details>
 
-## Development Commands
+---
 
-```bash
-pytest tests/
-ruff check . --select C901
-ruff format .
-```
+<p align="center">
+  <sub>Built for manuscript-heavy research workflows · <a href="LICENSE">MIT</a></sub>
+</p>
