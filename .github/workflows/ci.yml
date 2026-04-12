@@ -82,7 +82,7 @@ jobs:
         pytest -v --tb=short -m "${{ matrix.marker }}" \
           -n auto \
           --cov=src --cov-report=xml:coverage-${{ matrix.lane }}.xml \
-          --cov-report=json:coverage.json --cov-report=term-missing
+          --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       if: always()
@@ -94,12 +94,13 @@ jobs:
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-    - name: Upload coverage artifact
-      if: matrix.lane == 'fast'
+    - name: Upload .coverage data
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-report
-        path: coverage.json
+        name: coverage-data-${{ matrix.lane }}
+        path: .coverage
+        include-hidden-files: true
 
   coverage-badge:
     needs: test
@@ -111,10 +112,32 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download coverage artifact
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install coverage
+      run: pip install coverage
+
+    - name: Download fast coverage data
       uses: actions/download-artifact@v4
       with:
-        name: coverage-report
+        name: coverage-data-fast
+        path: cov-fast
+
+    - name: Download slow coverage data
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage-data-slow
+        path: cov-slow
+
+    - name: Combine coverage and generate JSON
+      run: |
+        cp cov-fast/.coverage .coverage.fast
+        cp cov-slow/.coverage .coverage.slow
+        coverage combine .coverage.fast .coverage.slow
+        coverage json -o coverage.json --include="src/*"
 
     - name: Update coverage.json and push
       run: |
