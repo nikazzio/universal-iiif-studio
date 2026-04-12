@@ -2,7 +2,7 @@
 
 ## Overview
 
-Universal IIIF Downloader & Studio separates a Python UI shell from reusable core services:
+Scriptoria separates a Python UI shell from reusable core services:
 
 - `studio_ui/` renders the FastHTML and HTMX interface.
 - `universal_iiif_core/` owns provider resolution, storage, download orchestration, export logic, OCR services, and runtime policy.

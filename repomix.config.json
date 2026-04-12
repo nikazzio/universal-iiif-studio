@@ -8,7 +8,7 @@
     "style": "xml",
     "parsableStyle": true,
     "compress": true,
-    "headerText": "Universal IIIF Downloader & Studio (v0.24.1) – focus on studio_app.py, src/universal_iiif_core/, src/studio_ui/, src/universal_iiif_cli/, docs/, tests/, and AGENTS.md for workflow context; ignore assets/downloads, vault/log caches, and generated binaries.",
+    "headerText": "Scriptoria – focus on studio_app.py, src/universal_iiif_core/, src/studio_ui/, src/universal_iiif_cli/, docs/, tests/, and AGENTS.md for workflow context; ignore assets/downloads, vault/log caches, and generated binaries.",
     "instructionFilePath": "AGENTS.md",
     "fileSummary": true,
     "directoryStructure": true,

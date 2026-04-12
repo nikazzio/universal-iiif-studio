@@ -146,7 +146,7 @@ def _add_cover_page(  # noqa: C901
         color=(1, 1, 1),
     )
 
-    subtitle = "Universal IIIF Downloader · PDF Export"
+    subtitle = "Scriptoria · PDF Export"
     page.insert_text(
         fitz.Point(margin_x, 92),
         subtitle,
@@ -219,7 +219,7 @@ def _add_cover_page(  # noqa: C901
     # Footer
     page.insert_text(
         fitz.Point(margin_x, rect.height - 50),
-        f"Generato il {time.strftime('%Y-%m-%d')} · Universal IIIF Downloader",
+        f"Generato il {time.strftime('%Y-%m-%d')} · Scriptoria",
         fontsize=9.5,
         fontname="helv",
         color=(0.45, 0.45, 0.45),

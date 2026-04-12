@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "universal-iiif"
 version = "0.25.3"
-description = "Universal IIIF Downloader & Studio for working with IIIF manuscripts."
+description = "Scriptoria — a research workbench for IIIF manuscripts."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -28,8 +28,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nikazzio/universal-iiif-studio"
-Repository = "https://github.com/nikazzio/universal-iiif-studio"
+Homepage = "https://github.com/nikazzio/scriptoria"
+Repository = "https://github.com/nikazzio/scriptoria"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -147,5 +147,7 @@ insertion_flag = "<!-- version list -->"
 changelog_file = "CHANGELOG.md"
 
 [project.scripts]
+scriptoria = "studio_app:main"
+scriptoria-cli = "universal_iiif_cli.cli:main"
 iiif-studio = "studio_app:main"
 iiif-cli = "universal_iiif_cli.cli:main"

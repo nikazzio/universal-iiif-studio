@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&label=CI&style=flat-square"></a>
-  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml"><img alt="Docs" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&label=Docs&style=flat-square"></a>
+  <a href="https://github.com/nikazzio/scriptoria/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/scriptoria/ci.yml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/nikazzio/scriptoria/actions/workflows/docs-ci.yml"><img alt="Docs" src="https://img.shields.io/github/actions/workflow/status/nikazzio/scriptoria/docs-ci.yml?branch=main&label=Docs&style=flat-square"></a>
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square&logo=python&logoColor=white"></a>
-  <a href="https://github.com/nikazzio/universal-iiif-studio/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=flat-square&color=0b7285"></a>
+  <a href="https://github.com/nikazzio/scriptoria/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/scriptoria?display_name=tag&style=flat-square&color=0b7285"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square"></a>
 </p>
 
@@ -16,8 +16,8 @@
 
 ---
 
-> **Web** &nbsp;`iiif-studio` → [127.0.0.1:8000](http://127.0.0.1:8000) &emsp;·&emsp;
-> **CLI** &nbsp;`iiif-cli "<manifest-url>"`
+> **Web** &nbsp;`scriptoria` → [127.0.0.1:8000](http://127.0.0.1:8000) &emsp;·&emsp;
+> **CLI** &nbsp;`scriptoria-cli "<manifest-url>"`
 
 <!-- TODO: add real screenshots
 <p align="center">
@@ -30,11 +30,11 @@
 ## Quickstart
 
 ```bash
-git clone https://github.com/nikazzio/universal-iiif-studio.git
-cd universal-iiif-studio
+git clone https://github.com/nikazzio/scriptoria.git
+cd scriptoria
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-iiif-studio
+scriptoria
 ```
 
 ## How It Works
@@ -69,7 +69,7 @@ flowchart LR
 ## CLI
 
 ```bash
-iiif-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
+scriptoria-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ```
 
 Any IIIF-compliant manifest URL works directly.
@@ -94,7 +94,7 @@ ruff check . --select C901       # complexity
 ## Troubleshooting
 
 <details>
-<summary><code>iiif-studio: command not found</code></summary>
+<summary><code>scriptoria: command not found</code></summary>
 
 ```bash
 source .venv/bin/activate && pip install -e .
@@ -112,7 +112,7 @@ source .venv/bin/activate && pip install -r requirements-dev.txt
 <details>
 <summary>Port 8000 already in use</summary>
 
-Stop the conflicting process and restart `iiif-studio`.
+Stop the conflicting process and restart `scriptoria`.
 </details>
 
 <details>

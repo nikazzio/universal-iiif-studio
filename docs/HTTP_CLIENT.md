@@ -287,7 +287,7 @@ data = http_client.get_json(url, library_name="gallica", timeout=(20, 20))
 
 ## References
 
-- **Issue**: [#71 - Centralized HTTP Client](https://github.com/nikazzio/universal-iiif-studio/issues/71)
+- **Issue**: [#71 - Centralized HTTP Client](https://github.com/nikazzio/scriptoria/issues/71)
 - **Branch**: `feat/issue-71-centralized-http-client`
 - **Implementation Plan**: `~/.copilot/session-state/.../plan.md`
 - **Test Guide**: `~/.copilot/session-state/.../files/manual-tests.md`

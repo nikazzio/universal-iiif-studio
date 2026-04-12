@@ -5,12 +5,12 @@ Use this page for the shortest path to a working local install.
 ## Quick Start
 
 ```bash
-git clone https://github.com/nikazzio/universal-iiif-studio.git
-cd universal-iiif-studio
+git clone https://github.com/nikazzio/scriptoria.git
+cd scriptoria
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-iiif-studio
+scriptoria
 ```
 
 Open `http://127.0.0.1:8000`.
@@ -18,7 +18,7 @@ Open `http://127.0.0.1:8000`.
 ## CLI
 
 ```bash
-iiif-cli "<manifest-url>"
+scriptoria-cli "<manifest-url>"
 ```
 
 ## Main Navigation
@@ -33,5 +33,5 @@ If `/studio` is opened without `doc_id` and `library`, the app shows the recent-
 ## Read Next
 
 - [Documentation Hub](../index.md)
-- [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-- [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
+- [User Guide](https://github.com/nikazzio/scriptoria/blob/main/docs/DOCUMENTAZIONE.md)
+- [Configuration Reference](https://github.com/nikazzio/scriptoria/blob/main/docs/CONFIG_REFERENCE.md)

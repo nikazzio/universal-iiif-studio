@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 class UniversalIIIFError(Exception):
-    """Base exception for all Universal IIIF custom exceptions."""
+    """Base exception for all Scriptoria custom exceptions."""
 
 
 class NetworkError(UniversalIIIFError):

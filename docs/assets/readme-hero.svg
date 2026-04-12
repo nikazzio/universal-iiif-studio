@@ -1,5 +1,5 @@
 <svg width="1800" height="560" viewBox="0 0 1800 560" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Universal IIIF Downloader and Studio banner</title>
+  <title id="title">Scriptoria banner</title>
   <desc id="desc">Stylized banner showing the Discovery, Library, Studio, and Export workflow.</desc>
   <rect width="1800" height="560" rx="32" fill="#07111F"/>
   <rect x="18" y="18" width="1764" height="524" rx="24" fill="url(#bg)"/>
@@ -8,7 +8,7 @@
   <circle cx="1436" cy="144" r="76" fill="#D8F3FF" opacity="0.26"/>
   <rect x="94" y="80" width="152" height="32" rx="16" fill="#0F1B2D" stroke="#3ABFF8" stroke-width="1.5"/>
   <text x="116" y="101" fill="#9FE8FF" font-size="16" font-family="Arial, Helvetica, sans-serif" font-weight="700">IIIF WORKFLOW</text>
-  <text x="92" y="166" fill="white" font-size="62" font-family="Arial, Helvetica, sans-serif" font-weight="700">Universal IIIF Downloader &amp; Studio</text>
+  <text x="92" y="166" fill="white" font-size="62" font-family="Arial, Helvetica, sans-serif" font-weight="700">Scriptoria</text>
   <text x="92" y="216" fill="#C6D4E1" font-size="26" font-family="Arial, Helvetica, sans-serif">Discovery-to-export workflow for IIIF manuscripts, local study copies, and profile-driven PDF output.</text>
   <text x="92" y="258" fill="#8FB3C9" font-size="20" font-family="Arial, Helvetica, sans-serif">Shared provider resolution. Local-first study flow. Profile-driven output. Built for demanding source material.</text>
 

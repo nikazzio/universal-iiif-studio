@@ -1,4 +1,4 @@
-# Universal IIIF Downloader & Studio Wiki
+# Scriptoria Wiki
 
 This wiki is published from repository-managed source files under `docs/wiki/`.
 
@@ -13,9 +13,9 @@ This wiki is published from repository-managed source files under `docs/wiki/`.
 ## Canonical Repository Docs
 
 - [Documentation Hub](../index.md)
-- [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
-- [Architecture](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
-- [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
+- [User Guide](https://github.com/nikazzio/scriptoria/blob/main/docs/DOCUMENTAZIONE.md)
+- [Architecture](https://github.com/nikazzio/scriptoria/blob/main/docs/ARCHITECTURE.md)
+- [Configuration Reference](https://github.com/nikazzio/scriptoria/blob/main/docs/CONFIG_REFERENCE.md)
 
 ## Maintenance Model
 
