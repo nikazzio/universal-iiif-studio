@@ -121,10 +121,33 @@ def render_export_thumbnail_card(
         f"/api/studio/export/page_optimize?doc_id={encoded_doc}&library={encoded_lib}"
         f"&page={page}&thumb_page={thumb_page}&page_size={page_size}"
     )
+    # Consolidated progress: pick the active one for the primary indicator
+    active_progress_cls = (
+        hi_progress_cls
+        if hi_busy
+        else stitch_progress_cls
+        if stitch_busy
+        else opt_progress_cls
+        if opt_busy
+        else "studio-thumb-progress-idle"
+    )
+    active_progress_pct = (
+        hi_progress_percent
+        if hi_busy
+        else stitch_progress_percent
+        if stitch_busy
+        else opt_progress_percent
+        if opt_busy
+        else 0
+    )
+
     card_id = _thumbnail_card_id(page)
     card_attrs = {"id": card_id}
     if hx_swap_oob:
         card_attrs["hx_swap_oob"] = hx_swap_oob
+
+    menu_id = f"studio-thumb-menu-{page}"
+
     return Div(
         select_btn,
         Div(
@@ -151,35 +174,12 @@ def render_export_thumbnail_card(
             Div(
                 Button(
                     Div(
-                        Span("⬇ Hi", cls="studio-thumb-action-label text-[11px] font-semibold"),
-                        Span(
-                            "",
-                            id=f"studio-thumb-progress-hi-{page}",
-                            cls=f"studio-thumb-progress {hi_progress_cls}",
-                            style=f"--progress:{hi_progress_percent}%;",
-                            aria_hidden="true",
-                        ),
-                        cls="studio-thumb-action-inner",
-                    ),
-                    type="button",
-                    hx_post=highres_url,
-                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#studio-thumb-progress-hi-{page}",
-                    hx_target=f"#{card_id}",
-                    hx_swap="outerHTML",
-                    disabled=is_busy,
-                    cls="app-btn app-btn-neutral studio-thumb-highres-btn",
-                    data_page=str(page),
-                    title="Riscarica la pagina con fetch diretto max, senza fallback stitching",
-                ),
-                Button(
-                    Div(
-                        Span("🧩 Std", cls="studio-thumb-action-label text-[11px] font-semibold"),
+                        Span("⬇ Scarica", cls="studio-thumb-action-label text-[11px] font-semibold"),
                         Span(
                             "",
                             id=f"studio-thumb-progress-stitch-{page}",
-                            cls=f"studio-thumb-progress {stitch_progress_cls}",
-                            style=f"--progress:{stitch_progress_percent}%;",
+                            cls=f"studio-thumb-progress {active_progress_cls}",
+                            style=f"--progress:{active_progress_pct}%;",
                             aria_hidden="true",
                         ),
                         cls="studio-thumb-action-inner",
@@ -193,33 +193,73 @@ def render_export_thumbnail_card(
                     disabled=is_busy,
                     cls="app-btn app-btn-neutral studio-thumb-stitch-btn",
                     data_page=str(page),
-                    title=(
-                        "Riscarica la pagina usando la strategia standard del volume "
-                        "(es. 3000 -> 1740 -> max, con fallback stitch se serve)"
-                    ),
+                    title="Scarica con strategia standard del volume",
                 ),
-                Button(
-                    Div(
-                        Span("⚙ Opt", cls="studio-thumb-action-label text-[11px] font-semibold"),
-                        Span(
-                            "",
-                            id=f"studio-thumb-progress-opt-{page}",
-                            cls=f"studio-thumb-progress {opt_progress_cls}",
-                            style=f"--progress:{opt_progress_percent}%;",
-                            aria_hidden="true",
-                        ),
-                        cls="studio-thumb-action-inner",
+                Div(
+                    Button(
+                        "⋯",
+                        type="button",
+                        cls=("app-btn app-btn-neutral studio-thumb-menu-toggle text-sm font-bold px-2 py-1"),
+                        disabled=is_busy,
+                        data_menu=menu_id,
+                        aria_expanded="false",
+                        title="Altre azioni",
                     ),
-                    type="button",
-                    hx_post=optimize_url,
-                    hx_include="#studio-export-thumb-page,#studio-export-page-size",
-                    hx_indicator=f"#studio-thumb-progress-opt-{page}",
-                    hx_target=f"#{card_id}",
-                    hx_swap="outerHTML",
-                    disabled=is_busy,
-                    cls="app-btn app-btn-neutral studio-thumb-opt-btn",
-                    data_page=str(page),
-                    title="Ottimizza solo questa pagina",
+                    Div(
+                        Button(
+                            Div(
+                                Span("⬇ Hi-res", cls="text-[11px] font-semibold"),
+                                Span(
+                                    "",
+                                    id=f"studio-thumb-progress-hi-{page}",
+                                    cls=f"studio-thumb-progress {hi_progress_cls}",
+                                    style=f"--progress:{hi_progress_percent}%;",
+                                    aria_hidden="true",
+                                ),
+                                cls="flex items-center justify-between gap-2 w-full",
+                            ),
+                            type="button",
+                            hx_post=highres_url,
+                            hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                            hx_indicator=f"#studio-thumb-progress-hi-{page}",
+                            hx_target=f"#{card_id}",
+                            hx_swap="outerHTML",
+                            disabled=is_busy,
+                            cls="app-btn app-btn-neutral w-full text-left",
+                            data_page=str(page),
+                            title="Fetch diretto max risoluzione, senza fallback stitching",
+                        ),
+                        Button(
+                            Div(
+                                Span("⚙ Ottimizza", cls="text-[11px] font-semibold"),
+                                Span(
+                                    "",
+                                    id=f"studio-thumb-progress-opt-{page}",
+                                    cls=f"studio-thumb-progress {opt_progress_cls}",
+                                    style=f"--progress:{opt_progress_percent}%;",
+                                    aria_hidden="true",
+                                ),
+                                cls="flex items-center justify-between gap-2 w-full",
+                            ),
+                            type="button",
+                            hx_post=optimize_url,
+                            hx_include="#studio-export-thumb-page,#studio-export-page-size",
+                            hx_indicator=f"#studio-thumb-progress-opt-{page}",
+                            hx_target=f"#{card_id}",
+                            hx_swap="outerHTML",
+                            disabled=is_busy,
+                            cls="app-btn app-btn-neutral w-full text-left",
+                            data_page=str(page),
+                            title="Ottimizza solo questa pagina localmente",
+                        ),
+                        id=menu_id,
+                        cls=(
+                            "studio-thumb-dropdown hidden absolute right-0 top-full mt-1 z-20 "
+                            "flex flex-col gap-1 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 "
+                            "bg-white dark:bg-slate-900 shadow-lg min-w-[8rem]"
+                        ),
+                    ),
+                    cls="relative",
                 ),
                 cls="studio-thumb-action",
             ),

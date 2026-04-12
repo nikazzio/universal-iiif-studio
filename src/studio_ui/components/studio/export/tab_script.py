@@ -508,6 +508,43 @@ def _export_tab_script() -> Script:
                     applySelectionToVisible(panel);
                     syncSelectionStore(panel);
 
+                    // Dropdown menu toggle for per-card action menus
+                    panel.querySelectorAll('.studio-thumb-menu-toggle').forEach((toggle) => {
+                        if (toggle.dataset.bound === '1') return;
+                        toggle.dataset.bound = '1';
+                        toggle.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const menuId = toggle.dataset.menu;
+                            if (!menuId) return;
+                            const menu = document.getElementById(menuId);
+                            if (!menu) return;
+                            const isOpen = !menu.classList.contains('hidden');
+                            // Close all other menus first
+                            panel.querySelectorAll('.studio-thumb-dropdown').forEach((m) => {
+                                m.classList.add('hidden');
+                            });
+                            panel.querySelectorAll('.studio-thumb-menu-toggle').forEach((t) => {
+                                t.setAttribute('aria-expanded', 'false');
+                            });
+                            if (!isOpen) {
+                                menu.classList.remove('hidden');
+                                toggle.setAttribute('aria-expanded', 'true');
+                            }
+                        });
+                    });
+                    // Close dropdown on outside click
+                    if (!panel.dataset.menuClickBound) {
+                        panel.dataset.menuClickBound = '1';
+                        document.addEventListener('click', () => {
+                            panel.querySelectorAll('.studio-thumb-dropdown').forEach((m) => {
+                                m.classList.add('hidden');
+                            });
+                            panel.querySelectorAll('.studio-thumb-menu-toggle').forEach((t) => {
+                                t.setAttribute('aria-expanded', 'false');
+                            });
+                        });
+                    }
+
                     if (includeCoverCheckbox && includeCoverHidden && includeCoverCheckbox.dataset.bound !== '1') {
                         includeCoverCheckbox.dataset.bound = '1';
                         includeCoverCheckbox.addEventListener('change', () => {

@@ -736,15 +736,12 @@ def _style_tag():
         "gap: 0.35rem; width: 100%; min-width: 0; }\n",
         ".studio-thumb-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; "
         "white-space: nowrap; line-height: 1; }\n",
-        ".studio-thumb-highres-btn { white-space: nowrap; font-size: 0.72rem !important; "
-        "padding: 0.34rem 0.44rem !important; flex: 1 1 0; min-width: 0; justify-content: flex-start !important; "
-        "overflow: hidden; }\n",
         ".studio-thumb-stitch-btn { white-space: nowrap; font-size: 0.72rem !important; "
         "padding: 0.34rem 0.44rem !important; flex: 1 1 0; min-width: 0; justify-content: flex-start !important; "
         "overflow: hidden; }\n",
-        ".studio-thumb-opt-btn { white-space: nowrap; font-size: 0.72rem !important; "
-        "padding: 0.34rem 0.44rem !important; flex: 1 1 0; min-width: 0; justify-content: flex-start !important; "
-        "overflow: hidden; }\n",
+        ".studio-thumb-menu-toggle { font-size: 0.82rem !important; padding: 0.34rem 0.5rem !important; "
+        "line-height: 1; min-width: 0; }\n",
+        ".studio-thumb-dropdown { font-size: 0.72rem; }\n",
         ".studio-thumb-progress { --progress: 0%; width: 0.88rem; height: 0.88rem; border-radius: 999px; "
         "flex: 0 0 0.88rem; display: inline-block; transform-origin: 50% 50%; will-change: transform; "
         "background: conic-gradient(var(--app-accent) var(--progress), rgba(148, 163, 184, 0.28) 0); "
