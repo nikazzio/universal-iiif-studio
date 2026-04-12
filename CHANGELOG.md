@@ -30,6 +30,70 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.26.0 (2026-04-12)
+
+### Bug Fixes
+
+- **export**: Rework card buttons, toolbar, summary and review fixes
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+### Chores
+
+- Rebrand to Scriptoria (#144) ([#145](https://github.com/nikazzio/scriptoria/pull/145),
+  [`906b2a1`](https://github.com/nikazzio/scriptoria/commit/906b2a1df07cf904eb466a25598421cd1bcda9ca))
+
+### Documentation
+
+- Add Scriptoria name to tagline ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- ASCII art SVG header with cyan gradient for Scriptoria
+  ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- Fix MD060 table column style lint errors ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- Polish README visuals and fix markdown lint
+  ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- Rebrand README as Scriptoria with SVG header
+  ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- Refine README header and wiki source links
+  ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+- Refresh English docs and wiki publishing flow
+  ([#143](https://github.com/nikazzio/scriptoria/pull/143),
+  [`890aded`](https://github.com/nikazzio/scriptoria/commit/890aded1aa31c11c4420b4aa4944f013a45bc55c))
+
+### Features
+
+- **export**: Add anti-double-click on bulk optimize buttons
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+- **export**: Add selection toolbar to Images tab and loading indicator
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+- **export**: Compact card layout with dropdown menu
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+- **export**: Unified toolbar with selection + bulk actions
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+- **export**: UX redesign thumbnail cards and toolbar (#142)
+  ([#146](https://github.com/nikazzio/scriptoria/pull/146),
+  [`307b6ef`](https://github.com/nikazzio/scriptoria/commit/307b6ef633f7187317c0350ca8b5b7d3be28bebb))
+
+
 ## v0.25.3 (2026-04-12)
 
 ### Bug Fixes
