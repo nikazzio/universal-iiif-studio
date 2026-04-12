@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import types
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -15,6 +16,7 @@ from universal_iiif_core.resolvers.harvard import HarvardResolver
 from universal_iiif_core.resolvers.heidelberg import HeidelbergResolver
 from universal_iiif_core.resolvers.institut import InstitutResolver
 from universal_iiif_core.resolvers.loc import LOCResolver
+from universal_iiif_core.resolvers.models import SearchResult
 from universal_iiif_core.resolvers.oxford import OxfordResolver
 from universal_iiif_core.resolvers.vatican import VaticanResolver
 
@@ -75,8 +77,8 @@ class IIIFProvider:
         return self.resolver_cls()
 
     def supports_search(self) -> bool:
-        """Return True when the provider exposes a search strategy."""
-        return self.search_strategy is not None
+        """Return True when the provider has both a search strategy and a wired handler."""
+        return self.search_strategy is not None and self.search_fn is not None
 
     def supports_direct_resolution(self) -> bool:
         """Return True when the provider has a dedicated resolver."""
@@ -316,46 +318,27 @@ def resolve_with_provider(value: str, *, include_generic: bool = True) -> tuple[
 # Search handler construction (lazy-loaded from resolvers.discovery)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_MAX_RESULTS = 20
+from universal_iiif_core.discovery.search_adapters import (  # noqa: E402
+    _max_results_from_payload,
+    _page_from_payload,
+)
 
-SearchHandlerFn = Callable[[str, dict[str, Any]], list[Any]]
-
-
-def _max_results_from_payload(payload: dict[str, Any]) -> int:
-    """Read max_results from the adapter payload, falling back to the default."""
-    raw = payload.get("max_results")
-    if raw is not None:
-        try:
-            return max(1, min(int(raw), 50))
-        except (TypeError, ValueError):
-            pass
-    return _DEFAULT_MAX_RESULTS
+SearchHandlerFn = Callable[[str, dict[str, Any]], list[SearchResult]]
 
 
-def _page_from_payload(payload: dict[str, Any]) -> int:
-    """Read page number from the adapter payload (1-based, default 1)."""
-    raw = payload.get("page")
-    if raw is not None:
-        try:
-            return max(1, int(raw))
-        except (TypeError, ValueError):
-            pass
-    return 1
-
-
-def _make_standard_adapter(fn: Callable[..., list[Any]]) -> SearchHandlerFn:
+def _make_standard_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandlerFn:
     """Wrap a (query, max_results, page) search fn into the (query, payload) interface."""
 
-    def _adapter(query: str, payload: dict[str, Any]) -> list[Any]:
+    def _adapter(query: str, payload: dict[str, Any]) -> list[SearchResult]:
         return fn(query, _max_results_from_payload(payload), _page_from_payload(payload))
 
     return _adapter
 
 
-def _make_gallica_adapter(fn: Callable[..., list[Any]]) -> SearchHandlerFn:
+def _make_gallica_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandlerFn:
     """Wrap the Gallica smart_search fn, forwarding gallica_type_filter from payload."""
 
-    def _adapter(query: str, payload: dict[str, Any]) -> list[Any]:
+    def _adapter(query: str, payload: dict[str, Any]) -> list[SearchResult]:
         return fn(
             query,
             max_records=_max_results_from_payload(payload),
@@ -366,14 +349,15 @@ def _make_gallica_adapter(fn: Callable[..., list[Any]]) -> SearchHandlerFn:
     return _adapter
 
 
-_search_handlers_cache: dict[str, SearchHandlerFn] | None = None
+_search_handlers_cache: types.MappingProxyType[str, SearchHandlerFn] | None = None
 
 
-def get_search_handlers() -> dict[str, SearchHandlerFn]:
+def get_search_handlers() -> types.MappingProxyType[str, SearchHandlerFn]:
     """Build the search-strategy dispatch dict from the provider registry.
 
     Search functions are lazy-imported from ``resolvers.discovery`` to avoid
     circular imports at module load time.  The result is cached after first call.
+    Returns a read-only mapping to prevent accidental mutation of the cache.
     """
     global _search_handlers_cache  # noqa: PLW0603
     if _search_handlers_cache is not None:
@@ -385,14 +369,23 @@ def get_search_handlers() -> dict[str, SearchHandlerFn]:
     for provider in PROVIDERS:
         if not provider.search_strategy or not provider.search_fn:
             continue
-        raw_fn = getattr(_disc, provider.search_fn)
+        raw_fn = getattr(_disc, provider.search_fn, None)
+        if raw_fn is None or not callable(raw_fn):
+            logger.warning(
+                "Provider %s declares search_fn=%r (strategy=%r) "
+                "but no matching callable found in resolvers.discovery — skipping",
+                provider.key,
+                provider.search_fn,
+                provider.search_strategy,
+            )
+            continue
         if provider.search_strategy == "gallica":
             handlers[provider.search_strategy] = _make_gallica_adapter(raw_fn)
         else:
             handlers[provider.search_strategy] = _make_standard_adapter(raw_fn)
 
-    _search_handlers_cache = handlers
-    return handlers
+    _search_handlers_cache = types.MappingProxyType(handlers)
+    return _search_handlers_cache
 
 
 __all__ = [
