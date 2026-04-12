@@ -32,6 +32,6 @@ If `/studio` is opened without `doc_id` and `library`, the app shows the recent-
 
 ## Read Next
 
-- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)
+- [Documentation Hub](../index.md)
 - [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
 - [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)

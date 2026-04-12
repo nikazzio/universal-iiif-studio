@@ -11,22 +11,23 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/readme-hero.svg" alt="Universal IIIF Downloader &amp; Studio hero" width="1200">
+  <img
+    src="https://capsule-render.vercel.app/api?type=soft&color=0:0f172a,35:1d4ed8,70:0b7285,100:99f6e4&height=220&section=header&text=UNIVERSAL%20IIIF%20STUDIO&fontSize=52&fontColor=ffffff&animation=fadeIn&desc=Discovery%20%E2%80%A2%20Library%20%E2%80%A2%20Studio%20%E2%80%A2%20Output&descSize=20&descAlignY=68"
+    alt="Universal IIIF Studio capsule header"
+    width="100%"
+  >
 </p>
 
-```text
- _   _       _                          _   ___ ___ ___ _____
-| | | |_ __ (_)_   _____ _ __ ___  __ _| | |_ _|_ _|_ _|  ___|
-| | | | '_ \| \ \ / / _ \ '__/ __|/ _` | |  | | | | | || |_
-| |_| | | | | |\ V /  __/ |  \__ \ (_| | |  | | | | | ||  _|
- \___/|_| |_|_| \_/ \___|_|  |___/\__,_|_| |___|___|___|_|
-
- ____                      _                 _              _ _
-|  _ \  _____      ___ __ | | ___   __ _  __| | ___ _ __   | (_)_ __   ___ _ __
-| | | |/ _ \ \ /\ / / '_ \| |/ _ \ / _` |/ _` |/ _ \ '__|  | | | '_ \ / _ \ '__|
-| |_| | (_) \ V  V /| | | | | (_) | (_| | (_| |  __/ |     | | | | | |  __/ |
-|____/ \___/ \_/\_/ |_| |_|_|\___/ \__,_|\__,_|\___|_|     |_|_|_| |_|\___|_|
-```
+<p align="center">
+  <pre>
+██╗   ██╗███╗   ██╗██╗██╗   ██╗███████╗██████╗ ███████╗ █████╗ ██╗
+██║   ██║████╗  ██║██║██║   ██║██╔════╝██╔══██╗██╔════╝██╔══██╗██║
+██║   ██║██╔██╗ ██║██║██║   ██║█████╗  ██████╔╝███████╗███████║██║
+██║   ██║██║╚██╗██║██║╚██╗ ██╔╝██╔══╝  ██╔══██╗╚════██║██╔══██║██║
+╚██████╔╝██║ ╚████║██║ ╚████╔╝ ███████╗██║  ██║███████║██║  ██║███████╗
+ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝
+  </pre>
+</p>
 
 Download IIIF material, keep local working copies under control, and move from discovery to study to export without leaving one toolchain.
 

@@ -69,4 +69,4 @@ Always edit source pages in `docs/wiki/` inside the main repository. The GitHub 
 
 - [Studio Workflow](Studio-Workflow.md)
 - [Configuration](Configuration.md)
-- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)
+- [Documentation Hub](../index.md)

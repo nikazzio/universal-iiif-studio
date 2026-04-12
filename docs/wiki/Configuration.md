@@ -39,6 +39,6 @@ Runtime settings live in `config.json` and are resolved through `universal_iiif_
 
 ## Canonical References
 
-- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)
+- [Documentation Hub](../index.md)
 - [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
 - [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)

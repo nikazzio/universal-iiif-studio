@@ -12,7 +12,7 @@ This wiki is published from repository-managed source files under `docs/wiki/`.
 
 ## Canonical Repository Docs
 
-- [Documentation Hub](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/index.md)
+- [Documentation Hub](../index.md)
 - [User Guide](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/DOCUMENTAZIONE.md)
 - [Architecture](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/ARCHITECTURE.md)
 - [Configuration Reference](https://github.com/nikazzio/universal-iiif-studio/blob/main/docs/CONFIG_REFERENCE.md)
