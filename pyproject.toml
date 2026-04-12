@@ -110,6 +110,25 @@ markers = [
     "unit: fast unit tests without external dependencies",
 ]
 
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/universal_iiif.egg-info/*",
+    "src/*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.json]
+output = "coverage.json"
+
 [tool.pyright]
 include = ["src"]
 exclude = ["**/node_modules", "**/__pycache__"]

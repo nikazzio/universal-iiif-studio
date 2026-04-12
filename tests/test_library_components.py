@@ -144,3 +144,17 @@ def test_card_action_flags_enable_download_full_only_for_remote_state():
     assert _card_action_flags({"asset_state": "partial"}).get("download_full") is False
     assert _card_action_flags({"asset_state": "complete"}).get("download_full") is False
     assert _card_action_flags({"asset_state": "error"}).get("download_full") is False
+
+
+def test_base_layout_bootstraps_library_filter_navigation():
+    """Layout should pre-resolve Library URL from persisted filters to avoid flash."""
+    from fasthtml.common import Div
+
+    from studio_ui.components.layout import base_layout
+
+    rendered = repr(base_layout("Test", Div("content"), active_page="library"))
+    assert "ui.library.filters.v1" in rendered
+    assert "window.location.replace('/library?' + query)" in rendered
+    assert 'data-nav-key="library"' in rendered
+    assert 'data-nav-key="studio"' in rendered
+    assert "new URL(target || '', window.location.origin).pathname" in rendered

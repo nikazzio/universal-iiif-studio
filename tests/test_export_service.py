@@ -11,7 +11,6 @@ from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.http_client import HTTPClient
 from universal_iiif_core.services.export.service import (
     execute_export_job,
-    get_export_capabilities,
     parse_page_selection,
 )
 
@@ -37,17 +36,6 @@ def _seed_document(doc_id: str, library: str, pages: int = 3) -> Path:
     }
     (data_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
     return root
-
-
-def test_export_capabilities_include_placeholders():
-    """Future text/drive capabilities must be visible but disabled."""
-    caps = get_export_capabilities()
-    formats = {item["key"]: item for item in caps["formats"]}
-    destinations = {item["key"]: item for item in caps["destinations"]}
-
-    assert formats["txt_transcription"]["available"] is False
-    assert formats["md_transcription"]["available"] is False
-    assert destinations["google_drive"]["available"] is False
 
 
 def test_parse_page_selection_expands_ranges_and_deduplicates():

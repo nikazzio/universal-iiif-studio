@@ -1537,3 +1537,67 @@ def test_export_thumbs_show_iiif_and_verified_dimensions_separately(tmp_path, mo
         assert "Dimensione verificata via download diretto: 3000x3931" in rendered
     finally:
         cm.set_downloads_dir(str(old_downloads))
+
+
+def test_setup_studio_routes_registers_expected_partials_only():
+    """Studio routes should keep PR3 partials limited to tabs/history/export."""
+    from studio_ui.routes.studio import setup_studio_routes
+
+    class _FakeApp:
+        def __init__(self) -> None:
+            self.routes: list[tuple[str, str]] = []
+
+        def get(self, path: str):
+            def _decorator(_handler):
+                self.routes.append(("GET", path))
+                return _handler
+
+            return _decorator
+
+        def post(self, path: str):
+            def _decorator(_handler):
+                self.routes.append(("POST", path))
+                return _handler
+
+            return _decorator
+
+        def delete(self, path: str):
+            def _decorator(_handler):
+                self.routes.append(("DELETE", path))
+                return _handler
+
+            return _decorator
+
+    app = _FakeApp()
+    setup_studio_routes(app)
+    get_paths = {path for method, path in app.routes if method == "GET"}
+
+    assert "/studio/partial/tabs" in get_paths
+    assert "/studio/partial/history" in get_paths
+    assert "/studio/partial/export" in get_paths
+    assert "/studio/partial/viewer" not in get_paths
+    assert "/studio/partial/availability" not in get_paths
+
+
+def test_window_config_includes_manifest_url():
+    """Mirador helper should embed the manifest URL in the config."""
+    import json
+
+    from studio_ui.common.mirador import window_config_json
+
+    manifest_url = "https://example.org/iiif/manifest.json"
+    cfg = json.loads(window_config_json(manifest_url))
+    assert cfg["manifestId"] == manifest_url
+
+
+def test_mirador_viewer_escapes_js_bootstrap_values():
+    """Viewer bootstrap should JSON-escape JS string literals derived from inputs."""
+    import json
+
+    from studio_ui.components.viewer import mirador_viewer
+
+    manifest_url = "https://example.org/iiif/ma'nifest\\test.json"
+    container_id = "viewer'one\\two"
+    rendered = "".join(str(part) for part in mirador_viewer(manifest_url, container_id))
+    assert f"const containerId = {json.dumps(container_id)};" in rendered
+    assert f"const manifestId = {json.dumps(manifest_url)};" in rendered

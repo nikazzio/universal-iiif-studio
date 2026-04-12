@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/nikazzio/scriptoria/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/scriptoria/ci.yml?branch=main&label=CI&style=flat-square"></a>
   <a href="https://github.com/nikazzio/scriptoria/actions/workflows/docs-ci.yml"><img alt="Docs" src="https://img.shields.io/github/actions/workflow/status/nikazzio/scriptoria/docs-ci.yml?branch=main&label=Docs&style=flat-square"></a>
+  <a href="https://github.com/nikazzio/scriptoria/actions/workflows/ci.yml"><img alt="Coverage" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnikazzio%2Fscriptoria%2Fmain%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage&style=flat-square&color=44cc11&logo=pytest"></a>
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square&logo=python&logoColor=white"></a>
   <a href="https://github.com/nikazzio/scriptoria/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/scriptoria?display_name=tag&style=flat-square&color=0b7285"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square"></a>
