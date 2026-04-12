@@ -28,7 +28,7 @@ def _seed_document(doc_id: str, library: str, pages: int = 3) -> Path:
 
     for idx in range(pages):
         image_path = scans / f"pag_{idx:04d}.jpg"
-        Image.new("RGB", (800, 1200), (250, 250, 250)).save(image_path, format="JPEG", quality=85)
+        Image.new("RGB", (100, 150), (250, 250, 250)).save(image_path, format="JPEG", quality=50)
 
     metadata = {
         "title": f"Document {doc_id}",
@@ -115,7 +115,7 @@ def test_execute_export_job_remote_temp_works_without_local_scans(monkeypatch):
 
     def _fake_fetch_highres_page_image(_manifest, page, out_file, iiif_quality="default"):
         _ = iiif_quality
-        Image.new("RGB", (1200, 1800), (240, 240, 240)).save(out_file, format="JPEG", quality=88)
+        Image.new("RGB", (120, 180), (240, 240, 240)).save(out_file, format="JPEG", quality=50)
         return True, f"page {page} ok"
 
     monkeypatch.setattr(

@@ -465,7 +465,7 @@ def test_studio_initial_render_keeps_export_lazy():
     scans_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+    Image.new("RGB", (60, 90), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
     (data_dir / "manifest.json").write_text(
         json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
         encoding="utf-8",
@@ -504,7 +504,7 @@ def test_export_thumbs_endpoint_returns_requested_slice():
     data_dir.mkdir(parents=True, exist_ok=True)
 
     for idx in range(5):
-        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
     (data_dir / "manifest.json").write_text(
         json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
         encoding="utf-8",
@@ -541,7 +541,7 @@ def test_export_panel_uses_submit_trigger_and_card_based_thumbnail_selection():
     data_dir.mkdir(parents=True, exist_ok=True)
 
     for idx in range(2):
-        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
     (data_dir / "manifest.json").write_text(
         json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
         encoding="utf-8",
@@ -619,7 +619,7 @@ def test_studio_optimize_scans_updates_metadata_and_feedback(tmp_path):
         scans.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
         scan_path = scans / "pag_0000.jpg"
-        Image.new("RGB", (2400, 1800), (210, 210, 210)).save(scan_path, format="JPEG", quality=95)
+        Image.new("RGB", (120, 90), (210, 210, 210)).save(scan_path, format="JPEG", quality=95)
         before_size = scan_path.stat().st_size
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}), encoding="utf-8"
@@ -682,7 +682,7 @@ def test_studio_export_page_highres_button_has_feedback_hooks(tmp_path):
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}), encoding="utf-8"
         )
@@ -724,8 +724,8 @@ def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_pa
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1800, 1400), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG", quality=94)
-        Image.new("RGB", (1800, 1400), (210, 210, 210)).save(scans_dir / "pag_0001.jpg", format="JPEG", quality=94)
+        Image.new("RGB", (90, 70), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG", quality=94)
+        Image.new("RGB", (90, 70), (210, 210, 210)).save(scans_dir / "pag_0001.jpg", format="JPEG", quality=94)
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -774,7 +774,7 @@ def test_studio_highres_queue_persists_page_job_without_toast(tmp_path, monkeypa
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -827,7 +827,7 @@ def test_studio_stitch_queue_persists_page_job_without_toast(tmp_path, monkeypat
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -879,7 +879,7 @@ def test_studio_highres_completed_updates_page_source_pref(tmp_path):
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -922,7 +922,7 @@ def test_studio_stitch_completed_updates_page_source_pref(tmp_path):
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (600, 900), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -961,7 +961,7 @@ def test_studio_export_live_state_returns_restructured_panel():
     data_dir = doc_root / "data"
     scans_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+    Image.new("RGB", (60, 90), (250, 250, 250)).save(scans_dir / "pag_0000.jpg", format="JPEG")
     (data_dir / "manifest.json").write_text(
         json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
         encoding="utf-8",
@@ -997,7 +997,7 @@ def test_export_thumbs_endpoint_preserves_highres_feedback_on_pagination(tmp_pat
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
         for idx in range(4):
-            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+            Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1059,7 +1059,7 @@ def test_export_thumbs_done_state_does_not_force_remote_probe_every_refresh(tmp_
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1108,7 +1108,7 @@ def test_export_thumbs_poller_disables_when_no_active_page_jobs(tmp_path):
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1173,7 +1173,7 @@ def test_export_thumbs_live_returns_oob_card_updates_only(tmp_path, monkeypatch)
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
         for idx in range(2):
-            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+            Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}, {"id": "https://example.org/canvas/2"}]}),
             encoding="utf-8",
@@ -1229,7 +1229,7 @@ def test_export_tab_does_not_show_stitch_badge_when_stats_mark_tile_stitch(tmp_p
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1200, 1600), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 80), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1275,7 +1275,7 @@ def test_export_thumbs_marks_single_green_by_current_image_source(tmp_path):
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
         for idx in range(2):
-            Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+            Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1346,7 +1346,7 @@ def test_export_thumbs_switches_green_from_opt_to_hi_after_new_highres_done(tmp_
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1401,7 +1401,7 @@ def test_export_thumbs_preserves_running_highres_when_preferred_source_is_highre
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (1600, 1200), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (80, 60), (220, 220, 220)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1451,7 +1451,7 @@ def test_export_thumb_page_size_preference_is_persisted_per_item():
     data_dir.mkdir(parents=True, exist_ok=True)
 
     for idx in range(4):
-        Image.new("RGB", (600, 900), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
+        Image.new("RGB", (60, 90), (250, 250, 250)).save(scans_dir / f"pag_{idx:04d}.jpg", format="JPEG")
     (data_dir / "manifest.json").write_text(
         json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
         encoding="utf-8",
@@ -1493,7 +1493,7 @@ def test_export_thumbs_show_iiif_and_verified_dimensions_separately(tmp_path, mo
         data_dir = doc_root / "data"
         scans_dir.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (3000, 3931), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
+        Image.new("RGB", (60, 79), (240, 240, 240)).save(scans_dir / "pag_0000.jpg", format="JPEG")
         (data_dir / "manifest.json").write_text(
             json.dumps({"items": [{"id": "https://example.org/canvas/1"}]}),
             encoding="utf-8",
@@ -1532,7 +1532,7 @@ def test_export_thumbs_show_iiif_and_verified_dimensions_separately(tmp_path, mo
 
         panel = studio_handlers.get_studio_export_thumbs(doc_id=doc_id, library=library, thumb_page=1, page_size=24)
         rendered = repr(panel)
-        assert "Locale 3000x3931" in rendered
+        assert "Locale 60x79" in rendered
         assert "Remote 1447x1896" in rendered
         assert "Dimensione verificata via download diretto: 3000x3931" in rendered
     finally:

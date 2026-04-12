@@ -10,3 +10,4 @@ pyright
 pytest
 pytest-timeout
 pytest-cov
+pytest-xdist
