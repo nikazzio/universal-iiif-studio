@@ -137,15 +137,15 @@ def get_manifest_details(manifest_url: str) -> SearchResult | None:
     if not url:
         return None
 
-    try:
-        manifest = get_http_client().get_json(url)
-        if not manifest:
-            raise ValueError("Empty manifest")
+    manifest = get_http_client().get_json(url)
+    if not manifest:
+        return None
 
+    try:
         doc_id = manifest.get("id") if isinstance(manifest, dict) else None
         return IIIFManifestParser.parse_manifest(manifest, url, doc_id=doc_id)
     except (ValueError, Exception) as exc:
-        logger.error("Failed to fetch/parse manifest %r: %s", url, exc, exc_info=True)
+        logger.error("Failed to parse manifest %r: %s", url, exc, exc_info=True)
         return None
 
 

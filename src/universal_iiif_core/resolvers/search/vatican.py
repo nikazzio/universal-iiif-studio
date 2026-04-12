@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final
+from typing import Any, Final
 
 import requests
 
@@ -210,24 +210,49 @@ def _build_vatican_html_result(chunk: str) -> SearchResult | None:
     }
 
 
+def _extract_label_str(label: Any, fallback: str = "") -> str:
+    """Normalise a IIIF label (string, list, or v3 language map) to a plain string."""
+    if isinstance(label, str):
+        return label
+    if isinstance(label, list):
+        return str(label[0]) if label else fallback
+    if isinstance(label, dict):
+        for vals in label.values():
+            if isinstance(vals, list) and vals:
+                return str(vals[0])
+            if isinstance(vals, str):
+                return vals
+    return fallback
+
+
 def _verify_vatican_manifest(manifest_url: str, ms_id: str, resolver) -> SearchResult | None:
     """Verify a Vatican manifest exists and return SearchResult if valid."""
     try:
-        manifest = get_http_client().get_json(manifest_url)
+        response = get_http_client().get(manifest_url)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+
+        try:
+            manifest = response.json()
+        except ValueError:
+            return None
+
         if not manifest:
             return None
 
-        label = manifest.get("label", ms_id)
-        if isinstance(label, list):
-            label = label[0] if label else ms_id
+        label = _extract_label_str(manifest.get("label", ms_id), fallback=ms_id)
 
         meta_map: dict[str, str] = {}
         for item in manifest.get("metadata", []):
-            lbl = item.get("label", "")
+            lbl = _extract_label_str(item.get("label", ""))
             val = item.get("value", "")
-            if isinstance(val, list):
+            if isinstance(val, dict):
+                val = _extract_label_str(val)
+            elif isinstance(val, list):
                 val = ", ".join(str(v) for v in val)
-            meta_map[lbl.lower()] = str(val)
+            if isinstance(lbl, str) and lbl:
+                meta_map[lbl.lower()] = str(val)
 
         thumb = manifest.get("thumbnail", {})
         thumb_url = thumb.get("@id") if isinstance(thumb, dict) else None

@@ -70,9 +70,11 @@ def get_search_http_client() -> HTTPClient:
 
 
 def clean_html_text(value: str) -> str:
-    """Strip HTML tags and collapse whitespace from *value*."""
+    """Strip HTML tags, unescape entities, and collapse whitespace from *value*."""
+    from html import unescape
+
     text = _HTML_TAG_RE.sub(" ", value)
-    text = _SPACE_RE.sub(" ", text).strip()
+    text = _SPACE_RE.sub(" ", unescape(text)).strip()
     text = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
     return _SPACE_BEFORE_SINGLE_PERIOD_RE.sub(".", text)
 

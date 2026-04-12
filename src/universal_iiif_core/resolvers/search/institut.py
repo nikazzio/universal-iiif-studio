@@ -84,20 +84,21 @@ def _fetch_institut_manifest_result(doc_id: str, fallback_title: str, resolver: 
     if not manifest_url:
         return None
 
-    try:
-        manifest = get_http_client().get_json(manifest_url)
-        if not manifest:
-            raise ValueError("Empty manifest")
-    except (ValueError, Exception) as exc:
-        logger.debug("Institut manifest fetch failed for %s: %s", doc_id, exc, exc_info=True)
+    manifest = get_http_client().get_json(manifest_url)
+    if not manifest:
         return _fallback_institut_result(doc_id, fallback_title, manifest_url)
 
-    parsed = IIIFManifestParser.parse_manifest(
-        manifest,
-        manifest_url,
-        library="Institut de France",
-        doc_id=doc_id,
-    )
+    try:
+        parsed = IIIFManifestParser.parse_manifest(
+            manifest,
+            manifest_url,
+            library="Institut de France",
+            doc_id=doc_id,
+        )
+    except ValueError as exc:
+        logger.debug("Institut manifest parse failed for %s: %s", doc_id, exc, exc_info=True)
+        return _fallback_institut_result(doc_id, fallback_title, manifest_url)
+
     if not parsed:
         return _fallback_institut_result(doc_id, fallback_title, manifest_url)
 
