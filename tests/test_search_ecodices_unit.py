@@ -3,6 +3,7 @@ from __future__ import annotations
 import requests
 
 from universal_iiif_core.resolvers import discovery
+from universal_iiif_core.resolvers.search import _common as _search_common
 
 
 class _Resp:
@@ -22,7 +23,7 @@ def _patch_http_client(monkeypatch, fake_get):
         def get(self, *args, **kwargs):
             return fake_get(*args, **kwargs)
 
-    monkeypatch.setattr(discovery, "_http_client_cache", _MockClient())
+    monkeypatch.setattr(_search_common, "_http_client_cache", _MockClient())
 
 
 def test_search_ecodices_blank_input_returns_empty():

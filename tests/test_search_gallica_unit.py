@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from universal_iiif_core.resolvers import discovery
 from universal_iiif_core.resolvers.discovery import search_gallica
+from universal_iiif_core.resolvers.search import _common as _search_common
 
 
 class _DummyResp:
@@ -21,7 +21,7 @@ def _patch_http_client(monkeypatch, fake_get):
         def get(self, *args, **kwargs):
             return fake_get(*args, **kwargs)
 
-    monkeypatch.setattr(discovery, "_http_client_cache", _MockClient())
+    monkeypatch.setattr(_search_common, "_http_client_cache", _MockClient())
 
 
 def test_search_gallica_parsing(monkeypatch):

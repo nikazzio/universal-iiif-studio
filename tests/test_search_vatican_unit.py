@@ -1,4 +1,5 @@
 from universal_iiif_core.resolvers import discovery
+from universal_iiif_core.resolvers.search import vatican as _vatican_mod
 
 
 def _result_for(ms_id: str):
@@ -23,7 +24,7 @@ def test_search_vatican_uses_normalized_direct_candidate(monkeypatch):
     """Ensure normalized shelfmark is checked first and returned when available."""
     calls: list[str] = []
 
-    monkeypatch.setattr(discovery, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(_vatican_mod, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
     monkeypatch.setattr("universal_iiif_core.resolvers.vatican.normalize_shelfmark", lambda _q: "MSS_Urb.lat.123")
     monkeypatch.setattr("universal_iiif_core.resolvers.vatican.VaticanResolver", lambda: object())
 
@@ -31,7 +32,7 @@ def test_search_vatican_uses_normalized_direct_candidate(monkeypatch):
         calls.append(ms_id)
         return _result_for(ms_id) if ms_id == "MSS_Urb.lat.123" else None
 
-    monkeypatch.setattr(discovery, "_verify_vatican_manifest", fake_verify)
+    monkeypatch.setattr(_vatican_mod, "_verify_vatican_manifest", fake_verify)
 
     results = discovery.search_vatican("Urb lat 123", max_results=5)
 
@@ -53,7 +54,7 @@ def test_search_vatican_numeric_candidates_respect_max_results(monkeypatch):
         calls.append(ms_id)
         return _result_for(ms_id)
 
-    monkeypatch.setattr(discovery, "_verify_vatican_manifest", fake_verify)
+    monkeypatch.setattr(_vatican_mod, "_verify_vatican_manifest", fake_verify)
 
     results = discovery.search_vatican("1223", max_results=2)
 
@@ -65,7 +66,7 @@ def test_search_vatican_text_variants_when_prefix_missing(monkeypatch):
     """Ensure textual input with number generates prefix-based candidates."""
     calls: list[str] = []
 
-    monkeypatch.setattr(discovery, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(_vatican_mod, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
 
     def raise_normalize(_q):
         raise ValueError("cannot normalize")
@@ -77,7 +78,7 @@ def test_search_vatican_text_variants_when_prefix_missing(monkeypatch):
         calls.append(ms_id)
         return _result_for(ms_id) if ms_id == "MSS_Urb.lat.77" else None
 
-    monkeypatch.setattr(discovery, "_verify_vatican_manifest", fake_verify)
+    monkeypatch.setattr(_vatican_mod, "_verify_vatican_manifest", fake_verify)
 
     results = discovery.search_vatican("manoscritto 77", max_results=5)
 
@@ -89,7 +90,7 @@ def test_search_vatican_skips_text_variants_when_prefix_already_present(monkeypa
     """Ensure prefixed inputs do not produce duplicate text-variant candidates."""
     calls: list[str] = []
 
-    monkeypatch.setattr(discovery, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(_vatican_mod, "_search_vatican_official_site", lambda *_args, **_kwargs: [])
 
     def raise_normalize(_q):
         raise ValueError("cannot normalize")
@@ -101,7 +102,7 @@ def test_search_vatican_skips_text_variants_when_prefix_already_present(monkeypa
         calls.append(ms_id)
         return None
 
-    monkeypatch.setattr(discovery, "_verify_vatican_manifest", fake_verify)
+    monkeypatch.setattr(_vatican_mod, "_verify_vatican_manifest", fake_verify)
 
     results = discovery.search_vatican("Vat.lat.77", max_results=5)
 
@@ -117,9 +118,9 @@ def test_search_vatican_uses_official_text_search_for_free_text(monkeypatch):
 
     monkeypatch.setattr("universal_iiif_core.resolvers.vatican.normalize_shelfmark", raise_normalize)
     monkeypatch.setattr("universal_iiif_core.resolvers.vatican.VaticanResolver", lambda: object())
-    monkeypatch.setattr(discovery, "_verify_vatican_manifest", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_vatican_mod, "_verify_vatican_manifest", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        discovery,
+        _vatican_mod,
         "_search_vatican_official_site",
         lambda query, max_results=5: [
             {
