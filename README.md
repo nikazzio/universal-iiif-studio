@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <em>A research workbench for IIIF manuscripts — discover, download, study, export.</em>
+  <strong>Scriptoria</strong> — a research workbench for IIIF manuscripts.
 </p>
 
 ---
