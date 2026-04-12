@@ -34,7 +34,7 @@ Studio supports **two viewing modes** for the Mirador viewer:
 Press `?` in Studio to see the shortcuts overlay. Summary:
 
 | Key | Action |
-|-----|--------|
+| --- | ------ |
 | `←` / `→` | Previous / next page |
 | `Ctrl+S` / `⌘+S` | Save transcription |
 | `Ctrl+Enter` | Run OCR on current page |
