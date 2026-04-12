@@ -67,10 +67,7 @@ def _render_export_pages_subtab(
     optimized_pages = int(feedback.get("optimized_pages") or 0)
     saved_bytes = int(feedback.get("bytes_saved") or 0)
     errors = int(feedback.get("errors") or 0)
-    before_bytes = int(feedback.get("bytes_before") or 0)
-    after_bytes = int(feedback.get("bytes_after") or 0)
     savings_percent = float(feedback.get("savings_percent") or 0.0)
-    optimized_at = str(feedback.get("optimized_at") or "")
     skipped_pages = int(feedback.get("skipped_pages") or 0)
     scope = str(feedback.get("scope") or "all").strip().lower()
     optimize_url = (
@@ -84,14 +81,30 @@ def _render_export_pages_subtab(
         cls="app-btn app-btn-accent",
     )
 
+    has_optimize_feedback = optimized_pages > 0 or saved_bytes > 0 or errors > 0
+    optimize_feedback_el = (
+        Div(
+            Span(
+                (
+                    f"Ultimo: ({'sel.' if scope == 'selected' else 'tutte'}) "
+                    f"{optimized_pages} pag., "
+                    f"−{_bytes_label(saved_bytes)} ({savings_percent:.1f}%)"
+                    + (f", {errors} err." if errors else "")
+                    + (f", {skipped_pages} skip." if skipped_pages > 0 else "")
+                ),
+                cls="text-[11px] text-slate-600 dark:text-slate-300",
+            ),
+            cls="px-1",
+        )
+        if has_optimize_feedback
+        else None
+    )
+
     return Div(
         Div(
             H3("Workspace Immagini", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
             P(
-                (
-                    "Gestisci miniature, high-res e ottimizzazione locale. "
-                    "Le miniature della pagina visibile vengono create on-demand al primo accesso."
-                ),
+                "Gestisci miniature, scaricamento e ottimizzazione locale.",
                 cls="text-xs text-slate-500 dark:text-slate-400",
             ),
             render_export_pages_summary(
@@ -104,6 +117,7 @@ def _render_export_pages_subtab(
             cls="space-y-2",
         ),
         Div(
+            # Row 1: Selection controls
             Div(
                 Button(
                     "☑ Tutte",
@@ -138,21 +152,12 @@ def _render_export_pages_subtab(
                 ),
                 cls="flex flex-wrap items-center gap-2",
             ),
-            cls=("p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80"),
-        ),
-        Div(
+            # Row 2: Bulk actions
             Div(
-                H3("Ottimizzazione Scans Locali", cls="text-sm font-semibold text-slate-900 dark:text-slate-100"),
-                P(
-                    "Riduci il peso dei file locali. Usa selezione o tutto l'item.",
-                    cls="text-xs text-slate-500 dark:text-slate-400",
-                ),
-                cls="space-y-1",
-            ),
-            Div(
+                Span("Azioni:", cls="text-[11px] font-semibold text-slate-600 dark:text-slate-300"),
                 Button(
                     Div(
-                        Span("Ottimizza selezione"),
+                        Span("⚙ Ottimizza sel."),
                         Span(
                             "…",
                             id="studio-export-optimize-selected-indicator",
@@ -169,11 +174,11 @@ def _render_export_pages_subtab(
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     hx_disabled_elt="this",
-                    cls="app-btn app-btn-neutral",
+                    cls="app-btn app-btn-neutral text-xs",
                 ),
                 Button(
                     Div(
-                        Span("Ottimizza tutte"),
+                        Span("⚙ Ottimizza tutte"),
                         Span(
                             "…",
                             id="studio-export-optimize-all-indicator",
@@ -190,38 +195,15 @@ def _render_export_pages_subtab(
                     hx_target="#studio-export-panel",
                     hx_swap="outerHTML",
                     hx_disabled_elt="this",
-                    cls="app-btn app-btn-neutral",
+                    cls="app-btn app-btn-neutral text-xs",
                 ),
                 cls="flex flex-wrap items-center gap-2",
             ),
-            (
-                Div(
-                    Span(
-                        (
-                            f"Ultimo run: ({'selezione' if scope == 'selected' else 'globale'}) "
-                            f"{optimized_pages} pagine ottimizzate, "
-                            f"risparmio {_bytes_label(saved_bytes)} ({savings_percent:.2f}%), errori {errors}."
-                            + (f" Skippate {skipped_pages}." if skipped_pages > 0 else "")
-                        ),
-                        cls="text-xs text-slate-700 dark:text-slate-200",
-                    ),
-                    Span(
-                        f"Prima {_bytes_label(before_bytes)} · Dopo {_bytes_label(after_bytes)}"
-                        + (f" · {optimized_at}" if optimized_at else ""),
-                        cls="text-[11px] text-slate-500 dark:text-slate-400",
-                    ),
-                    cls=(
-                        "flex flex-col gap-1 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 "
-                        "bg-white dark:bg-slate-900"
-                    ),
-                )
-                if optimized_pages > 0 or saved_bytes > 0 or errors > 0
-                else Div(
-                    "Nessuna ottimizzazione registrata per questo item.",
-                    cls="text-xs text-slate-500 dark:text-slate-400",
-                ),
+            *([] if optimize_feedback_el is None else [optimize_feedback_el]),
+            cls=(
+                "space-y-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 "
+                "bg-white/80 dark:bg-slate-900/80"
             ),
-            cls=("space-y-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"),
         ),
         Div(
             render_export_thumbnails_loading_shell(

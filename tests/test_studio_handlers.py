@@ -638,7 +638,7 @@ def test_studio_optimize_scans_updates_metadata_and_feedback(tmp_path):
         result = studio_handlers.optimize_studio_export_scans(doc_id, library, thumb_page=1, page_size=24)
         rendered = repr(result)
         assert "Ottimizzazione completata" in rendered
-        assert "Ultimo run:" in rendered
+        assert "Ultimo:" in rendered
 
         row = vm.get_manuscript(doc_id) or {}
         assert int(row.get("local_optimized") or 0) == 1
@@ -749,7 +749,7 @@ def test_studio_optimize_scans_selected_scope_only_updates_selected_pages(tmp_pa
             optimize_scope="selected",
         )
         rendered = repr(result)
-        assert "Ultimo run: (selezione)" in rendered
+        assert "Ultimo: (sel.)" in rendered
 
         row = vm.get_manuscript(doc_id) or {}
         meta = json.loads(str(row.get("local_optimization_meta_json") or "{}"))
