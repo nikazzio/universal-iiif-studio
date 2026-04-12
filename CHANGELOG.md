@@ -30,6 +30,32 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.25.3 (2026-04-12)
+
+### Bug Fixes
+
+- Address PR review comments ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
+  [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
+
+### Refactoring
+
+- Decompose export.py into export/ subpackage (Phase 3)
+  ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
+  [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
+
+- Decompose panes.py into panes/ subpackage (9 modules)
+  ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
+  [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
+
+- Decompose Studio UI monoliths (#114)
+  ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
+  [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
+
+- Decompose studio_handlers.py into _studio/ subpackage (Phase 1)
+  ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
+  [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
+
+
 ## v0.25.2 (2026-04-12)
 
 ### Bug Fixes
