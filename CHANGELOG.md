@@ -30,6 +30,35 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.27.0 (2026-04-12)
+
+### Bug Fixes
+
+- Combine coverage from both fast+slow lanes for badge
+  ([#148](https://github.com/nikazzio/scriptoria/pull/148),
+  [`07b6688`](https://github.com/nikazzio/scriptoria/commit/07b66880fc3c23cfb6ccc5fb6f805fb9c2d06603))
+
+- Resolve ruff lint errors in test files ([#148](https://github.com/nikazzio/scriptoria/pull/148),
+  [`07b6688`](https://github.com/nikazzio/scriptoria/commit/07b66880fc3c23cfb6ccc5fb6f805fb9c2d06603))
+
+### Chores
+
+- Cleanup test suite and add code coverage ([#148](https://github.com/nikazzio/scriptoria/pull/148),
+  [`07b6688`](https://github.com/nikazzio/scriptoria/commit/07b66880fc3c23cfb6ccc5fb6f805fb9c2d06603))
+
+### Features
+
+- Speed up test suite + add Codecov + pytest-xdist
+  ([#148](https://github.com/nikazzio/scriptoria/pull/148),
+  [`07b6688`](https://github.com/nikazzio/scriptoria/commit/07b66880fc3c23cfb6ccc5fb6f805fb9c2d06603))
+
+### Testing
+
+- Add quick-win unit tests (+58 tests, coverage 69%→70%)
+  ([#148](https://github.com/nikazzio/scriptoria/pull/148),
+  [`07b6688`](https://github.com/nikazzio/scriptoria/commit/07b66880fc3c23cfb6ccc5fb6f805fb9c2d06603))
+
+
 ## v0.26.0 (2026-04-12)
 
 ### Bug Fixes
