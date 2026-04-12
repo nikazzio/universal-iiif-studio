@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from universal_iiif_core.logic.downloader_pdf import (
+    _clear_existing_scans,
+    _collect_scan_stats,
     _determine_pdf_output_path,
     _load_logo_bytes,
     _should_create_pdf_from_images,
     _should_prefer_native_pdf,
-    _clear_existing_scans,
-    _collect_scan_stats,
 )
 
 
@@ -36,7 +36,7 @@ def _make_downloader_stub(tmp_path: Path, **overrides):
         cm=cm,
         prefer_images=overrides.get("prefer_images", False),
         logger=MagicMock(),
-        get_pdf_url=lambda: overrides.get("pdf_url", None),
+        get_pdf_url=lambda: overrides.get("pdf_url"),
     )
     return stub
 

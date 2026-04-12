@@ -10,7 +10,6 @@ from universal_iiif_core.logic.downloader_runtime import (
     _page_number_from_filename,
 )
 
-
 # --- _build_canvas_plan ---
 
 class TestBuildCanvasPlan:
@@ -137,8 +136,9 @@ def test_store_page_stats_empty_is_noop(tmp_path: Path):
 
 def test_collect_finalized_scan_files(tmp_path: Path):
     """Should return sorted scan paths for expected pages."""
-    from universal_iiif_core.logic.downloader_runtime import _collect_finalized_scan_files
     from PIL import Image
+
+    from universal_iiif_core.logic.downloader_runtime import _collect_finalized_scan_files
 
     scans_dir = tmp_path / "scans"
     scans_dir.mkdir()
@@ -175,8 +175,9 @@ def test_collect_finalized_scan_files_missing_pages(tmp_path: Path):
 
 def test_page_numbers_in_dir(tmp_path: Path):
     """Should find 1-indexed page numbers from pag_XXXX.jpg files."""
-    from universal_iiif_core.logic.downloader_runtime import _page_numbers_in_dir
     from PIL import Image
+
+    from universal_iiif_core.logic.downloader_runtime import _page_numbers_in_dir
 
     for i in [0, 3, 7]:
         img = Image.new("RGB", (10, 10))

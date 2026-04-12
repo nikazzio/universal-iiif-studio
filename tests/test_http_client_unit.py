@@ -1,15 +1,16 @@
-"""Tests for HTTPClient pure methods — HTTPMetrics, _resolve_policy, _compute_backoff, _is_retriable_error, _handle_json_fallback."""
+"""Tests for HTTPClient pure methods.
+
+Covers HTTPMetrics, _resolve_policy, _compute_backoff,
+_is_retriable_error, _handle_json_fallback.
+"""
 
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import requests
 
 from universal_iiif_core.http_client import HTTPClient, HTTPMetrics
-
 
 # --- HTTPMetrics ---
 

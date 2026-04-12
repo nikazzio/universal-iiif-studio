@@ -1,12 +1,14 @@
-"""Tests for downloader pure helpers — CanvasServiceLocator, _format_dimension, get_canvases, get_pdf_url, _get_thumbnail_url."""
+"""Tests for downloader pure helpers.
+
+Covers CanvasServiceLocator, _format_dimension, get_canvases,
+get_pdf_url, _get_thumbnail_url.
+"""
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from universal_iiif_core.logic.downloader import CanvasServiceLocator, PageDownloader
-
 
 # --- CanvasServiceLocator ---
 

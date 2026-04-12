@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import argparse
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from universal_iiif_cli import cli
 from universal_iiif_cli.cli import _build_parser, _handle_db_commands, _status_icon
-
 
 # --- _status_icon ---
 
@@ -202,7 +201,10 @@ def test_handle_db_commands_no_command():
 def test_resolve_download_args_with_url():
     from universal_iiif_cli.cli import _resolve_download_args
 
-    args = _build_parser().parse_args(["http://x.com/m.json", "-w", "8", "--prefer-images", "--ocr", "model.mlmodel", "--create-pdf"])
+    args = _build_parser().parse_args([
+        "http://x.com/m.json", "-w", "8", "--prefer-images",
+        "--ocr", "model.mlmodel", "--create-pdf",
+    ])
     result = _resolve_download_args(args)
     assert result == ("http://x.com/m.json", None, 8, False, True, "model.mlmodel", True)
 

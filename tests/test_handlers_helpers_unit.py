@@ -15,7 +15,6 @@ from studio_ui.routes.discovery_handlers import (
 )
 from studio_ui.routes.library_handlers import _parse_ranges
 
-
 # --- _toast_text ---
 
 def test_toast_text_with_detail():

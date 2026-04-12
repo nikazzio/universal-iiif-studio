@@ -12,7 +12,7 @@ from universal_iiif_core.jobs import JobManager
 
 def _fresh_job_manager() -> JobManager:
     """Create an isolated JobManager with reset state (bypasses singleton).
-    
+
     Uses object.__new__ to avoid triggering the singleton __new__.
     Restores the class _instance after test via a separate approach.
     """
