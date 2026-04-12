@@ -1,5 +1,7 @@
 from universal_iiif_core.providers import (
+    PROVIDERS,
     get_provider,
+    get_search_handlers,
     is_known_provider,
     iter_providers,
     provider_library_options,
@@ -108,3 +110,24 @@ def test_resolve_with_provider_does_not_misclassify_archive_free_text():
     assert provider.key == "Unknown"
     assert doc_id is None
     assert manifest_url is None
+
+
+def test_get_search_handlers_returns_all_searchable_strategies():
+    """get_search_handlers must cover every provider that declares a search_strategy."""
+    handlers = get_search_handlers()
+    expected_keys = {p.search_strategy for p in PROVIDERS if p.search_strategy and p.search_fn}
+    assert set(handlers.keys()) == expected_keys
+
+
+def test_get_search_handlers_is_cached():
+    """Repeated calls must return the same dict instance (lazy-init caching)."""
+    assert get_search_handlers() is get_search_handlers()
+
+
+def test_provider_search_fn_matches_search_strategy():
+    """Every provider with a search_strategy must also declare search_fn."""
+    for provider in PROVIDERS:
+        if provider.search_strategy:
+            assert provider.search_fn is not None, (
+                f"Provider {provider.key} has search_strategy={provider.search_strategy!r} but no search_fn"
+            )
