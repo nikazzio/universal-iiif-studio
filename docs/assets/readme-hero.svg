@@ -1,44 +1,47 @@
-<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="1800" height="560" viewBox="0 0 1800 560" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Universal IIIF Downloader and Studio banner</title>
   <desc id="desc">Stylized banner showing the Discovery, Library, Studio, and Export workflow.</desc>
-  <rect width="1600" height="520" rx="28" fill="#07111F"/>
-  <rect x="18" y="18" width="1564" height="484" rx="22" fill="url(#bg)"/>
-  <path d="M104 412C221 297 348 250 498 274C648 298 688 382 854 390C1020 398 1106 282 1284 256C1395 240 1494 257 1542 278V488H104V412Z" fill="url(#wave)" opacity="0.85"/>
-  <circle cx="1314" cy="116" r="118" fill="url(#orb)" opacity="0.45"/>
-  <circle cx="1272" cy="132" r="62" fill="#D8F3FF" opacity="0.28"/>
-  <text x="92" y="138" fill="white" font-size="54" font-family="Arial, Helvetica, sans-serif" font-weight="700">Universal IIIF Downloader &amp; Studio</text>
-  <text x="92" y="188" fill="#C6D4E1" font-size="24" font-family="Arial, Helvetica, sans-serif">Discovery-to-export workflow for IIIF manuscripts, local study copies, and profile-driven PDF output.</text>
+  <rect width="1800" height="560" rx="32" fill="#07111F"/>
+  <rect x="18" y="18" width="1764" height="524" rx="24" fill="url(#bg)"/>
+  <path d="M108 446C244 312 394 252 570 278C746 304 802 402 994 408C1186 414 1292 294 1496 262C1616 243 1716 262 1738 276V524H108V446Z" fill="url(#wave)" opacity="0.88"/>
+  <circle cx="1488" cy="126" r="132" fill="url(#orb)" opacity="0.45"/>
+  <circle cx="1436" cy="144" r="76" fill="#D8F3FF" opacity="0.26"/>
+  <rect x="94" y="80" width="152" height="32" rx="16" fill="#0F1B2D" stroke="#3ABFF8" stroke-width="1.5"/>
+  <text x="116" y="101" fill="#9FE8FF" font-size="16" font-family="Arial, Helvetica, sans-serif" font-weight="700">IIIF WORKFLOW</text>
+  <text x="92" y="166" fill="white" font-size="62" font-family="Arial, Helvetica, sans-serif" font-weight="700">Universal IIIF Downloader &amp; Studio</text>
+  <text x="92" y="216" fill="#C6D4E1" font-size="26" font-family="Arial, Helvetica, sans-serif">Discovery-to-export workflow for IIIF manuscripts, local study copies, and profile-driven PDF output.</text>
+  <text x="92" y="258" fill="#8FB3C9" font-size="20" font-family="Arial, Helvetica, sans-serif">Shared provider resolution. Local-first study flow. Profile-driven output. Built for demanding source material.</text>
 
-  <g transform="translate(90 278)">
-    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#3ABFF8" stroke-width="2"/>
-    <text x="26" y="42" fill="#8BE9FD" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">DISCOVERY</text>
-    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Resolve, search, prefetch</text>
+  <g transform="translate(88 318)">
+    <rect width="286" height="116" rx="20" fill="#0F1B2D" stroke="#3ABFF8" stroke-width="2"/>
+    <text x="28" y="44" fill="#8BE9FD" font-size="19" font-family="Arial, Helvetica, sans-serif" font-weight="700">DISCOVERY</text>
+    <text x="28" y="78" fill="#DBE7F2" font-size="22" font-family="Arial, Helvetica, sans-serif">Resolve, search, prefetch</text>
   </g>
 
-  <g transform="translate(390 278)">
-    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#5EEAD4" stroke-width="2"/>
-    <text x="26" y="42" fill="#99F6E4" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">LIBRARY</text>
-    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Track local assets</text>
+  <g transform="translate(414 318)">
+    <rect width="286" height="116" rx="20" fill="#0F1B2D" stroke="#5EEAD4" stroke-width="2"/>
+    <text x="28" y="44" fill="#99F6E4" font-size="19" font-family="Arial, Helvetica, sans-serif" font-weight="700">LIBRARY</text>
+    <text x="28" y="78" fill="#DBE7F2" font-size="22" font-family="Arial, Helvetica, sans-serif">Track local assets</text>
   </g>
 
-  <g transform="translate(690 278)">
-    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#F59E0B" stroke-width="2"/>
-    <text x="26" y="42" fill="#FCD34D" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">STUDIO</text>
-    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Read, annotate, inspect</text>
+  <g transform="translate(740 318)">
+    <rect width="286" height="116" rx="20" fill="#0F1B2D" stroke="#F59E0B" stroke-width="2"/>
+    <text x="28" y="44" fill="#FCD34D" font-size="19" font-family="Arial, Helvetica, sans-serif" font-weight="700">STUDIO</text>
+    <text x="28" y="78" fill="#DBE7F2" font-size="22" font-family="Arial, Helvetica, sans-serif">Read, annotate, inspect</text>
   </g>
 
-  <g transform="translate(990 278)">
-    <rect width="250" height="108" rx="18" fill="#0F1B2D" stroke="#FB7185" stroke-width="2"/>
-    <text x="26" y="42" fill="#FDA4AF" font-size="18" font-family="Arial, Helvetica, sans-serif" font-weight="700">OUTPUT</text>
-    <text x="26" y="74" fill="#DBE7F2" font-size="20" font-family="Arial, Helvetica, sans-serif">Profiles, jobs, PDF export</text>
+  <g transform="translate(1066 318)">
+    <rect width="286" height="116" rx="20" fill="#0F1B2D" stroke="#FB7185" stroke-width="2"/>
+    <text x="28" y="44" fill="#FDA4AF" font-size="19" font-family="Arial, Helvetica, sans-serif" font-weight="700">OUTPUT</text>
+    <text x="28" y="78" fill="#DBE7F2" font-size="22" font-family="Arial, Helvetica, sans-serif">Profiles, jobs, PDF export</text>
   </g>
 
-  <path d="M342 332H388" stroke="#82E9FF" stroke-width="4" stroke-linecap="round"/>
-  <path d="M642 332H688" stroke="#82F3D4" stroke-width="4" stroke-linecap="round"/>
-  <path d="M942 332H988" stroke="#FCD34D" stroke-width="4" stroke-linecap="round"/>
-  <path d="M374 318L392 332L374 346" stroke="#82E9FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M674 318L692 332L674 346" stroke="#82F3D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M974 318L992 332L974 346" stroke="#FCD34D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M374 376H412" stroke="#82E9FF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M700 376H738" stroke="#82F3D4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1026 376H1064" stroke="#FCD34D" stroke-width="4" stroke-linecap="round"/>
+  <path d="M398 362L416 376L398 390" stroke="#82E9FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M724 362L742 376L724 390" stroke="#82F3D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1050 362L1068 376L1050 390" stroke="#FCD34D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 
   <defs>
     <linearGradient id="bg" x1="106" y1="36" x2="1486" y2="470" gradientUnits="userSpaceOnUse">

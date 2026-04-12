@@ -51,7 +51,7 @@ All notable changes to this project are documented in this file.
   ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
   [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
 
-- Decompose studio_handlers.py into _studio/ subpackage (Phase 1)
+- Decompose `studio_handlers.py` into `_studio/` subpackage (Phase 1)
   ([#141](https://github.com/nikazzio/universal-iiif-studio/pull/141),
   [`0c437d2`](https://github.com/nikazzio/universal-iiif-studio/commit/0c437d22321db0cdc6e07ac43c89b28672c81392))
 

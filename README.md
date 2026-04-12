@@ -1,13 +1,32 @@
 # Universal IIIF Downloader & Studio
 
-[![CI](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml)
-[![Docs CI](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&style=for-the-badge&label=Docs)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml)
-[![Wiki Sync](https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/wiki-sync.yml?branch=main&style=for-the-badge&label=Wiki)](https://github.com/nikazzio/universal-iiif-studio/actions/workflows/wiki-sync.yml)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-0f172a?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-0b7285?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=for-the-badge)](https://github.com/nikazzio/universal-iiif-studio/releases)
+<p align="center">
+  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
+  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/docs-ci.yml"><img alt="Docs CI" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/docs-ci.yml?branch=main&style=for-the-badge&label=Docs"></a>
+  <a href="https://github.com/nikazzio/universal-iiif-studio/actions/workflows/wiki-sync.yml"><img alt="Wiki Sync" src="https://img.shields.io/github/actions/workflow/status/nikazzio/universal-iiif-studio/wiki-sync.yml?branch=main&style=for-the-badge&label=Wiki"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0f172a?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/Lint-Ruff-1d4ed8?style=for-the-badge&logo=ruff&logoColor=white"></a>
+  <a href="https://github.com/nikazzio/universal-iiif-studio/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/universal-iiif-studio?display_name=tag&style=for-the-badge"></a>
+  <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-0b7285?style=for-the-badge"></a>
+</p>
 
-![Universal IIIF Downloader & Studio hero](docs/assets/readme-hero.svg)
+<p align="center">
+  <img src="docs/assets/readme-hero.svg" alt="Universal IIIF Downloader &amp; Studio hero" width="1200">
+</p>
+
+```text
+ _   _       _                          _   ___ ___ ___ _____
+| | | |_ __ (_)_   _____ _ __ ___  __ _| | |_ _|_ _|_ _|  ___|
+| | | | '_ \| \ \ / / _ \ '__/ __|/ _` | |  | | | | | || |_
+| |_| | | | | |\ V /  __/ |  \__ \ (_| | |  | | | | | ||  _|
+ \___/|_| |_|_| \_/ \___|_|  |___/\__,_|_| |___|___|___|_|
+
+ ____                      _                 _              _ _
+|  _ \  _____      ___ __ | | ___   __ _  __| | ___ _ __   | (_)_ __   ___ _ __
+| | | |/ _ \ \ /\ / / '_ \| |/ _ \ / _` |/ _` |/ _ \ '__|  | | | '_ \ / _ \ '__|
+| |_| | (_) \ V  V /| | | | | (_) | (_| | (_| |  __/ |     | | | | | |  __/ |
+|____/ \___/ \_/\_/ |_| |_|_|\___/ \__,_|\__,_|\___|_|     |_|_|_| |_|\___|_|
+```
 
 Download IIIF material, keep local working copies under control, and move from discovery to study to export without leaving one toolchain.
 
