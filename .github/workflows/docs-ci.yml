@@ -24,7 +24,8 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,20 +37,8 @@ jobs:
           npm install -g markdownlint-cli
           markdownlint "**/*.md"
 
-      - name: Link check
-        uses: lycheeverse/lychee-action@v2
-        with:
-          fail: true
-          args: >-
-            --no-progress
-            --verbose
-            --max-retries 3
-            --retry-wait-time 2
-            --timeout 20
-            --exclude-path .venv/**
-            --exclude-path node_modules/**
-            --exclude-file .lycheeignore
-            "**/*.md"
+      - name: Install docs dependencies
+        run: npm ci
 
       - name: Check docs language consistency
         run: |
@@ -59,6 +48,10 @@ jobs:
         run: |
           python scripts/check_docs_integrity.py
 
+      - name: Build Docusaurus docs
+        run: |
+          npm run docs:build
+
       - name: Check changelog policy
         run: |
           python scripts/check_changelog_policy.py
@@ -66,3 +59,4 @@ jobs:
       - name: Check release consistency
         run: |
           python scripts/check_release_consistency.py
+

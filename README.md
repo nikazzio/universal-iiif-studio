@@ -79,9 +79,9 @@ Any IIIF-compliant manifest URL works directly.
 
 | | |
 | --- | --- |
-| 📘 [User Guide](docs/DOCUMENTAZIONE.md) | 🏗️ [Architecture](docs/ARCHITECTURE.md) |
-| ⚙️ [Config Reference](docs/CONFIG_REFERENCE.md) | 🌐 [HTTP Client](docs/HTTP_CLIENT.md) |
-| 📖 [Wiki](docs/wiki/Home.md) | 🗂️ [All Docs](docs/index.md) |
+| 🗂️ [Docs Home](https://nikazzio.github.io/scriptoria/) | 🚀 [Getting Started](https://nikazzio.github.io/scriptoria/intro/getting-started) |
+| 🏗️ [Architecture](https://nikazzio.github.io/scriptoria/explanation/architecture) | ⚙️ [Config Overview](https://nikazzio.github.io/scriptoria/reference/configuration) |
+| 💻 [CLI Reference](https://nikazzio.github.io/scriptoria/reference/cli) | 📖 [Wiki](https://github.com/nikazzio/scriptoria/wiki) |
 
 ## Development
 

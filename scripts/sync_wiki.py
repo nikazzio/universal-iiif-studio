@@ -48,6 +48,21 @@ def _build_wiki_remote(repo_slug: str, token: str | None) -> str:
     return f"https://github.com/{repo_slug}.wiki.git"
 
 
+def _default_docs_base_url(repo_slug: str) -> str:
+    owner, repo = repo_slug.split("/", 1)
+    return f"https://{owner}.github.io/{repo}/"
+
+
+def _docs_site_url_for_path(*, repo_rel: str, docs_base_url: str) -> str | None:
+    docs_base = docs_base_url.rstrip("/") + "/"
+    if repo_rel == "docs/index.md":
+        return docs_base
+    if not repo_rel.startswith("docs/") or not repo_rel.endswith(".md"):
+        return None
+    slug = repo_rel.removeprefix("docs/").removesuffix(".md")
+    return docs_base if slug == "index" else f"{docs_base}{slug}"
+
+
 def _clone_or_update_wiki(*, remote_url: str, wiki_dir: Path) -> None:
     if (wiki_dir / ".git").exists():
         _run(["git", "fetch", "--all"], cwd=wiki_dir)
@@ -87,6 +102,7 @@ def _rewrite_markdown_links(
     repo_root: Path,
     repo_slug: str,
     repo_ref: str,
+    docs_base_url: str,
 ) -> tuple[str, list[str]]:
     failures: list[str] = []
 
@@ -114,6 +130,9 @@ def _rewrite_markdown_links(
             except ValueError:
                 failures.append(f"{src}: link target is outside repository root: {target}")
                 return match.group(0)
+            docs_site_target = _docs_site_url_for_path(repo_rel=repo_rel, docs_base_url=docs_base_url)
+            if docs_site_target:
+                return f"{prefix}{docs_site_target}{anchor}{suffix}"
             absolute = f"https://github.com/{repo_slug}/blob/{repo_ref}/{repo_rel}{anchor}"
             return f"{prefix}{absolute}{suffix}"
 
@@ -128,6 +147,7 @@ def _sync_files(
     repo_root: Path,
     repo_slug: str,
     repo_ref: str,
+    docs_base_url: str,
     prune: bool,
 ) -> tuple[int, int]:
     copied = 0
@@ -150,6 +170,7 @@ def _sync_files(
                 repo_root=repo_root,
                 repo_slug=repo_slug,
                 repo_ref=repo_ref,
+                docs_base_url=docs_base_url,
             )
             failures.extend(rewrite_failures)
             current = dst.read_text(encoding="utf-8") if dst.exists() else None
@@ -210,6 +231,11 @@ def _parse_args() -> argparse.Namespace:
         "--commit-message",
         default="docs(wiki): sync from docs/wiki",
         help="Commit message used when changes are detected.",
+    )
+    parser.add_argument(
+        "--docs-base-url",
+        default="",
+        help="Public docs site base URL used when rewriting canonical documentation links.",
     )
     parser.add_argument(
         "--dry-run",
@@ -315,7 +341,9 @@ def main() -> int:
     wiki_dir = Path(args.wiki_dir).resolve()
     _validate_source_root(source_root)
     repo_slug = _resolve_repo_slug(args.repo)
+    docs_base_url = str(args.docs_base_url or "").strip() or _default_docs_base_url(repo_slug)
     _print_run_context(repo_slug=repo_slug, source_root=source_root, wiki_dir=wiki_dir, repo_ref=args.repo_ref)
+    print(f"Docs base URL: {docs_base_url}")
 
     token = os.getenv("GITHUB_TOKEN")
     remote_url = _build_wiki_remote(repo_slug, token)
@@ -327,6 +355,7 @@ def main() -> int:
         repo_root=repo_root,
         repo_slug=repo_slug,
         repo_ref=str(args.repo_ref),
+        docs_base_url=docs_base_url,
         prune=bool(args.prune),
     )
 

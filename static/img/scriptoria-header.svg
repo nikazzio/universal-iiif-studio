@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 621 196" fill="none">
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="621" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0f1a"/>
+      <stop offset="50%" stop-color="#0c1929"/>
+      <stop offset="100%" stop-color="#0a0f1a"/>
+    </linearGradient>
+    <linearGradient id="cyan-grad" x1="0" y1="0" x2="621" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="30%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#67e8f9"/>
+      <stop offset="70%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="border-grad" x1="0" y1="0" x2="621" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#22d3ee" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.6"/>
+      <stop offset="80%" stop-color="#22d3ee" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="621" height="196" rx="12" fill="url(#bg-grad)"/>
+  
+  <!-- Subtle border glow -->
+  <rect x="0.5" y="0.5" width="620" height="195" rx="12" fill="none" stroke="url(#border-grad)" stroke-width="1"/>
+
+  <!-- Top accent line -->
+  <rect x="93.14999999999999" y="0" width="434.7" height="1" fill="url(#border-grad)"/>
+
+  <!-- ASCII art text -->
+  <text x="40" y="44" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ███████╗  ██████╗ ██████╗  ██╗ ██████╗  ████████╗  ██████╗  ██████╗  ██╗  █████╗ </text>
+  <text x="40" y="60" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ██╔════╝ ██╔════╝ ██╔══██╗ ██║ ██╔══██╗ ╚══██╔══╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔══██╗</text>
+  <text x="40" y="76" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ███████╗ ██║      ██████╔╝ ██║ ██████╔╝    ██║    ██║   ██║ ██████╔╝ ██║ ███████║</text>
+  <text x="40" y="92" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ╚════██║ ██║      ██╔══██╗ ██║ ██╔═══╝     ██║    ██║   ██║ ██╔══██╗ ██║ ██╔══██║</text>
+  <text x="40" y="108" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ███████║ ╚██████╗ ██║  ██║ ██║ ██║         ██║    ╚██████╔╝ ██║  ██║ ██║ ██║  ██║</text>
+  <text x="40" y="124" font-family="'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, monospace" font-size="11" fill="url(#cyan-grad)" xml:space="preserve"> ╚══════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═╝ ╚═╝         ╚═╝     ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚═╝  ╚═╝</text>
+  <text x="310.5" y="164" text-anchor="middle" font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif" font-size="14" letter-spacing="4" fill="#67e8f9" opacity="0.65">discover · download · study · export</text>
+
+  <!-- Bottom accent line -->
+  <rect x="93.14999999999999" y="195" width="434.7" height="1" fill="url(#border-grad)"/>
+</svg>

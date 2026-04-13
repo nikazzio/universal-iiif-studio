@@ -1,8 +1,8 @@
 # Getting Started
 
-Use this page for the shortest path to a working local install.
+Use this page when you need the shortest reliable path to a working local install.
 
-## Quick Start
+## Quick Install
 
 ```bash
 git clone https://github.com/nikazzio/scriptoria.git
@@ -13,25 +13,28 @@ pip install -e .
 scriptoria
 ```
 
-Open `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8000`.
 
-## CLI
+## What To Do First
+
+The normal first workflow is straightforward:
+
+1. resolve a manuscript in `Discovery`;
+2. add it to `Library`;
+3. download only when local assets are actually needed;
+4. open it in `Studio`;
+5. use `Output` for inspection and export.
+
+## CLI Shortcut
 
 ```bash
 scriptoria-cli "<manifest-url>"
 ```
 
-## Main Navigation
-
-- `Discovery` resolves provider inputs and search results.
-- `Library` is the canonical entrypoint for local items.
-- `Studio` is the working workspace for a selected document.
-- `Output` is the export surface inside Studio.
-
-If `/studio` is opened without `doc_id` and `library`, the app shows the recent-work hub instead of an empty editor.
+Use the CLI when you already have the exact IIIF manifest and do not need the full interactive workflow.
 
 ## Read Next
 
-- [Documentation Hub](../index.md)
-- [User Guide](https://github.com/nikazzio/scriptoria/blob/main/docs/DOCUMENTAZIONE.md)
-- [Configuration Reference](https://github.com/nikazzio/scriptoria/blob/main/docs/CONFIG_REFERENCE.md)
+- [Docs Home](../index.md)
+- [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
+- [Provider Support](../reference/provider-support.md)

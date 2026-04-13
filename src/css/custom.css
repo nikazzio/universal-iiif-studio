@@ -1,0 +1,111 @@
+:root {
+  --ifm-color-primary: #0b7285;
+  --ifm-color-primary-dark: #096879;
+  --ifm-color-primary-darker: #086170;
+  --ifm-color-primary-darkest: #064f5c;
+  --ifm-color-primary-light: #0d7c91;
+  --ifm-color-primary-lighter: #0e8399;
+  --ifm-color-primary-lightest: #1095ad;
+  --ifm-code-font-size: 95%;
+  --ifm-navbar-background-color: #0f1720;
+  --ifm-navbar-link-color: #e6f4f7;
+  --ifm-footer-background-color: #0b1118;
+  --ifm-background-surface-color: #f6fbfc;
+}
+
+[data-theme="dark"] {
+  --ifm-background-color: #09131c;
+  --ifm-background-surface-color: #0e1a24;
+}
+
+.markdown img {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+}
+
+.navbar__logo img {
+  height: 2.25rem;
+  width: auto;
+}
+
+.theme-announcement-bar {
+  border-bottom: 1px solid rgba(103, 232, 249, 0.2);
+  background: linear-gradient(90deg, #0b1721 0%, #0f2635 50%, #0b1721 100%);
+}
+
+.theme-announcement-bar a {
+  color: #b9f3ff;
+  font-weight: 600;
+}
+
+.theme-announcement-bar img {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.markdown .scriptoria-docs-hero {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  align-items: center;
+  padding: 1.5rem;
+  margin: 0 0 2rem;
+  border: 1px solid rgba(11, 114, 133, 0.14);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(16, 149, 173, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 250, 0.92));
+}
+
+[data-theme="dark"] .markdown .scriptoria-docs-hero {
+  border-color: rgba(103, 232, 249, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(16, 149, 173, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(12, 24, 35, 0.95), rgba(10, 19, 29, 0.95));
+}
+
+.markdown .scriptoria-docs-hero p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown .scriptoria-docs-hero-art {
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.markdown .scriptoria-fact-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 1.25rem 0 2rem;
+}
+
+.markdown .scriptoria-fact-card {
+  padding: 1rem;
+  border: 1px solid rgba(11, 114, 133, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+[data-theme="dark"] .markdown .scriptoria-fact-card {
+  background: rgba(12, 24, 35, 0.92);
+  border-color: rgba(103, 232, 249, 0.12);
+}
+
+.markdown .scriptoria-fact-card strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ifm-color-primary-darkest);
+}
+
+[data-theme="dark"] .markdown .scriptoria-fact-card strong {
+  color: #b9f3ff;
+}
+
+@media (max-width: 996px) {
+  .markdown .scriptoria-docs-hero {
+    grid-template-columns: 1fr;
+  }
+}
