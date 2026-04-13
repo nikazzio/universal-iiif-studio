@@ -30,6 +30,14 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.27.2 (2026-04-13)
+
+### Bug Fixes
+
+- SECURITY.md table alignment + coverage-badge push race condition
+  ([`ec33be4`](https://github.com/nikazzio/scriptoria/commit/ec33be4e9a34d2786841a6cbf5653d871a59a995))
+
+
 ## v0.27.1 (2026-04-13)
 
 ### Bug Fixes
