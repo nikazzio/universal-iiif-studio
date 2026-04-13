@@ -30,6 +30,19 @@ All notable changes to this project are documented in this file.
 
 <!-- version list -->
 
+## v0.27.1 (2026-04-13)
+
+### Bug Fixes
+
+- Install coverage[toml] for pyproject.toml support in CI
+  ([`1435d8e`](https://github.com/nikazzio/scriptoria/commit/1435d8e03a4f034edd181ec1da1afc2639c1e189))
+
+### Documentation
+
+- Add Code of Conduct, Contributing guide, and Security policy
+  ([`1039d02`](https://github.com/nikazzio/scriptoria/commit/1039d02f4c10aa77dd4ce2a6c833e8b910016369))
+
+
 ## v0.27.0 (2026-04-12)
 
 ### Bug Fixes
