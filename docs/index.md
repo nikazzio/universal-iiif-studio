@@ -2,10 +2,10 @@
 
 <div className="scriptoria-docs-hero">
   <div>
-    <p><strong>Scriptoria is a local-first IIIF manuscript workbench.</strong> It helps you move from provider discovery to a managed local workspace where reading, repair, transcription, and export remain under your control.</p>
-    <p>The project exists for situations where a normal viewer is not enough: inconsistent provider search, uneven image delivery, partial local downloads, page-by-page repair needs, and reproducible export requirements.</p>
+    <p><strong>Scriptoria is a local-first IIIF manuscript workbench.</strong> It takes you from provider discovery to a managed local workspace where reading, repair, transcription, and export stay under your control.</p>
+    <p>It exists for the cases where a standard viewer is not enough: inconsistent provider search, uneven image delivery, partial downloads, page-level repair needs, reproducible export.</p>
   </div>
-  <img className="scriptoria-docs-hero-art" src="/img/scriptoria-header.svg" alt="Scriptoria header graphic" />
+  <img className="scriptoria-docs-hero-art" src="/img/morte_tamburo.png" alt="Morte al tamburo — Scriptoria symbol" />
 </div>
 
 <div className="scriptoria-fact-grid">
@@ -27,19 +27,21 @@
   </div>
 </div>
 
-Scriptoria is a local research workbench for IIIF manuscripts. It is built for people who need more than a generic viewer: scholars who must move from catalog discovery to close reading, librarians or digital curators who need reproducible local working copies, and advanced users who want controlled export, provenance retention, and page-level repair tools.
+Scriptoria is a local research workbench for IIIF manuscripts. It is built for people who need more than a generic viewer: scholars moving from catalog discovery to close reading, librarians or digital curators who need reproducible local working copies, and technical users who want controlled export, provenance retention, and page-level repair.
 
-The product is designed around one practical idea: remote IIIF sources are valuable but inconsistent. Search behavior differs from provider to provider, manifests are not equally clean, image delivery is uneven, and PDF availability is highly variable. Scriptoria gives you one local workspace where those differences remain visible and manageable instead of being hidden behind a fake notion of uniformity.
+The core idea is simple: remote IIIF sources are valuable but unreliable. Search behavior varies by provider, manifests are not equally clean, image delivery is inconsistent, and PDF availability is a lottery. Scriptoria gives you one local workspace where those differences stay visible and manageable — not hidden behind a false sense of uniformity.
 
 :::info Why "Scriptoria"?
-In the history of the book, a *scriptorium* was a place where manuscripts were copied, annotated, corrected, and prepared for circulation. The name fits the product well: Scriptoria is not only a reader, but a working environment for acquiring, inspecting, correcting, and exporting manuscript material.
+The *scriptorium* (plural *scriptoria*) was the room in a medieval monastery set aside for copying, illuminating, and preserving manuscripts. Kept quiet and well-lit, it sat close to the library and was one of the few places where Greek and Latin culture survived the early Middle Ages. The monks who worked there — scribes, or *amanuenses* — produced their texts by hand on parchment, one page at a time.
+
+The name fits: Scriptoria is not just a reader. It is a working environment for acquiring, inspecting, correcting, and exporting manuscript material.
 :::
 
 ## What Scriptoria Is For
 
-Use Scriptoria when you need to resolve a manuscript from a supported IIIF provider, preserve a stable local record before a full download exists, work from local scans instead of trusting upstream availability, repair weak pages selectively, and export PDF or image bundles with explicit source and quality choices.
+Use Scriptoria when you need to resolve a manuscript from a supported IIIF provider, keep a stable local record before a full download exists, work from local scans instead of depending on upstream availability, repair weak pages selectively, and export PDF or image bundles with explicit source and quality choices.
 
-Just as important, Scriptoria keeps the operational boundary between remote source, local workspace, and final export artifact visible all the way through the workflow. It is not a public-facing digital library frontend, not a cloud collaboration suite, and not a generic IIIF demo viewer. It is a local-first technical workspace for manuscript-heavy research and curation work.
+Scriptoria keeps the boundary between remote source, local workspace, and final export artifact visible throughout the workflow. It is not a public-facing digital library frontend, not a cloud collaboration tool, and not a generic IIIF demo. It is a local-first technical workspace for manuscript-heavy research and curation.
 
 ## Main Surfaces
 
