@@ -13,15 +13,13 @@ const config = {
   organizationName: orgName,
   projectName: repoName,
   onBrokenLinks: "throw",
+  onBrokenMarkdownLinks: "throw",
   i18n: {
     defaultLocale: "en",
     locales: ["en"],
   },
   markdown: {
     mermaid: true,
-    hooks: {
-      onBrokenMarkdownLinks: "throw",
-    },
   },
   themes: ["@docusaurus/theme-mermaid"],
   presets: [
