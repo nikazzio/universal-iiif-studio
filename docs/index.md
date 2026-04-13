@@ -1,54 +1,111 @@
 # Scriptoria Documentation
 
-Scriptoria is a local research workbench for IIIF manuscripts. It is designed for scholars, librarians, and advanced users who need to move from a remote IIIF source to a controlled local workspace without losing provenance, page structure, or export flexibility.
+<div className="scriptoria-docs-hero">
+  <div>
+    <p><strong>Scriptoria is a local-first IIIF manuscript workbench.</strong> It helps you move from provider discovery to a managed local workspace where reading, repair, transcription, and export remain under your control.</p>
+    <p>The project exists for situations where a normal viewer is not enough: inconsistent provider search, uneven image delivery, partial local downloads, page-by-page repair needs, and reproducible export requirements.</p>
+  </div>
+  <img className="scriptoria-docs-hero-art" src="/img/scriptoria-header.svg" alt="Scriptoria header graphic" />
+</div>
 
-The product has two user-facing entry points:
+<div className="scriptoria-fact-grid">
+  <div className="scriptoria-fact-card">
+    <strong>Runtime Model</strong>
+    Discovery, local catalog, Studio workspace, and Output/export remain separate on purpose.
+  </div>
+  <div className="scriptoria-fact-card">
+    <strong>Input Types</strong>
+    Manifest URLs, provider URLs, shelfmarks, record identifiers, and supported free-text queries.
+  </div>
+  <div className="scriptoria-fact-card">
+    <strong>Operational Focus</strong>
+    Local scans, source-mode policy, page repair actions, and profile-driven export.
+  </div>
+  <div className="scriptoria-fact-card">
+    <strong>Best Fit</strong>
+    Scholars, librarians, digital humanists, and technical users working with manuscript-heavy IIIF sources.
+  </div>
+</div>
 
-- `scriptoria` for the local web application;
-- `scriptoria-cli` for direct CLI workflows.
+Scriptoria is a local research workbench for IIIF manuscripts. It is built for people who need more than a generic viewer: scholars who must move from catalog discovery to close reading, librarians or digital curators who need reproducible local working copies, and advanced users who want controlled export, provenance retention, and page-level repair tools.
 
-The web application is built around four surfaces:
+The product is designed around one practical idea: remote IIIF sources are valuable but inconsistent. Search behavior differs from provider to provider, manifests are not equally clean, image delivery is uneven, and PDF availability is highly variable. Scriptoria gives you one local workspace where those differences remain visible and manageable instead of being hidden behind a fake notion of uniformity.
 
-- `Discovery` to resolve a manifest, provider URL, shelfmark, or supported search query;
-- `Library` to keep a local catalog of saved and downloaded items;
-- `Studio` to read, inspect, transcribe, and prepare output for one item;
-- `Output` to manage PDF-oriented export jobs and page-level recovery actions.
+:::info Why "Scriptoria"?
+In the history of the book, a *scriptorium* was a place where manuscripts were copied, annotated, corrected, and prepared for circulation. The name fits the product well: Scriptoria is not only a reader, but a working environment for acquiring, inspecting, correcting, and exporting manuscript material.
+:::
 
-## Start Here
+## What Scriptoria Is For
 
-- [Getting Started](intro/getting-started.md)
-- [First Manuscript Workflow](guides/first-manuscript-workflow.md)
-- [Troubleshooting](guides/troubleshooting.md)
+Use Scriptoria when you need to resolve a manuscript from a supported IIIF provider, preserve a stable local record before a full download exists, work from local scans instead of trusting upstream availability, repair weak pages selectively, and export PDF or image bundles with explicit source and quality choices.
 
-Use the guides when you need a concrete workflow, the reference section when you need exact keys or commands, and the explanation section when you need to understand system behavior.
+Just as important, Scriptoria keeps the operational boundary between remote source, local workspace, and final export artifact visible all the way through the workflow. It is not a public-facing digital library frontend, not a cloud collaboration suite, and not a generic IIIF demo viewer. It is a local-first technical workspace for manuscript-heavy research and curation work.
 
-## Product Model
+## Main Surfaces
 
-Scriptoria separates concerns on purpose:
+The application has four main user-facing surfaces. They are intentionally separate because they solve different problems.
 
-- resolving a document is not the same as downloading it;
-- saving an item to Library is not the same as creating a full local archive;
-- reading can happen against remote IIIF assets or local scans, depending on availability and policy;
-- exporting a PDF is treated as a tracked workflow, not as an unstructured one-click side effect.
+### Discovery
 
-This matters because many upstream libraries are inconsistent. Some support stable free-text discovery, some mostly support identifier- or URL-driven access, and some expose native PDFs while others only expose image-based workflows. Scriptoria keeps these differences visible instead of pretending every provider behaves the same way.
+Discovery is where you resolve a manuscript from a provider-specific input. Depending on the provider, that input may be a shelfmark, a record URL, a text query, or a direct IIIF manifest URL. Discovery is not only "search". It is the normalization layer that translates heterogeneous provider behavior into a candidate item that Scriptoria can work with.
 
-## Main Reading Paths
+### Library
 
-### Guides
+Library is the local catalog of known items. Saving an item to Library is different from downloading it. A manuscript can exist in Library as a local record even when its scans are still remote or incomplete. This separation is fundamental to the product model.
 
-- [Discovery And Library](guides/discovery-and-library.md)
-- [Studio Workflow](guides/studio-workflow.md)
-- [PDF Export](guides/pdf-export.md)
+### Studio
 
-### Reference
+Studio is the main document workspace. It combines viewer state, manifest resolution, local-versus-remote reading policy, OCR, transcription work, and export preparation. Opening Studio is not simply loading a viewer page. It means asking Scriptoria to resolve which assets are available, which source mode is active, and what degree of local completeness exists for the current manuscript.
 
+### Output
+
+Output is the controlled export surface. It combines thumbnail-based page inspection, per-page repair actions, profile-driven export, PDF inventory, and a live job monitor. Export is treated as an explicit workflow because output quality depends on source mode, page availability, profile settings, and upstream capabilities.
+
+## Supported Libraries
+
+Scriptoria currently supports these provider families in the shared registry:
+
+- Vaticana (BAV)
+- Gallica (BnF)
+- Institut de France (Bibnum)
+- Bodleian (Oxford)
+- Universitaetsbibliothek Heidelberg
+- Cambridge University Digital Library
+- e-codices
+- Harvard University
+- Library of Congress
+- Internet Archive
+- generic direct IIIF manifest URL
+
+This does **not** mean every provider behaves the same way. Some are strong for free-text search, some work best with record URLs or identifiers, and some have search flows that are technically supported but operationally less reliable. Read [Provider Support](reference/provider-support.md) before assuming a provider-specific workflow will behave like another one.
+
+## How To Read This Documentation
+
+The documentation is split by function rather than by audience labels. The idea is simple: guides show workflows, reference pages define exact behavior, and explanation pages describe the system model behind the UI.
+
+### Start Here
+
+If you are new to the product and want a working path:
+
+1. Read [Getting Started](intro/getting-started.md).
+2. Follow [First Manuscript Workflow](guides/first-manuscript-workflow.md).
+3. Read [Discovery And Library](guides/discovery-and-library.md).
+4. Read [Studio Workflow](guides/studio-workflow.md).
+5. Read [PDF Export](guides/pdf-export.md) before relying on export profiles or page repair actions.
+
+### Use The Reference When You Need Exact Behavior
+
+Go to the reference section when you need exact inputs, settings, or capability boundaries:
+
+- [Provider Support](reference/provider-support.md)
 - [Configuration Overview](reference/configuration.md)
+- [Detailed Configuration Reference](CONFIG_REFERENCE.md)
 - [CLI Reference](reference/cli.md)
 - [Runtime Paths](reference/runtime-paths.md)
-- [Provider Support](reference/provider-support.md)
 
-### Explanation
+### Use The Explanation Pages When You Need The System Model
+
+The explanation pages are for the parts of the product that are easy to misunderstand if you only read the UI labels:
 
 - [Architecture Summary](explanation/architecture.md)
 - [Storage Model](explanation/storage-model.md)
@@ -57,24 +114,28 @@ This matters because many upstream libraries are inconsistent. Some support stab
 - [Export And PDF Model](explanation/export-and-pdf-model.md)
 - [Security And Path Safety](explanation/security-and-path-safety.md)
 
-## Typical Reading Order
+## Configuration And Operations
 
-For a new user:
+Scriptoria is configurable because it has to cope with very different upstream behaviors and local workstation constraints. The runtime configuration is not cosmetic. It controls network policy, image acquisition strategy, thumbnail behavior, viewer source policy, PDF defaults, storage retention, and test behavior.
 
-1. Read [Getting Started](intro/getting-started.md).
-2. Follow [First Manuscript Workflow](guides/first-manuscript-workflow.md).
-3. Use [Discovery And Library](guides/discovery-and-library.md) and [Studio Workflow](guides/studio-workflow.md) as operating guides.
-4. Read [Provider Support](reference/provider-support.md) before relying on a provider-specific search flow.
-5. Read [PDF Export](guides/pdf-export.md) when you need controlled output.
+If you only need the map, start with [Configuration Overview](reference/configuration.md). If you need the full keyspace and runtime semantics, use [Detailed Configuration Reference](CONFIG_REFERENCE.md).
 
-For a maintainer or contributor:
+## Typical Working Path
 
-1. Read [Architecture Summary](explanation/architecture.md).
-2. Read [Discovery And Provider Model](explanation/discovery-provider-model.md).
-3. Read [Storage Model](explanation/storage-model.md) and [Job Lifecycle](explanation/job-lifecycle.md).
-4. Use [Configuration Overview](reference/configuration.md) and [CLI Reference](reference/cli.md) as exact reference material.
+The most common Scriptoria workflow looks like this:
 
-## Project Docs
+1. Resolve a manuscript in `Discovery`.
+2. Save it to `Library`.
+3. Download only when local assets are actually needed.
+4. Open the item in `Studio`.
+5. Repair or inspect pages in `Output` when quality is uneven.
+6. Export a PDF or image bundle with an explicit profile.
+
+That sequence is important because Scriptoria is built around controlled transitions between states: discovered, saved, partially local, fully local, and exported.
+
+## Project Documentation
+
+The site also includes project-facing material for maintainers and contributors:
 
 - [Contributing](project/contributing.md)
 - [Testing Guide](project/testing-guide.md)
@@ -83,6 +144,4 @@ For a maintainer or contributor:
 
 ## Publishing Model
 
-- The docs site is the canonical public documentation surface.
-- `docs/wiki/` is the source of truth for the GitHub Wiki.
-- The GitHub Wiki is an orientation layer, not a parallel documentation set.
+This docs site is the canonical documentation surface. Long-form material lives under `docs/`, while `docs/wiki/` is the source for the GitHub Wiki publishing layer. The wiki stays intentionally short and should direct readers back to the canonical site instead of duplicating it.

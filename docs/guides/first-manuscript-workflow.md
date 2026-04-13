@@ -1,81 +1,81 @@
 # First Manuscript Workflow
 
-This guide covers the shortest complete workflow for a real manuscript, while also explaining the decisions Scriptoria asks you to make along the way.
+This guide walks through the shortest serious workflow for a manuscript in Scriptoria. The goal is not only to describe which buttons to press, but to explain what state the system is building at each step.
 
-## 1. Resolve The Source
+## 1. Resolve The Source In Discovery
 
-Start in `Discovery` and submit one of:
+Start in `Discovery` with the strongest reference you have available. Best case is a direct IIIF manifest URL. A supported provider URL, shelfmark, provider-specific identifier, or free-text query can also work, but they are progressively less stable depending on the provider.
 
-- a IIIF manifest URL;
-- a supported provider URL;
-- a shelfmark or provider-specific identifier;
-- a free-text query for providers with search adapters.
+When the preview looks correct, use `Add item`.
 
-`Add item` stores local metadata. It does not force a full download.
+That action is intentionally limited. It stores the local manuscript record and normalized metadata, but it does not start a heavy asset acquisition pipeline on your behalf.
 
-That distinction is intentional. Scriptoria lets you build a research shortlist before you commit network time and local storage to a full image acquisition.
+## 2. Register The Item In Library
 
-## 2. Build The Local Workspace
+Once the item is in `Library`, it becomes part of your local workspace model.
 
-Open the new item in `Library` and decide whether to:
+At that point you decide whether the item should remain a metadata-only local record, move immediately into a full download, or resume a previous partial acquisition. This is the moment where an external manuscript becomes a managed local object. The workspace may still be thin, but the identity and current state are now under Scriptoria's control.
 
-- keep it as metadata-only for later;
-- start the full download;
-- retry missing pages if a prior run was partial.
+## 3. Understand The Initial State
 
-This separation matters. Scriptoria treats discovery and asset acquisition as different operations.
+Before opening Studio, understand the three states that matter operationally:
 
-At this stage, you should think in three states:
+- `saved`: local record exists, but a complete local scan set does not;
+- `partial`: some local assets exist, but the workspace is incomplete;
+- `complete`: local coverage is good enough for stable local-first reading and export.
 
-- `saved`: the item exists in local catalog state, but the reading assets may still be remote;
-- `partial`: some local pages or files exist, but the local working copy is incomplete;
-- `complete`: the local working copy is considered complete enough for fully local reading and export workflows.
+These are not decorative labels. They drive later behavior in Studio and Output.
 
-## 3. Work In Studio
+## 4. Open The Item In Studio
 
-`Studio` is the main research surface:
+Open the manuscript from `Library` into `Studio`.
 
-- the viewer handles local and remote image sourcing;
-- transcription and OCR flows stay attached to the document context;
-- page-level actions let you refresh or optimize only the pages that need attention.
+At this point Scriptoria resolves several things at once:
 
-Opening an item in Studio does not simply “open a viewer”. Scriptoria also resolves:
+- whether the manifest should come from local cache or remote source;
+- whether page images should be local or remote;
+- whether the current state satisfies the configured local-reading policy;
+- whether the item opens as a local manuscript or an online manuscript.
 
-- whether the manifest should come from the local cache or the remote endpoint;
-- whether page images should come from local scans or remain remote;
-- whether the current local asset state is complete enough for the configured reading policy.
+This is why the correct question is not "does the item exist in Library?" but "what local coverage does the item currently have?"
 
-This is why Studio may show a document in remote mode even when the item already exists in Library.
+## 5. Inspect And Repair Only What Needs Attention
 
-## 4. Export Only When Needed
+If the manuscript is incomplete or some pages are weak, do not assume you need to redownload everything.
 
 Use `Output` for:
 
+- thumbnail-based page inspection;
+- page selection;
+- `Scarica`, `Hi-res`, and `Opt` actions on individual pages;
 - PDF inventory review;
-- profile-based export;
-- page refresh actions;
-- export job monitoring.
+- export job creation.
 
-Profiles should be the default decision point. Per-job overrides should remain exceptional.
+This is one of Scriptoria's strengths: page-level repair exists because real-world manuscript pipelines often fail unevenly rather than uniformly.
 
-The product is deliberately conservative here. Export is treated as a tracked workflow because PDF generation may depend on:
+## 6. Export Deliberately
 
-- native upstream PDF availability;
-- local scan availability and quality;
-- temporary remote refetch for higher-resolution pages;
-- page selection rules;
-- output cleanup and retention policy.
+When the manuscript is ready, create the export from `Output`.
 
-## Common Pitfalls
+Use a PDF profile as the normal control surface. Only open job-level overrides when the current export is exceptional.
 
-- If Studio opens without a document, you are on the recent-work hub.
-- If remote images are shown, the item may still be incomplete locally.
-- If pages remain staged, check the storage promotion policy.
-- If a provider search feels unreliable, switch from free text to a shelfmark, record URL, or direct manifest URL.
+The final export can depend on:
+
+- whether a native provider PDF exists;
+- the quality of the current local scans;
+- whether remote temporary high-resolution fetch is needed;
+- whether all pages or only a subset should be included;
+- whether temporary assets should be cleaned after the job.
+
+That is why Scriptoria treats export as a tracked workflow instead of a one-click side effect.
+
+## Common Failure Modes
+
+If the first workflow feels wrong, the cause is usually one of a small set of predictable cases: the provider input was too vague and should be replaced with a direct URL or identifier, the item is only `saved` and not yet locally complete, Studio is correctly staying in remote mode because coverage is still incomplete, staged pages have not yet been promoted because storage policy is conservative, or the provider itself is better handled through URL-driven or browser-assisted discovery.
 
 ## Related Docs
 
-- [Discovery and Library](discovery-and-library.md)
+- [Discovery And Library](discovery-and-library.md)
 - [Studio Workflow](studio-workflow.md)
 - [PDF Export](pdf-export.md)
 - [Troubleshooting](troubleshooting.md)

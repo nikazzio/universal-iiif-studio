@@ -1,11 +1,12 @@
 # Getting Started
 
-Scriptoria supports two primary entry points:
+This page is the shortest reliable path to a working local installation and a first useful session. It does not try to document every feature. Its purpose is to get you from clone to a real manuscript workflow without confusion about what the application is doing.
 
-- `scriptoria` for the web application;
-- `scriptoria-cli "<manifest-url>"` for direct CLI-driven download and inspection tasks.
+Scriptoria exposes two entry points. `scriptoria` starts the web application and gives you the complete workflow. `scriptoria-cli "<manifest-url>"` is the direct CLI path when you already know the exact item you want. For most users, the web application is the right starting point because it exposes discovery, local cataloging, Studio work, and export in one place.
 
-The recommended starting point is the web application. It exposes the full workflow: discovery, local cataloging, Studio reading, and PDF export. The CLI is useful when you already know the document you need and want a direct download-oriented path.
+## Prerequisites
+
+You need Python 3.10 or newer, a local virtual environment, and the project installed in editable mode.
 
 ## Install
 
@@ -17,64 +18,66 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-## Start The Web App
+## Start The Web Application
 
 ```bash
 scriptoria
 ```
 
-Open `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8000`.
 
-## What To Expect In The Interface
+At first start, expect a local-first application rather than a public website. Even when you work against remote IIIF sources, Scriptoria is already building a managed local record of the item and preparing its runtime workspace.
 
-The application is local-first. Even when you work with remote IIIF material, Scriptoria builds a managed local record for the item and can progressively enrich that record with downloaded assets.
+## What You Will See
 
-At a high level:
+The interface is organized into four operational surfaces. `Discovery` resolves external inputs into candidate items. `Library` tracks the items already known to your local workspace. `Studio` opens one manuscript in a working context. `Output` handles page inspection, export preparation, and finished artifacts.
 
-- `Discovery` resolves identifiers, URLs, and provider search results into candidate items;
-- `Library` stores the known items and their local state;
-- `Studio` opens one item in a reading and working context;
-- `Output` manages PDF exports and page-level asset actions.
+Those surfaces are separate because they represent different states in the workflow. Discovery is not Library, and Library is not the same thing as a complete local download.
 
-## First Workflow
+## Your First Useful Session
+
+The simplest realistic path is:
 
 1. Open `Discovery`.
-2. Resolve a manifest URL, provider URL, shelfmark, or supported identifier.
-3. Add the item to `Library`.
-4. Start the download only when you actually want local assets.
-5. Open the item in `Studio`.
-6. Export a PDF from `Output` when needed.
+2. Paste a direct IIIF manifest URL, a provider URL, a shelfmark, or another supported identifier.
+3. Use `Add item` to create the local record.
+4. Open the item in `Library`.
+5. Download scans only if you need a real local working copy.
+6. Open the item in `Studio`.
+7. Use `Output` when you need page inspection or export.
+
+If you only remember one thing, remember this: saving an item is not the same as downloading it.
 
 ## Choosing The Right Input
 
-Scriptoria accepts several input styles, but not every provider is equally good at all of them.
+Scriptoria accepts multiple input styles, but the best one depends on the provider.
 
-- Best case: a direct IIIF manifest URL.
-- Very good: a provider item URL that the resolver knows how to normalize.
-- Often good: a provider-specific identifier or shelfmark, such as `Urb.lat.1779`.
-- Variable: free-text search. Some providers expose reliable search adapters; others are better handled with explicit identifiers or URLs.
+The general order of reliability is:
 
-Before you start large-scale work, read [Provider Support](../reference/provider-support.md). It explains what kind of reference is most reliable for each supported library.
+1. direct IIIF manifest URL;
+2. provider item URL;
+3. provider-specific shelfmark or identifier;
+4. free-text query.
 
-## CLI Quick Start
+That last option is the least universal. Some providers are good at discovery-first search, while others behave much better when you already have a stable record reference. Before doing serious work across libraries, read [Provider Support](../reference/provider-support.md).
+
+## When To Use The CLI
+
+Use the CLI when you already know the exact manuscript and do not need the full interactive workflow.
+
+Example:
 
 ```bash
 scriptoria-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ```
 
-Use the CLI when you need a direct, scriptable workflow without opening the web interface.
+The CLI is a good fit for:
 
-Typical CLI use cases:
+- direct acquisition of known items;
+- shell-based workflows;
+- scripted processing;
+- environments where you do not need the full Studio and Output surfaces.
 
-- resolve and download one known manuscript quickly;
-- inspect local database state;
-- work in shell scripts or batch-oriented environments;
-- avoid the web UI when you only need direct acquisition.
+## What To Read Next
 
-## Next Steps
-
-- [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
-- [Discovery And Library](../guides/discovery-and-library.md)
-- [Studio Workflow](../guides/studio-workflow.md)
-- [Configuration Overview](../reference/configuration.md)
-- [CLI Reference](../reference/cli.md)
+If this first session worked as expected, continue with [First Manuscript Workflow](../guides/first-manuscript-workflow.md) and then [Discovery And Library](../guides/discovery-and-library.md). When you start using the item workspace seriously, read [Studio Workflow](../guides/studio-workflow.md) and [PDF Export](../guides/pdf-export.md). If you need to tune behavior rather than just use the defaults, move on to [Configuration Overview](../reference/configuration.md).

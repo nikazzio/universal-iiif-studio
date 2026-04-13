@@ -12,8 +12,9 @@
     "docs:clear": "docusaurus clear"
   },
   "devDependencies": {
-    "@docusaurus/core": "3.9.2",
-    "@docusaurus/preset-classic": "3.9.2",
-    "@docusaurus/theme-mermaid": "3.9.2"
+    "@docusaurus/core": "3.10.0",
+    "@docusaurus/preset-classic": "3.10.0",
+    "@docusaurus/theme-mermaid": "3.10.0",
+    "@mermaid-js/layout-elk": "0.1.9"
   }
 }

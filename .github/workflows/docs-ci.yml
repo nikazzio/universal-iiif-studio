@@ -40,21 +40,6 @@ jobs:
       - name: Install docs dependencies
         run: npm ci
 
-      - name: Link check
-        uses: lycheeverse/lychee-action@v2
-        with:
-          fail: true
-          args: >-
-            --no-progress
-            --verbose
-            --max-retries 3
-            --retry-wait-time 2
-            --timeout 20
-            --exclude-path .venv/**
-            --exclude-path node_modules/**
-            --exclude-file .lycheeignore
-            "**/*.md"
-
       - name: Check docs language consistency
         run: |
           python scripts/check_docs_language.py
@@ -74,3 +59,25 @@ jobs:
       - name: Check release consistency
         run: |
           python scripts/check_release_consistency.py
+
+  docs-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          fail: true
+          args: >-
+            --no-progress
+            --verbose
+            --max-retries 3
+            --retry-wait-time 2
+            --timeout 20
+            --exclude-path .venv/**
+            --exclude-path node_modules/**
+            --exclude-file .lycheeignore
+            "**/*.md"

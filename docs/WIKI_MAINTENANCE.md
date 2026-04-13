@@ -33,13 +33,13 @@ The sync script is responsible for:
 Dry-run first:
 
 ```bash
-python scripts/sync_wiki.py --repo owner/repo --dry-run
+python3 scripts/sync_wiki.py --repo owner/repo --dry-run
 ```
 
 Publish when dry-run is clean:
 
 ```bash
-python scripts/sync_wiki.py --repo owner/repo --push
+python3 scripts/sync_wiki.py --repo owner/repo --push
 ```
 
 ## Required Wiki Pages

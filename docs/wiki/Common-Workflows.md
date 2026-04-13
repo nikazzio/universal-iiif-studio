@@ -1,27 +1,34 @@
 # Common Workflows
 
-Use this page when you need the shortest explanation of the main product flows.
+Use this page for the shortest operational summary of the main Scriptoria flows. The point is to remember the sequence, not to replace the full guides.
 
-## Resolve And Add
+## Resolve And Register
 
 1. Open `Discovery`.
-2. Resolve a manifest URL, provider URL, shelfmark, or supported identifier.
-3. Use `Add item` to save metadata locally.
+2. Paste a manifest URL, provider URL, shelfmark, or supported identifier.
+3. Use `Add item` to create the local manuscript record.
 
-## Download And Open
+## Build The Local Workspace
 
 1. Go to `Library`.
-2. Start the document download only when you need local assets.
-3. Open the item in `Studio`.
+2. Keep the item as metadata-only or start the full download.
+3. Reopen the item from Library when you are ready to work.
 
-## Export A PDF
+## Read And Repair
 
 1. Open the item in `Studio`.
-2. Go to `Output`.
+2. Let Scriptoria choose local or remote reading mode based on current asset state.
+3. Use `Output` when pages need inspection, repair, or export preparation.
+
+## Export
+
+1. Open `Output`.
+2. Inspect pages if needed.
 3. Choose a PDF profile.
-4. Start the export job.
+4. Start the export job and monitor it from the Jobs view.
 
 ## Read Next
 
-- [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
+- [Discovery And Library](../guides/discovery-and-library.md)
+- [Studio Workflow](../guides/studio-workflow.md)
 - [PDF Export](../guides/pdf-export.md)

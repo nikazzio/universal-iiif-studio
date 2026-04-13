@@ -1,8 +1,8 @@
 # Getting Started
 
-Use this page for the shortest path to a working local install. Continue to the docs site for the full documentation set.
+Use this page when you need the shortest reliable path to a working local install.
 
-## Quick Start
+## Quick Install
 
 ```bash
 git clone https://github.com/nikazzio/scriptoria.git
@@ -13,26 +13,28 @@ pip install -e .
 scriptoria
 ```
 
-Open `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8000`.
 
-## CLI Quick Path
+## What To Do First
+
+The normal first workflow is straightforward:
+
+1. resolve a manuscript in `Discovery`;
+2. add it to `Library`;
+3. download only when local assets are actually needed;
+4. open it in `Studio`;
+5. use `Output` for inspection and export.
+
+## CLI Shortcut
 
 ```bash
 scriptoria-cli "<manifest-url>"
 ```
 
-Any supported IIIF manifest URL can be used directly. Provider URLs and supported identifiers can be resolved through the web application.
-
-## Main Workflow
-
-1. Resolve an item in `Discovery`.
-2. Add it to `Library`.
-3. Download only when you need local assets.
-4. Open it in `Studio`.
-5. Export from `Output`.
+Use the CLI when you already have the exact IIIF manifest and do not need the full interactive workflow.
 
 ## Read Next
 
 - [Docs Home](../index.md)
 - [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
-- [Common Workflows](Common-Workflows.md)
+- [Provider Support](../reference/provider-support.md)

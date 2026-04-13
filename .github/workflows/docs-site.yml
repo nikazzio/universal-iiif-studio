@@ -10,6 +10,7 @@ on:
       - "docusaurus.config.js"
       - "sidebars.js"
       - "package.json"
+      - "package-lock.json"
       - ".github/workflows/docs-site.yml"
   workflow_dispatch:
 

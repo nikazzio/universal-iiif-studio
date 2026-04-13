@@ -1,59 +1,125 @@
 # Export And PDF Model
 
-Export in Scriptoria is profile-driven and storage-aware.
+Export in Scriptoria is profile-driven, source-aware, and explicitly job-based.
 
-## Main Decisions
+## Why Export Is Its Own Subsystem
 
-- prefer native PDF when available and configured;
-- fall back to IIIF image download when native PDF is unavailable or disabled;
-- optionally build a PDF from images;
-- allow temporary remote high-resolution sourcing for export jobs that need it.
+Scriptoria does not treat export as a trivial "save as PDF" action. The code separates it into a dedicated service because the final result depends on a chain of decisions that are not stable across providers or across manuscripts.
 
-## Why Export Is A Separate System
+The export service has to resolve item scope, requested format, supported destination, valid pages for the selected source mode, effective profile or document override, source material origin, and whether the result is a PDF or a ZIP of selected images. That is why the UI exposes both a build form and a live jobs monitor.
 
-Export is not treated as a passive file conversion step. It is a separate job system because output quality depends on multiple moving parts:
+## Capability Model
 
-- whether the provider exposes a native PDF;
-- whether the item already has complete local scans;
-- whether local scans should be optimized before output;
-- whether the export should temporarily re-fetch better remote images;
-- whether the user wants all pages or a custom selection;
-- whether cleanup should remove temporary high-resolution export assets afterward.
+The service declares export capabilities explicitly. This is important because the product already reserves UI space for future export targets without pretending they are ready.
 
-## Why Profiles Matter
+Currently enabled are `pdf_images`, `pdf_searchable`, `pdf_facing`, `zip_images`, and the `local_filesystem` destination. Currently declared but disabled are transcription-oriented text exports and destinations such as `google_drive`.
 
-Profiles keep export behavior predictable. They let users choose quality, source mode, and cleanup behavior without editing global config for every job.
+This capability model lets the UI remain honest: visible roadmap, but no fake affordances.
 
-## PDF Sources
+## Profiles As Policy
 
-Scriptoria recognizes two main PDF source models:
+Profiles are not cosmetic presets. They are policy bundles applied before job execution.
 
-- `native PDF`: the upstream provider already exposes a PDF representation;
-- `image-based PDF`: Scriptoria assembles a PDF from page images, either from local scans or temporary export-specific fetches.
+The effective export configuration is resolved in this order:
 
-The product can prefer native PDF where appropriate, but image-based export remains the most controllable and generally available path.
+1. explicit profile selected for the job;
+2. document-specific override if present;
+3. global default profile;
+4. fallback to `balanced`.
 
-## Export Jobs And Scope
+The normalized profile payload controls:
 
-Every export run becomes a tracked job with:
+- compression label;
+- image source mode;
+- maximum long edge for export images;
+- JPEG quality;
+- cover and colophon inclusion;
+- forced remote re-fetch;
+- temporary asset cleanup;
+- maximum parallel page fetch count.
 
-- item scope;
-- output format;
+This means export behavior remains deterministic even when the UI surface changes later.
+
+## Source Resolution Model
+
+The export subsystem has three main image source modes:
+
+- `local_balanced`;
+- `local_highres`;
+- `remote_highres_temp`.
+
+The first two assume that local scans are the working source. The third is different: it allows the service to materialize higher-resolution pages into a temporary staging area for the current job, particularly when local scans are incomplete or not detailed enough.
+
+This source distinction directly changes how page validation works, how many pages are considered available, and whether the job can proceed without a complete local scan set.
+
+## Page Selection Semantics
+
+The export service accepts:
+
+- `all`;
+- `custom`.
+
+`custom` is parsed from a human-oriented range syntax such as `1,3-5,9`.
+
+Selection is then validated against the active source:
+
+- in local modes, requested pages must exist in `scans/`;
+- in `remote_highres_temp`, the service can use manifest page count when local scans are absent or incomplete.
+
+This is one of the key architectural differences between export and ordinary viewing. Viewing can degrade gracefully to remote access; export must either validate exactly or fail with a clear reason.
+
+## Native PDF Versus Image-Based Output
+
+Scriptoria recognizes two broad output families:
+
+- provider-native PDF;
+- image-based output assembled from page images.
+
+The dedicated export service mainly governs the second family, because that is where page selection, quality control, and local-vs-remote materialization matter most.
+
+Provider-native PDF still matters as a capability signal and as a pragmatic shortcut for some libraries, but image-based assembly is the more general path across heterogeneous IIIF sources.
+
+## Job Lifecycle
+
+Each export becomes a stored job row with:
+
+- scope type;
+- document ids;
+- library identity;
+- export format;
+- output kind;
 - page-selection mode;
 - destination;
-- current progress;
-- final output path or error status.
+- progress counters;
+- final output path;
+- terminal error or cancellation status.
 
-This gives the UI a stable way to monitor long-running exports, cancellations, and retries.
+Worker execution happens asynchronously. The route layer creates the job entry first, then spawns the worker thread. That separation is what allows the UI to poll status, cancel active jobs, and still retain the result history after completion.
+
+## Relationship Between Page Actions And Export
+
+The thumbnail page actions are part of the same export-oriented quality model even though they are not export jobs themselves.
+
+They exist because export quality is often constrained by page-level problems:
+
+- one scan may be too compressed;
+- one page may have been stitched poorly;
+- one provider fetch may need a direct high-resolution retry;
+- one manuscript may need local optimization before the final PDF build.
+
+The Output surface therefore combines pre-export repair and final export generation in one workspace.
+
+## Why Thumbnail Derivatives Matter
+
+The export UI does not render the full scans in the selection grid. It uses cached derivatives and remote-resolution metadata so the page review surface stays responsive.
+
+That subsystem keeps local thumbnails for the grid, hover previews for quick inspection, remote dimension cache entries, and retention rules for stale derivatives. Architecturally, this means export inspection is not just a viewer convenience. It is a storage-backed derivative layer with its own cache discipline.
 
 ## Relationship With Studio
 
-Studio's Output tab is the primary user surface for export, but the export model is shared and can also be started from other UI contexts. The same core export services decide:
+Studio is the main user-facing surface, but export logic lives in shared services. Studio feeds the job request, while the core service resolves profile, pages, source mode, and artifact generation.
 
-- which pages are included;
-- which image source mode is active;
-- whether a local artifact can be reused;
-- whether an export capability is currently available.
+That split is important. Studio owns interaction and feedback. Export services own execution and validation. Storage services own persistence of jobs and artifacts.
 
 ## Related Docs
 

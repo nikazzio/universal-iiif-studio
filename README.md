@@ -79,9 +79,9 @@ Any IIIF-compliant manifest URL works directly.
 
 | | |
 | --- | --- |
-| 📘 [User Guide](docs/DOCUMENTAZIONE.md) | 🏗️ [Architecture](docs/ARCHITECTURE.md) |
-| ⚙️ [Config Reference](docs/CONFIG_REFERENCE.md) | 🌐 [HTTP Client](docs/HTTP_CLIENT.md) |
-| 📖 [Wiki](docs/wiki/Home.md) | 🗂️ [All Docs](docs/index.md) |
+| 🗂️ [Docs Home](docs/index.md) | 🚀 [Getting Started](docs/intro/getting-started.md) |
+| 🏗️ [Architecture](docs/explanation/architecture.md) | ⚙️ [Config Overview](docs/reference/configuration.md) |
+| 💻 [CLI Reference](docs/reference/cli.md) | 📖 [Wiki](docs/wiki/Home.md) |
 
 ## Development
 

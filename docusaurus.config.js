@@ -9,6 +9,7 @@ const config = {
   tagline: "A research workbench for IIIF manuscripts.",
   url: `https://${orgName}.github.io`,
   baseUrl: `/${repoName}/`,
+  favicon: "img/scriptoria-header.svg",
   organizationName: orgName,
   projectName: repoName,
   onBrokenLinks: "throw",
@@ -44,11 +45,29 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      announcementBar: {
+        id: "project-status",
+        isCloseable: true,
+        content:
+          '<a href="https://github.com/nikazzio/scriptoria" target="_blank" rel="noopener noreferrer">GitHub</a> · ' +
+          '<a href="https://github.com/nikazzio/scriptoria/issues" target="_blank" rel="noopener noreferrer">Issues</a> · ' +
+          '<a href="https://github.com/nikazzio/scriptoria/releases" target="_blank" rel="noopener noreferrer">Releases</a> · ' +
+          '<img alt="GitHub stars" src="https://img.shields.io/github/stars/nikazzio/scriptoria?style=flat-square&label=stars" /> ' +
+          '<img alt="Open issues" src="https://img.shields.io/github/issues/nikazzio/scriptoria?style=flat-square&label=issues" />',
+      },
       navbar: {
         title: "Scriptoria",
+        logo: {
+          alt: "Scriptoria",
+          src: "img/scriptoria-header.svg",
+          href: "/",
+        },
         items: [
           {to: "/", label: "Docs", position: "left"},
+          {to: "/reference/provider-support", label: "Libraries", position: "left"},
+          {to: "/reference/configuration", label: "Configuration", position: "left"},
           {href: `https://github.com/${orgName}/${repoName}`, label: "GitHub", position: "right"},
+          {href: `https://github.com/${orgName}/${repoName}/issues`, label: "Issues", position: "right"},
           {href: `https://github.com/${orgName}/${repoName}/wiki`, label: "Wiki", position: "right"},
         ],
       },
@@ -68,6 +87,7 @@ const config = {
             items: [
               {label: "GitHub", href: `https://github.com/${orgName}/${repoName}`},
               {label: "Issues", href: `https://github.com/${orgName}/${repoName}/issues`},
+              {label: "Wiki", href: `https://github.com/${orgName}/${repoName}/wiki`},
             ],
           },
         ],

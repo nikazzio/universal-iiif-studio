@@ -16,7 +16,7 @@ This is expected. Opening `/studio` without `doc_id` and `library` shows the rec
 
 ## Studio shows remote images instead of local images
 
-This is expected when local page availability is incomplete and local-only gating is enabled.
+This is expected when local page availability is incomplete and local-only gating is enabled. In practice, it usually means Scriptoria is being conservative rather than failing.
 
 Review:
 
@@ -33,7 +33,15 @@ Review:
 
 ## Why do some providers feel slower than others?
 
-Per-library rate limiting and backoff settings can be stricter for fragile upstream services. Review `settings.network.global.*` and `settings.network.libraries.<library>.*`.
+Per-library rate limiting and backoff settings can be stricter for fragile upstream services. Review `settings.network.global.*` and `settings.network.libraries.<library>.*` before assuming the slowdown is accidental.
+
+## Which libraries are currently supported?
+
+See [Provider Support](../reference/provider-support.md). That page also explains which providers are search-first, resolver-first, or operationally better with explicit URLs and identifiers.
+
+## Where is the full configuration documented?
+
+Start with [Configuration Overview](../reference/configuration.md), then use [Detailed Configuration Reference](../CONFIG_REFERENCE.md) for the full keyspace.
 
 ## Wiki sync ran, but the wiki did not update
 

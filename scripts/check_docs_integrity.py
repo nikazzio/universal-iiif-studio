@@ -21,15 +21,15 @@ REQUIRED_FILES = [
     Path("docs/reference/cli.md"),
     Path("docs/explanation/architecture.md"),
     Path("docs/project/wiki-maintenance.md"),
-    Path("docs/adr/0001-docs-information-architecture.md"),
     Path("docs/wiki/Home.md"),
 ]
 
 REQUIRED_README_LINKS = [
     "(docs/index.md)",
-    "(docs/DOCUMENTAZIONE.md)",
-    "(docs/ARCHITECTURE.md)",
-    "(docs/CONFIG_REFERENCE.md)",
+    "(docs/intro/getting-started.md)",
+    "(docs/explanation/architecture.md)",
+    "(docs/reference/configuration.md)",
+    "(docs/reference/cli.md)",
 ]
 
 REQUIRED_DOC_LINK_MARKERS = [

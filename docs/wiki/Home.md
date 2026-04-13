@@ -1,23 +1,35 @@
 # Scriptoria Wiki
 
-This wiki is a short orientation layer for Scriptoria. Use it for fast navigation, then continue into the docs site for the full documentation set.
+This wiki is the short orientation layer for Scriptoria. It exists to get readers to the right canonical page quickly, not to duplicate the full documentation set.
 
-## Start Here
+If you are new to the project, start from the docs site:
+
+- [Docs Home](../index.md)
+- [Getting Started](../intro/getting-started.md)
+- [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
+
+## Use This Wiki For Fast Navigation
 
 - [Getting Started](Getting-Started.md)
 - [Common Workflows](Common-Workflows.md)
 - [Troubleshooting](Troubleshooting.md)
 - [FAQ](FAQ.md)
 
-## Canonical Docs
+## Canonical Technical Entry Points
 
-- [Docs Home](../index.md)
-- [CLI Reference](../reference/cli.md)
+- [Provider Support](../reference/provider-support.md)
 - [Configuration Overview](../reference/configuration.md)
-- [Architecture Summary](../explanation/architecture.md)
+- [Detailed Configuration Reference](../CONFIG_REFERENCE.md)
+- [CLI Reference](../reference/cli.md)
+- [Studio Workflow](../guides/studio-workflow.md)
+- [PDF Export](../guides/pdf-export.md)
 
-## Maintenance Model
+## What The Wiki Is Not
 
-- The docs site is the source of truth.
-- Wiki pages are curated publish targets only.
-- Edit wiki source files in `docs/wiki/`, not the GitHub Wiki directly.
+The wiki is not the canonical long-form documentation set, not a second copy of the full docs site, and not the right place for deep reference material.
+
+When a topic needs detail, that detail belongs in `docs/` and the wiki should link to it.
+
+## Maintenance Rule
+
+Edit wiki source files in `docs/wiki/`, not in the GitHub Wiki repository directly.

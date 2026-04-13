@@ -53,14 +53,6 @@ const sidebars = {
         "project/issue-triage",
       ],
     },
-    {
-      type: "category",
-      label: "ADRs",
-      items: [
-        "adr/docs-information-architecture",
-        "adr/docs-site-and-wiki-publishing-model",
-      ],
-    },
   ],
 };
 

@@ -1,14 +1,28 @@
 # Configuration Reference
 
-Single source of truth for runtime configuration keys used by this project.
+This page is the detailed reference for the runtime `config.json` used by Scriptoria. It is meant for operators, contributors, and advanced users who need the exact keyspace and the practical runtime meaning of each configuration family.
+
+Use [Configuration Overview](reference/configuration.md) if you want the conceptual map first. Use this page when you need to know exactly which key exists, what shape it expects, and how the application interprets it.
 
 ## Scope and Sources
 
-This reference documents the full `config.json` keyspace currently used by the app, based on:
-- `src/universal_iiif_core/config_manager.py` (`DEFAULT_CONFIG_JSON`)
-- `config.example.json`
+This reference documents the `config.json` keyspace currently used by the application, based on:
 
-If a key appears in one source but not the other, keep this document aligned with runtime behavior in `ConfigManager`.
+- `src/universal_iiif_core/config_manager.py` and its runtime defaults;
+- validation logic in `src/universal_iiif_core/config_validation.py`;
+- `config.example.json`;
+- the active Settings UI panes that expose parts of the same tree.
+
+If a key appears in one source but not the others, this document should follow actual runtime behavior first and example files second.
+
+## How To Read This Reference
+
+The file is intentionally dense. A practical reading strategy is:
+
+1. locate the top-level family you need;
+2. read the notes attached to that family, not only the raw keys;
+3. cross-check with the related UI pane if the key is user-editable from the web interface;
+4. treat validation and migration notes as part of the contract, because Scriptoria still carries some alpha-era legacy keys.
 
 ## Runtime Validation Policy
 
@@ -173,17 +187,16 @@ Behavior notes:
 ## `settings.library`
 
 - `settings.library.default_mode` (`string`, default: `operativa`)
-  - allowed: `operativa` | `archiviata`
-  - Determines the initial view mode displayed in the Library interface
-  - `operativa`: shows active/working documents (documents currently being processed or studied)
-  - `archiviata`: shows archived documents (completed or stored documents)
+  - allowed: `operativa` | `archivio`
+  - Determines the initial view mode displayed in the Library interface.
+  - `operativa` opens the working view oriented around active study items.
+  - `archivio` opens the archival view used for retained items and completed workspaces.
 
 ## `settings.ui`
 
 - `settings.ui.theme_preset` (`string`, default: `rosewater`)
 - `settings.ui.theme_primary_color` (`string`, default: `#7B8CC7`)
 - `settings.ui.theme_accent_color` (`string`, default: `#E8A6B6`)
-- `settings.ui.theme_color` (`string`, default: `#E8A6B6`)
 - `settings.ui.items_per_page` (`int`, default: `12`)
 - `settings.ui.toast_duration` (`int`, default: `3000`)
 - `settings.ui.studio_recent_max_items` (`int`, default: `8`, allowed range: `1..20`)
@@ -191,7 +204,7 @@ Behavior notes:
 - `settings.ui.polling.download_status_interval_seconds` (`int`, default: `3`, allowed range: `1..30`)
 
 Notes:
-- `theme_color` is kept for backward compatibility; current UI uses primary/accent keys and preset.
+- `theme_color` is a legacy input accepted only during migration; `ConfigManager` rewrites it in-memory to `theme_accent_color` and removes the old key from the loaded tree.
 - Download polling values are used by Discovery HTMX fragments only (Download Manager and single status card).
 
 ## `settings.images`
@@ -200,8 +213,6 @@ Notes:
   - allowed: `balanced|quality_first|fast|archival|custom`
 - `settings.images.download_strategy_custom` (`string[]`, default: `['3000', '1740', 'max']`)
   - used only when `download_strategy_mode=custom`
-- `settings.images.download_strategy` (`string[]`, default: `['3000', '1740', 'max']`)
-  - canonical resolved strategy used at runtime (materialized from mode/custom)
 - `settings.images.stitch_mode_default` (`string`, default: `auto_fallback`)
   - allowed: `auto_fallback|direct_only|stitch_only`
 - `settings.images.iiif_quality` (`string`, default: `default`)
@@ -215,6 +226,7 @@ Runtime notes:
 - `download_strategy_mode` defines ordered direct size attempts before tile stitching.
 - The Studio `Std` button uses the same strategy as a normal volume download.
 - `download_strategy_custom` is an ordered attempt list (`3000`, `1740`, `max`), not a guarantee that `max` is larger than every explicit numeric attempt.
+- `download_strategy` is not a stable persisted config key anymore. Earlier configs may still contain it, but `ConfigManager` drops it and runtime recomputes the effective direct-attempt sequence from `download_strategy_mode` plus `download_strategy_custom`.
 - `stitch_mode_default` controls whether the standard volume strategy can fall back to stitching after direct attempts.
 - `iiif_quality` applies to normal page downloads and temporary remote high-res export fetches.
 - `probe_remote_max_resolution` drives the Studio thumbnail “Remote” informational line by probing `info.json`; it does not change download behavior.
@@ -222,8 +234,14 @@ Runtime notes:
 
 ## `settings.ocr`
 
-- `settings.ocr.ocr_engine` (`string`, optional in example config)
+- `settings.ocr.ocr_engine` (`string`, default: `openai`)
+  - allowed: `openai|anthropic|google_vision|kraken|huggingface`
 - `settings.ocr.kraken_enabled` (`bool`, default: `false`)
+
+Notes:
+- `settings.defaults.preferred_ocr_engine` seeds workflows that have not selected an engine explicitly.
+- `settings.ocr.ocr_engine` is the operational OCR engine used by Studio OCR flows.
+- The current Settings UI exposes `openai`, `anthropic`, `google_vision`, and `kraken`. Validation and OCR runtime also accept `huggingface`, so direct `config.json` editing can still select it.
 
 ## `settings.pdf`
 
@@ -231,6 +249,11 @@ Runtime notes:
 - `settings.pdf.viewer_jpeg_quality` (`int`, default: `95`)
 - `settings.pdf.prefer_native_pdf` (`bool`, default: `true`)
 - `settings.pdf.create_pdf_from_images` (`bool`, default: `false`)
+
+Notes:
+- `viewer_dpi`, `viewer_jpeg_quality`, `prefer_native_pdf`, and `create_pdf_from_images` are edited from the Settings `Processing Core` pane even though they live under `settings.pdf.*`.
+- `prefer_native_pdf=true` means Scriptoria will prefer a source PDF exposed by the upstream manifest when that produces a cleaner local acquisition path and no page subset has been requested.
+- `create_pdf_from_images=true` adds a compiled PDF artifact from local images when a native PDF was not used.
 
 ### `settings.pdf.export`
 
@@ -270,6 +293,7 @@ UI/runtime notes:
 - Studio item Output only selects one profile for the current job.
 - Studio item Output keeps profile selection as the primary control; job-specific overrides are optional and collapsed by default.
 - `max_parallel_page_fetch` is actively used for parallel remote high-res page staging.
+- `document_overrides` still exists in runtime because `pdf_profiles.py` can persist per-document override state, but it is not the main operator-facing control surface anymore.
 
 Backward compatibility:
 - legacy `settings.pdf.render_dpi` is mapped in-memory to:
@@ -282,6 +306,11 @@ Backward compatibility:
 - `settings.thumbnails.jpeg_quality` (`int`, default: `70`)
 - `settings.thumbnails.page_size` (`int`, default: `48`)
 - `settings.thumbnails.page_size_options` (`int[]`, default: `[24, 48, 72, 96]`)
+- `settings.thumbnails.studio_page_size_max` (`int`, default: `72`)
+
+Notes:
+- `page_size` and every entry in `page_size_options` are expected to stay in the `1..120` range.
+- `studio_page_size_max` is a runtime guard used by Studio thumbnail routes to cap oversized page-size requests even if the options list contains larger values.
 
 ## `settings.housekeeping`
 
@@ -354,6 +383,10 @@ Runtime notes:
 - `settings.viewer.mirador.openSeadragonOptions.maxZoomLevel` (`number`, default: `25`)
 - `settings.viewer.mirador.openSeadragonOptions.minZoomLevel` (`number`, default: `0.35`)
 
+Notes:
+- These values are presented in the Settings `Viewer > Zoom & Navigation` pane.
+- They shape the feel of the Mirador/OpenSeadragon canvas rather than the downloaded image quality itself.
+
 ## `settings.viewer.visual_filters.defaults`
 
 - `settings.viewer.visual_filters.defaults.brightness` (`number`, default: `1.0`)
@@ -401,3 +434,19 @@ Discovery search configuration. Editable from Settings > Discovery tab in the we
   - Clamped to [1, 50] at runtime and on save.
   - For paginatable providers (Archive.org, Harvard, LOC, Gallica), additional results can be loaded via the "Carica altri risultati" button.
   - Non-paginatable providers (Vatican, Bodleian, Cambridge, Heidelberg, Institut, e-codices) return at most this many results from a single API call.
+
+## Migration Notes
+
+Scriptoria is still carrying a small amount of alpha-era config migration logic. The important consequence is that a historical `config.json` may continue to load even after keys have moved.
+
+Currently migrated in-memory:
+
+- `settings.system.max_concurrent_downloads` -> `settings.network.global.max_concurrent_download_jobs`
+- `settings.system.download_workers` -> `settings.network.download.default_workers_per_job`
+- `settings.system.request_timeout` -> `settings.network.global.connect_timeout_s` and `settings.network.global.read_timeout_s`
+- `settings.pdf.render_dpi` -> `settings.pdf.viewer_dpi` and legacy `settings.pdf.ocr_dpi`
+- `settings.images.viewer_quality` -> `settings.pdf.viewer_jpeg_quality`
+- `settings.ui.theme_color` -> `settings.ui.theme_accent_color`
+- `settings.images.download_strategy` -> removed and recomputed at runtime
+
+This migration is non-destructive at runtime. It keeps old configs working, but the canonical file shape for new documentation and new edits is the one described in the sections above.
