@@ -149,6 +149,7 @@ jobs:
             echo "No coverage changes to commit"
           else
             git commit -m "chore: update coverage.json [skip ci]"
+            git pull --rebase
             git push
           fi
         fi
