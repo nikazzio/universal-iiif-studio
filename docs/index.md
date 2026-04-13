@@ -1,32 +1,51 @@
-# Documentation Hub
+# Scriptoria Documentation
 
-Use this page as the primary navigation layer for repository documentation.
+Scriptoria is a research workbench for IIIF manuscripts with two user-facing entry points:
+
+- `scriptoria` for the local web application;
+- `scriptoria-cli` for direct CLI workflows.
 
 ## Start Here
 
-- [README](../README.md) for first install and quickstart.
-- [Getting Started Wiki Page](wiki/Getting-Started.md) for a reader-friendly overview.
+- [Getting Started](intro/getting-started.md)
+- [First Manuscript Workflow](guides/first-manuscript-workflow.md)
+- [Troubleshooting](guides/troubleshooting.md)
 
-## User Guides
+Use the guides when you need a concrete workflow, the reference section when you need exact keys or commands, and the explanation section when you need to understand system behavior.
 
-- [User Guide](DOCUMENTAZIONE.md)
-- [Studio Workflow Wiki Page](wiki/Studio-Workflow.md)
-- [PDF Export Profiles Wiki Page](wiki/PDF-Export-Profiles.md)
-- [FAQ](wiki/FAQ.md)
+## Main Reading Paths
 
-## Reference
+### Guides
 
-- [Configuration Reference](CONFIG_REFERENCE.md)
-- [HTTP Client Notes](HTTP_CLIENT.md)
+- [Discovery And Library](guides/discovery-and-library.md)
+- [Studio Workflow](guides/studio-workflow.md)
+- [PDF Export](guides/pdf-export.md)
 
-## Architecture And Maintenance
+### Reference
 
-- [Architecture](ARCHITECTURE.md)
-- [Wiki Maintenance](WIKI_MAINTENANCE.md)
-- [Issue Triage Policy](ISSUE_TRIAGE_POLICY.md)
+- [Configuration Overview](reference/configuration.md)
+- [CLI Reference](reference/cli.md)
+- [Runtime Paths](reference/runtime-paths.md)
+- [Provider Support](reference/provider-support.md)
+
+### Explanation
+
+- [Architecture Summary](explanation/architecture.md)
+- [Storage Model](explanation/storage-model.md)
+- [Job Lifecycle](explanation/job-lifecycle.md)
+- [Discovery And Provider Model](explanation/discovery-provider-model.md)
+- [Export And PDF Model](explanation/export-and-pdf-model.md)
+- [Security And Path Safety](explanation/security-and-path-safety.md)
+
+## Project Docs
+
+- [Contributing](project/contributing.md)
+- [Testing Guide](project/testing-guide.md)
+- [Wiki Maintenance](project/wiki-maintenance.md)
+- [Issue Triage](project/issue-triage.md)
 
 ## Publishing Model
 
-- Repository docs under `docs/` are the source of truth.
-- `docs/wiki/` contains curated pages that are published to the GitHub Wiki.
-- Documentation prose is English-only. Product UI labels may appear in their original form when quoted.
+- The docs site is the canonical public documentation surface.
+- `docs/wiki/` is the source of truth for the GitHub Wiki.
+- The GitHub Wiki is an orientation layer, not a parallel documentation set.

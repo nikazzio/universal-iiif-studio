@@ -1,24 +1,23 @@
 # Scriptoria Wiki
 
-This wiki is published from repository-managed source files under `docs/wiki/`.
+This wiki is a short orientation layer for Scriptoria. Use it for fast navigation, then continue into the docs site for the full documentation set.
 
 ## Start Here
 
 - [Getting Started](Getting-Started.md)
-- [Configuration](Configuration.md)
-- [Studio Workflow](Studio-Workflow.md)
-- [PDF Export Profiles](PDF-Export-Profiles.md)
+- [Common Workflows](Common-Workflows.md)
+- [Troubleshooting](Troubleshooting.md)
 - [FAQ](FAQ.md)
 
-## Canonical Repository Docs
+## Canonical Docs
 
-- [Documentation Hub](../index.md)
-- [User Guide](https://github.com/nikazzio/scriptoria/blob/main/docs/DOCUMENTAZIONE.md)
-- [Architecture](https://github.com/nikazzio/scriptoria/blob/main/docs/ARCHITECTURE.md)
-- [Configuration Reference](https://github.com/nikazzio/scriptoria/blob/main/docs/CONFIG_REFERENCE.md)
+- [Docs Home](../index.md)
+- [CLI Reference](../reference/cli.md)
+- [Configuration Overview](../reference/configuration.md)
+- [Architecture Summary](../explanation/architecture.md)
 
 ## Maintenance Model
 
-- Repository docs are the source of truth.
-- Wiki pages are curated publish targets.
+- The docs site is the source of truth.
+- Wiki pages are curated publish targets only.
 - Edit wiki source files in `docs/wiki/`, not the GitHub Wiki directly.

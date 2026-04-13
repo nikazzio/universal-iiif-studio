@@ -12,11 +12,16 @@ class ValidationError(RuntimeError):
 
 REQUIRED_FILES = [
     Path("README.md"),
+    Path("package.json"),
+    Path("docusaurus.config.js"),
+    Path("sidebars.js"),
     Path("docs/index.md"),
-    Path("docs/DOCUMENTAZIONE.md"),
-    Path("docs/ARCHITECTURE.md"),
-    Path("docs/CONFIG_REFERENCE.md"),
-    Path("docs/WIKI_MAINTENANCE.md"),
+    Path("docs/intro/getting-started.md"),
+    Path("docs/guides/first-manuscript-workflow.md"),
+    Path("docs/reference/cli.md"),
+    Path("docs/explanation/architecture.md"),
+    Path("docs/project/wiki-maintenance.md"),
+    Path("docs/adr/0001-docs-information-architecture.md"),
     Path("docs/wiki/Home.md"),
 ]
 
@@ -27,24 +32,10 @@ REQUIRED_README_LINKS = [
     "(docs/CONFIG_REFERENCE.md)",
 ]
 
-CRITICAL_CONFIG_KEYS = [
-    "settings.network.global.max_concurrent_download_jobs",
-    "settings.network.global.connect_timeout_s",
-    "settings.network.global.read_timeout_s",
-    "settings.network.global.transport_retries",
-    "settings.network.global.per_host_concurrency",
-    "settings.images.download_strategy_mode",
-    "settings.images.stitch_mode_default",
-    "settings.pdf.prefer_native_pdf",
-    "settings.pdf.create_pdf_from_images",
-    "settings.storage.partial_promotion_mode",
-    "settings.viewer.mirador.require_complete_local_images",
-]
-
-ARCHITECTURE_MARKERS = [
-    "studio_ui/routes/_studio/",
-    "studio_ui/components/settings/panes/",
-    "studio_ui/components/studio/export/",
+REQUIRED_DOC_LINK_MARKERS = [
+    "(intro/getting-started.md)",
+    "(guides/first-manuscript-workflow.md)",
+    "(reference/cli.md)",
 ]
 
 
@@ -65,15 +56,10 @@ def main() -> int:
         if link not in readme_text:
             failures.append(f"README.md is missing required documentation link: {link}")
 
-    config_reference = Path("docs/CONFIG_REFERENCE.md").read_text(encoding="utf-8")
-    for key in CRITICAL_CONFIG_KEYS:
-        if key not in config_reference:
-            failures.append(f"docs/CONFIG_REFERENCE.md is missing critical key: {key}")
-
-    architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")
-    for marker in ARCHITECTURE_MARKERS:
-        if marker not in architecture:
-            failures.append(f"docs/ARCHITECTURE.md is missing current package marker: {marker}")
+    docs_index = Path("docs/index.md").read_text(encoding="utf-8")
+    for marker in REQUIRED_DOC_LINK_MARKERS:
+        if marker not in docs_index:
+            failures.append(f"docs/index.md is missing required docs link: {marker}")
 
     if failures:
         details = "\n".join(f"- {item}" for item in failures)

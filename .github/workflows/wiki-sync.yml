@@ -35,6 +35,7 @@ jobs:
             --repo "${{ github.repository }}" \
             --source-root "docs/wiki" \
             --wiki-dir "/tmp/iiif-wiki-sync-test" \
+            --docs-base-url "https://nikazzio.github.io/scriptoria/" \
             --dry-run
 
   publish-wiki:
@@ -60,5 +61,6 @@ jobs:
             --repo "${{ github.repository }}" \
             --source-root "docs/wiki" \
             --wiki-dir "/tmp/iiif-wiki-sync" \
+            --docs-base-url "https://nikazzio.github.io/scriptoria/" \
             --push \
             --commit-message "docs(wiki): sync from docs/wiki (${GITHUB_SHA})"

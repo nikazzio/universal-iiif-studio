@@ -50,5 +50,7 @@ repomix-output*
 .vscode/
 .idea/
 *.swp
+node_modules/
+.docusaurus/
 PRIORITIES.md
 .claude/skills/

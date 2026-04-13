@@ -1,6 +1,6 @@
 # Getting Started
 
-Use this page for the shortest path to a working local install.
+Use this page for the shortest path to a working local install. Continue to the docs site for the full documentation set.
 
 ## Quick Start
 
@@ -15,23 +15,24 @@ scriptoria
 
 Open `http://127.0.0.1:8000`.
 
-## CLI
+## CLI Quick Path
 
 ```bash
 scriptoria-cli "<manifest-url>"
 ```
 
-## Main Navigation
+Any supported IIIF manifest URL can be used directly. Provider URLs and supported identifiers can be resolved through the web application.
 
-- `Discovery` resolves provider inputs and search results.
-- `Library` is the canonical entrypoint for local items.
-- `Studio` is the working workspace for a selected document.
-- `Output` is the export surface inside Studio.
+## Main Workflow
 
-If `/studio` is opened without `doc_id` and `library`, the app shows the recent-work hub instead of an empty editor.
+1. Resolve an item in `Discovery`.
+2. Add it to `Library`.
+3. Download only when you need local assets.
+4. Open it in `Studio`.
+5. Export from `Output`.
 
 ## Read Next
 
-- [Documentation Hub](../index.md)
-- [User Guide](https://github.com/nikazzio/scriptoria/blob/main/docs/DOCUMENTAZIONE.md)
-- [Configuration Reference](https://github.com/nikazzio/scriptoria/blob/main/docs/CONFIG_REFERENCE.md)
+- [Docs Home](../index.md)
+- [First Manuscript Workflow](../guides/first-manuscript-workflow.md)
+- [Common Workflows](Common-Workflows.md)
