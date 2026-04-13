@@ -25,11 +25,11 @@ REQUIRED_FILES = [
 ]
 
 REQUIRED_README_LINKS = [
-    "(docs/index.md)",
-    "(docs/intro/getting-started.md)",
-    "(docs/explanation/architecture.md)",
-    "(docs/reference/configuration.md)",
-    "(docs/reference/cli.md)",
+    "https://nikazzio.github.io/scriptoria/",
+    "https://nikazzio.github.io/scriptoria/intro/getting-started",
+    "https://nikazzio.github.io/scriptoria/explanation/architecture",
+    "https://nikazzio.github.io/scriptoria/reference/configuration",
+    "https://nikazzio.github.io/scriptoria/reference/cli",
 ]
 
 REQUIRED_DOC_LINK_MARKERS = [

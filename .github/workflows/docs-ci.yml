@@ -80,4 +80,5 @@ jobs:
             --exclude-path .venv/**
             --exclude-path node_modules/**
             --exclude-file .lycheeignore
+            --exclude '/img/'
             "**/*.md"
