@@ -74,11 +74,11 @@ jobs:
           args: >-
             --no-progress
             --verbose
+            --base https://nikazzio.github.io/scriptoria/
             --max-retries 3
             --retry-wait-time 2
             --timeout 20
             --exclude-path .venv/**
             --exclude-path node_modules/**
             --exclude-file .lycheeignore
-            --exclude '/img/'
             "**/*.md"
