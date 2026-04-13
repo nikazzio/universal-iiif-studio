@@ -148,8 +148,6 @@ reportMissingImports = true
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["src/universal_iiif_core/__init__.py:__version__"]
 assets = []
-commit_message = "chore(release): {version} [skip ci]"
-commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 tag_format = "v{version}"
 major_on_zero = false
 allow_zero_version = true
@@ -157,13 +155,6 @@ build_command = ""
 
 [tool.semantic_release.branches.main]
 match = "main"
-
-[tool.semantic_release.changelog]
-mode = "update"
-insertion_flag = "<!-- version list -->"
-
-[tool.semantic_release.changelog.default_templates]
-changelog_file = "CHANGELOG.md"
 
 [project.scripts]
 scriptoria = "studio_app:main"

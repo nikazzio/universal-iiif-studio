@@ -12,7 +12,6 @@ DOC_FILES = [
     *sorted(Path("docs").rglob("*.md")),
     Path("tests/README.md"),
     Path("AGENTS.md"),
-    Path("CHANGELOG.md"),
 ]
 
 EN_WORDS = {
