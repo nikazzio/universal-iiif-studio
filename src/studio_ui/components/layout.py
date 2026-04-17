@@ -321,6 +321,7 @@ def _sidebar(active_page: str = "") -> Nav:
         ("library", "Libreria", "/library", "📚"),
         ("studio", "Studio", "/studio", "🧭"),
         ("export", "Export", "/export", "📄"),
+        ("stats", "Statistiche", "/stats", "📊"),
         ("settings", "Impostazioni", "/settings", "⚙️"),
     ]
 
@@ -377,7 +378,13 @@ def _sidebar(active_page: str = "") -> Nav:
             cls="w-full py-3 px-4 rounded bg-gray-700 hover:bg-gray-600 transition-colors mb-3 text-white",
         ),
         Div(
-            Div(f"v{__version__} → FastHTML", cls="text-xs text-gray-500"),
+            Div(
+                id="sidebar-stats-widget",
+                hx_get="/api/stats/sidebar",
+                hx_trigger="load",
+                hx_swap="outerHTML",
+            ),
+            Div(f"v{__version__}", cls="text-xs text-gray-600 sidebar-label"),
             cls="pt-4 border-t border-gray-700 sidebar-footer",
         ),
         Script("""

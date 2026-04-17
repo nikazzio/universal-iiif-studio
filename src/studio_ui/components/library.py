@@ -60,12 +60,6 @@ def render_library_page(
             cls="flex items-center justify-between mb-4",
         ),
         _kpi_strip(docs),
-        Div(
-            id="library-stats-panel",
-            hx_get="/api/library/stats",
-            hx_trigger="load",
-            hx_swap="outerHTML",
-        ),
         _render_filters(
             view=view,
             q=q,

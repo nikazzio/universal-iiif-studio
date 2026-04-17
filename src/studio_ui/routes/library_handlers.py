@@ -10,7 +10,6 @@ from fasthtml.common import Request
 from studio_ui.common.toasts import build_toast
 from studio_ui.components.layout import base_layout
 from studio_ui.components.library import render_library_card, render_library_page
-from studio_ui.components.library_stats import render_library_stats
 from studio_ui.routes.discovery_helpers import start_downloader_thread
 from studio_ui.routes.library_query import (
     _collect_docs_and_filters,
@@ -161,12 +160,6 @@ def library_page(
     if request.headers.get("HX-Request") == "true":
         return content
     return base_layout("Libreria", content, active_page="library")
-
-
-def library_stats_panel():
-    """Return the lazy-loaded statistics panel for the Library view."""
-    manuscripts = VaultManager().get_all_manuscripts()
-    return render_library_stats(manuscripts)
 
 
 def library_delete(
