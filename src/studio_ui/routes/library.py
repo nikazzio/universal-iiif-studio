@@ -6,6 +6,7 @@ from studio_ui.routes import library_handlers
 def setup_library_routes(app):
     """Register library/local-assets routes."""
     app.get("/library")(library_handlers.library_page)
+    app.get("/api/library/stats")(library_handlers.library_stats_panel)
     app.post("/api/library/delete")(library_handlers.library_delete)
     app.post("/api/library/cleanup_partial")(library_handlers.library_cleanup_partial)
     app.post("/api/library/start_download")(library_handlers.library_start_download)
