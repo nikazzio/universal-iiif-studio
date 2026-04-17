@@ -6,7 +6,7 @@ Scriptoria exposes two entry points. `scriptoria` starts the web application and
 
 ## Prerequisites
 
-You need Python 3.10 or newer, a local virtual environment, and the project installed in editable mode.
+You need Python 3.10 or newer, a local virtual environment, and the project installed in editable mode. No system-level services are required for a first run: Scriptoria stores its catalog in a local SQLite vault and writes runtime data under a managed directory tree.
 
 ## Install
 
@@ -18,13 +18,30 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+After install, verify the binaries are on your path:
+
+```bash
+scriptoria --version
+scriptoria-cli --version
+```
+
+Both should print the same version. The legacy aliases `iiif-studio` and `iiif-cli` are still installed and point to the same entry points, so older scripts and bookmarks continue to work.
+
 ## Start The Web Application
 
 ```bash
 scriptoria
 ```
 
-Then open `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8000`. The default port is `8000` and is not currently configurable from the command line; if it is in use, free it on your side or run from a different shell session.
+
+For active development, use the watcher mode:
+
+```bash
+scriptoria --reload
+```
+
+The watcher reloads on changes to `*.py` and `*.html` files and ignores runtime data directories so it does not restart on every download.
 
 At first start, expect a local-first application rather than a public website. Even when you work against remote IIIF sources, Scriptoria is already building a managed local record of the item and preparing its runtime workspace.
 
@@ -71,12 +88,34 @@ Example:
 scriptoria-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"
 ```
 
+If you run `scriptoria-cli` with no positional argument, it enters an interactive wizard that asks for the URL, an optional output filename, and an optional OCR model. The wizard is intentionally minimal; for anything more advanced use explicit flags.
+
 The CLI is a good fit for:
 
 - direct acquisition of known items;
 - shell-based workflows;
 - scripted processing;
-- environments where you do not need the full Studio and Output surfaces.
+- environments where you do not need the full Studio and Output surfaces;
+- inspecting or repairing local vault state without opening the web app.
+
+See [CLI Reference](../reference/cli.md) for the complete flag list.
+
+## Configuration On First Run
+
+Scriptoria reads its runtime configuration from `config.json`, which controls network policy, image acquisition, viewer defaults, export behavior, storage retention, and test behavior. On first run a default configuration is written if one is not present, and runtime directories are created under `data/local/` (downloads, exports, logs, temp images, models, snippets).
+
+You do not need to touch configuration for a first session. Once you start working seriously across providers, read [Configuration Overview](../reference/configuration.md) and, when you need exact behavior, [Detailed Configuration Reference](../CONFIG_REFERENCE.md).
+
+## When Something Does Not Work
+
+Most first-run friction comes from a small set of predictable cases:
+
+- the input pasted into Discovery is too vague for the chosen provider;
+- the manuscript is `saved` but not yet downloaded, so Studio opens in remote mode and looks slower than expected;
+- a partial download was interrupted and Library shows the item in a mid-state;
+- the upstream provider rate-limited a fast acquisition.
+
+Before assuming a bug, read [Troubleshooting](../guides/troubleshooting.md) and check `Provider Support` for any provider-specific caveats.
 
 ## What To Read Next
 
