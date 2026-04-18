@@ -380,8 +380,10 @@ def test_stats_detail_handler_refreshes_after_ttl(monkeypatch, tmp_path):
         lambda: MagicMock(get_downloads_dir=lambda: downloads),
     )
 
-    # Seed cache with an expired entry
-    stats_handlers._detail_cache = (0.0, None)
+    import time as _t
+
+    # Seed cache with a timestamp guaranteed to be past the TTL
+    stats_handlers._detail_cache = (_t.monotonic() - stats_handlers._DETAIL_TTL - 1, None)
 
     stats_handlers.stats_detail_content()
     assert call_count["n"] == 1, "Expired cache must trigger a fresh scan"
