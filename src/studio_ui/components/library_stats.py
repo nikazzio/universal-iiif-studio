@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fasthtml.common import H2, A, Div, Li, P, Span, Ul
 
+from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,7 +55,10 @@ def _time_ago(ts_str: str | None) -> str:
         return "—"
     try:
         dt = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
-        delta = datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+        # SQLite stores timestamps without tzinfo; treat naive values as UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - dt
         days = delta.days
         if days == 0:
             hours = delta.seconds // 3600
@@ -108,13 +112,16 @@ def _scan_transcriptions(manuscripts: list[dict]) -> tuple[int, int]:
 
 def _dir_size(path: Path) -> int:
     total = 0
-    with suppress(OSError):
-        total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+    for f in path.rglob("*"):
+        with suppress(OSError):
+            if f.is_file():
+                total += f.stat().st_size
     return total
 
 
 def _scan_disk_usage(manuscripts: list[dict]) -> int:
     """Return total bytes used across all local manuscript directories."""
+    downloads_root = get_config_manager().get_downloads_dir().resolve()
     total = 0
     seen: set[str] = set()
     for m in manuscripts:
@@ -122,7 +129,10 @@ def _scan_disk_usage(manuscripts: list[dict]) -> int:
         if not lp or lp in seen:
             continue
         seen.add(lp)
-        p = Path(lp)
+        p = Path(lp).resolve()
+        if not p.is_relative_to(downloads_root):
+            logger.warning("Skipping local_path outside downloads dir: %s", lp)
+            continue
         if p.exists():
             total += _dir_size(p)
     return total

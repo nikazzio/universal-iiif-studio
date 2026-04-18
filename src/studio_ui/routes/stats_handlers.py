@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time as _time
+
 from fasthtml.common import Request
 
 from studio_ui.components.layout import base_layout
@@ -11,6 +13,9 @@ from studio_ui.components.library_stats import (
     render_stats_page_content,
 )
 from universal_iiif_core.services.storage.vault_manager import VaultManager
+
+_detail_cache: tuple[float, object] | None = None
+_DETAIL_TTL = 300.0  # seconds
 
 
 def stats_page(request: Request):
@@ -29,6 +34,15 @@ def stats_sidebar_widget():
 
 
 def stats_detail_content():
-    """Return the lazy-loaded detail metrics panel (disk + transcription scan)."""
+    """Return the lazy-loaded detail metrics panel (disk + transcription scan).
+
+    Result is cached for 5 minutes to avoid repeated full-disk scans on reload.
+    """
+    global _detail_cache
+    now = _time.monotonic()
+    if _detail_cache is not None and now - _detail_cache[0] < _DETAIL_TTL:
+        return _detail_cache[1]
     manuscripts = VaultManager().get_all_manuscripts()
-    return render_library_stats(manuscripts)
+    result = render_library_stats(manuscripts)
+    _detail_cache = (now, result)
+    return result
