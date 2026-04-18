@@ -66,96 +66,94 @@ def _extract_date(text: str) -> str:
     return m.group(0).strip() if m else ""
 
 
+def _parse_result_block(block: str) -> SearchResult | None:
+    """Parse a single `block-item-search-result` HTML block into a SearchResult."""
+    # OAI ID: prefer dc_id span (raw, not URL-encoded); fallback to URL param
+    m_dc_id = re.search(r"<span[^>]+dc_id[^>]*>(oai:[^<]+)</span>", block, re.IGNORECASE)
+    if m_dc_id:
+        oai_id = m_dc_id.group(1).strip()
+    else:
+        m_oai = _OAI_ID_RE.search(block)
+        if not m_oai:
+            return None
+        oai_id = _decode_url_component(m_oai.group(1))
+
+    # teca from descSourceLevel2 URL param in the thumbnail img src
+    m_thumb_src = re.search(r'/jmms/thumbnail\?[^"\']*?teca=([^"\'& ]+)', block)
+    if m_thumb_src:
+        teca = _decode_url_component(m_thumb_src.group(1))
+    else:
+        # fallback: descSourceLevel2 in viewresource URL
+        m_desc = _DESC_SOURCE_RE.search(block)
+        teca = _decode_url_component(m_desc.group(1)) if m_desc else ""
+
+    if not oai_id or not teca:
+        return None
+
+    # Title: h2.dc_title (distinct from h2.dc_creator which is the author)
+    m_title = re.search(r"<h2[^>]+dc_title[^>]*>(.*?)</h2>", block, re.DOTALL | re.IGNORECASE)
+    title = _clean_html(m_title.group(1)) if m_title else ""
+
+    # Author: h2.dc_creator
+    m_creator = re.search(r"<h2[^>]+dc_creator[^>]*>(.*?)</h2>", block, re.DOTALL | re.IGNORECASE)
+    authors: list[str] = []
+    if m_creator:
+        for m_a in re.finditer(r"<a[^>]+>(.*?)</a>", m_creator.group(1), re.IGNORECASE):
+            name = _clean_html(m_a.group(1)).strip(" ;")
+            if name:
+                authors.append(name)
+
+    # Library: dc_descSourceLevel2 span
+    m_lib = re.search(r"<span[^>]+dc_descSourceLevel2[^>]*>(.*?)</span>", block, re.IGNORECASE)
+    library = _clean_html(m_lib.group(1)) if m_lib else teca.replace("+", " ")
+
+    # Date: dc_issued span
+    m_date = re.search(r"<span[^>]+dc_issued[^>]*>(.*?)</span>", block, re.IGNORECASE)
+    date = _clean_html(m_date.group(1)) if m_date else ""
+
+    # Material type: first dc_type span
+    m_type = re.search(r"<span[^>]+dc_type[^>]*>(.*?)</span>", block, re.IGNORECASE)
+    mat_type = _clean_html(m_type.group(1)) if m_type else ""
+
+    # Thumbnail URL (reconstruct from src path using canonical format)
+    thumb_url = ""
+    if m_thumb_src:
+        thumb_url = (
+            f"https://www.internetculturale.it/jmms/thumbnail"
+            f"?type=preview&id={quote_plus(oai_id)}&teca={quote_plus(teca)}"
+        )
+
+    manifest_url = build_magparser_url(oai_id, teca)
+    viewer_url = (
+        f"https://www.internetculturale.it/it/16/search/viewresource?id={quote_plus(oai_id)}&teca={quote_plus(teca)}"
+    )
+
+    description = f"{mat_type} – {library}" if mat_type else library
+
+    return SearchResult(
+        id=oai_id,
+        title=title,
+        author="; ".join(authors),
+        date=date,
+        description=description,
+        library=library,
+        thumbnail=thumb_url,
+        thumb=thumb_url,
+        manifest=manifest_url,
+        manifest_status="pending",
+        viewer_url=viewer_url,
+        raw={"oai_id": oai_id, "teca": teca, "type": mat_type},
+    )
+
+
 def _parse_search_html(html: str) -> list[SearchResult]:
     """Parse IC search results page HTML into SearchResult list."""
     results: list[SearchResult] = []
-
-    # Split HTML into result blocks by the viewresource anchor
-    # Each block starts with a thumbnail img link to viewresource
-    blocks = re.split(r"(?=<a[^>]+viewresource\?)", html)
-
+    blocks = re.split(r"(?=<div[^>]+block-item-search-result)", html)
     for block in blocks:
-        # Extract OAI ID
-        m_oai = _OAI_ID_RE.search(block)
-        if not m_oai:
-            continue
-        raw_oai = m_oai.group(1)
-        oai_id = _decode_url_component(raw_oai)
-
-        # Extract teca (try multiple patterns)
-        m_teca = _TECA_RE.search(block)
-        teca = _decode_url_component(m_teca.group(1)) if m_teca else ""
-        if not teca:
-            m_desc = _DESC_SOURCE_RE.search(block)
-            if m_desc:
-                teca = _decode_url_component(m_desc.group(1))
-
-        if not oai_id or not teca:
-            continue
-
-        # Extract title from <h2> tag
-        m_h2 = re.search(r"<h2[^>]*>(.*?)</h2>", block, re.DOTALL | re.IGNORECASE)
-        title = _clean_html(m_h2.group(1)) if m_h2 else ""
-
-        # Extract author (inside <a> tags after h2)
-        authors: list[str] = []
-        if m_h2:
-            after_h2 = block[m_h2.end() :]
-            for m_a in re.finditer(r"<a[^>]+channel__creator[^>]+>(.*?)</a>", after_h2, re.IGNORECASE):
-                authors.append(_clean_html(m_a.group(1)))
-
-        # Extract text snippet (description block)
-        m_desc_block = re.search(
-            r"</h2>(.*?)(?:<ul|<div|$)", block[m_h2.end() if m_h2 else 0 :], re.DOTALL | re.IGNORECASE
-        )
-        description_text = _clean_html(m_desc_block.group(1)) if m_desc_block else ""
-
-        # Extract date
-        date = _extract_date(description_text) or _extract_date(title)
-
-        # Library from teca label (descSourceLevel2 is the display name)
-        library = teca.replace("+", " ").replace("%20", " ")
-        m_desc2 = _DESC_SOURCE_RE.search(block)
-        if m_desc2:
-            library = _decode_url_component(m_desc2.group(1)).replace("+", " ")
-
-        # Thumbnail
-        m_thumb = re.search(r'thumbnail\?[^"\']*?id=([^"\'&]+)[^"\']*?teca=([^"\'&]+)"', block)
-        thumb_url = ""
-        if m_thumb:
-            thumb_url = (
-                f"https://www.internetculturale.it/jmms/thumbnail"
-                f"?type=preview&id={m_thumb.group(1)}&teca={m_thumb.group(2)}"
-            )
-
-        # Build manifest URL (magparser)
-        manifest_url = build_magparser_url(oai_id, teca) if oai_id and teca else ""
-
-        # Viewer URL
-        viewer_url = (
-            f"https://www.internetculturale.it/it/16/search/viewresource"
-            f"?id={quote_plus(oai_id)}&teca={quote_plus(teca)}"
-        )
-
-        result: SearchResult = {
-            "id": oai_id,
-            "title": title,
-            "author": "; ".join(authors),
-            "date": date,
-            "description": description_text[:200],
-            "library": library,
-            "thumbnail": thumb_url,
-            "thumb": thumb_url,
-            "manifest": manifest_url,
-            "manifest_status": "pending",
-            "viewer_url": viewer_url,
-            "raw": {
-                "oai_id": oai_id,
-                "teca": teca,
-            },
-        }
-        results.append(result)
-
+        result = _parse_result_block(block)
+        if result is not None:
+            results.append(result)
     return results
 
 
@@ -163,18 +161,19 @@ def search_internetculturale(
     query: str,
     max_results: int = 20,
     page: int = 1,
-    tipo: str = "Manoscritto",
+    ic_type_filter: str = "all",
 ) -> list[SearchResult]:
-    """Search Internet Culturale manuscript catalog.
+    """Search Internet Culturale digital catalog.
 
     Args:
         query: Free-text search query.
         max_results: Maximum results to return (IC returns ~10 per page).
         page: Result page (1-based).
-        tipo: Material type filter. "Manoscritto" for manuscripts, "" for all.
+        ic_type_filter: Material type filter key — "all", "Manoscritto", "Libro moderno", etc.
+                        "all" means no filter (search all material types).
 
     Returns:
-        List of SearchResult with library, shelfmark, OAI ID, teca, manifest URL.
+        List of SearchResult with library, OAI ID, teca, manifest URL.
     """
     if not query or not query.strip():
         return []
@@ -184,13 +183,10 @@ def search_internetculturale(
         "instance": "magindice",
         "searchType": "avanzato",
     }
-    if tipo:
-        params["channel__typeTipo"] = tipo
+    if ic_type_filter and ic_type_filter != "all":
+        params["channel__typeTipo"] = ic_type_filter
 
-    # IC uses page offset via a different param
-    results_per_page = 10
-    offset = (page - 1) * results_per_page
-    if offset:
+    if page > 1:
         params["paginate_pageNum"] = str(page)
 
     url = f"{_IC_SEARCH_URL}?{urlencode(params)}"
