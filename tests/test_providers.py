@@ -61,7 +61,14 @@ def test_heidelberg_provider_exposes_browser_handoff_metadata():
 def test_iter_providers_respects_explicit_sort_order():
     """UI/CLI ordering should follow provider metadata rather than tuple declaration luck."""
     ordered_keys = [provider.key for provider in iter_providers()]
-    assert ordered_keys[:5] == ["Vaticana", "Gallica", "Institut de France", "Bodleian", "Heidelberg"]
+    assert ordered_keys[:6] == [
+        "Internet Culturale",
+        "Vaticana",
+        "Gallica",
+        "Institut de France",
+        "Bodleian",
+        "Heidelberg",
+    ]
     assert ordered_keys[-1] == "Unknown"
 
 

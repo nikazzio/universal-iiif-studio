@@ -10,6 +10,7 @@ from universal_iiif_cli.cli import _build_parser, _handle_db_commands, _status_i
 
 # --- _status_icon ---
 
+
 def test_status_icon_complete():
     assert _status_icon("complete") == "✅"
 
@@ -28,6 +29,7 @@ def test_status_icon_unknown_returns_circle():
 
 
 # --- _build_parser ---
+
 
 def test_build_parser_returns_parser():
     parser = _build_parser()
@@ -120,6 +122,7 @@ def test_build_parser_delete_job():
 
 # --- _resolve_manifest ---
 
+
 def test_resolve_manifest_uses_library_aware_resolver(monkeypatch):
     """CLI manifest resolution should preserve the detected library name."""
     monkeypatch.setattr(
@@ -150,6 +153,7 @@ def test_resolve_manifest_keeps_direct_manifest_urls():
 
 
 # --- _handle_db_commands ---
+
 
 def test_handle_db_commands_list(monkeypatch):
     mock_list = MagicMock()
@@ -198,13 +202,21 @@ def test_handle_db_commands_no_command():
 
 # --- _resolve_download_args ---
 
+
 def test_resolve_download_args_with_url():
     from universal_iiif_cli.cli import _resolve_download_args
 
-    args = _build_parser().parse_args([
-        "http://x.com/m.json", "-w", "8", "--prefer-images",
-        "--ocr", "model.mlmodel", "--create-pdf",
-    ])
+    args = _build_parser().parse_args(
+        [
+            "http://x.com/m.json",
+            "-w",
+            "8",
+            "--prefer-images",
+            "--ocr",
+            "model.mlmodel",
+            "--create-pdf",
+        ]
+    )
     result = _resolve_download_args(args)
     assert result == ("http://x.com/m.json", None, 8, False, True, "model.mlmodel", True)
 

@@ -52,12 +52,8 @@ def test_ensure_hover_preview_creates_larger_image(tmp_path: Path):
     thumbs = tmp_path / "thumbs"
     _create_scan(scans, 0, size=(3000, 2000))
 
-    thumb = ensure_thumbnail(
-        scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=320
-    )
-    hover = ensure_hover_preview(
-        scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=900
-    )
+    thumb = ensure_thumbnail(scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=320)
+    hover = ensure_hover_preview(scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=900)
 
     assert thumb is not None and hover is not None
     assert thumb.exists() and hover.exists()
@@ -98,9 +94,7 @@ def test_ensure_thumbnail_small_source_no_resize(tmp_path: Path):
     thumbs = tmp_path / "thumbs"
     _create_scan(scans, 0, size=(200, 150))
 
-    result = ensure_thumbnail(
-        scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=320
-    )
+    result = ensure_thumbnail(scans_dir=scans, thumbnails_dir=thumbs, page_num_1_based=1, max_long_edge_px=320)
     assert result is not None
     with PILImage.open(str(result)) as img:
         assert max(img.size) == 200

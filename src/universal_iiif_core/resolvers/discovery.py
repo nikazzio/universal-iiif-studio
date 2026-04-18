@@ -31,6 +31,7 @@ from .search import (  # noqa: F401 — re-exports for backward compatibility
     search_harvard,
     search_heidelberg,
     search_institut,
+    search_internetculturale,
     search_loc,
     search_vatican,
 )
@@ -171,6 +172,7 @@ __all__ = [
     "search_harvard",
     "search_heidelberg",
     "search_institut",
+    "search_internetculturale",
     "search_loc",
     "search_vatican",
     "smart_search",

@@ -24,6 +24,7 @@ from ..library_catalog import parse_manifest_catalog
 from ..logger import get_download_logger
 from ..network_policy import resolve_library_network_policy
 from ..pdf_utils import convert_pdf_to_images  # noqa: F401 - preserved for monkeypatch compatibility in tests
+from ..resolvers.mag_parser import fetch_and_convert, is_iccu_magparser_url
 from ..services.storage.vault_manager import VaultManager
 from ..utils import DEFAULT_HEADERS, ensure_dir, save_json
 from .download_helpers import derive_identifier
@@ -256,7 +257,10 @@ class IIIFDownloader:
         )
 
         # load manifest and derive human label (for display, NOT for storage)
-        self.manifest: dict[str, Any] = get_http_client().get_json(manifest_url) or {}
+        if is_iccu_magparser_url(manifest_url):
+            self.manifest = fetch_and_convert(manifest_url)
+        else:
+            self.manifest = get_http_client().get_json(manifest_url) or {}
         self.label = self.manifest.get("label", "unknown_manuscript")
         if isinstance(self.label, list):
             self.label = self.label[0] if self.label else "unknown_manuscript"

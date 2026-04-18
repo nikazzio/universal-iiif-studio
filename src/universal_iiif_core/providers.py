@@ -15,6 +15,7 @@ from universal_iiif_core.resolvers.generic import GenericResolver
 from universal_iiif_core.resolvers.harvard import HarvardResolver
 from universal_iiif_core.resolvers.heidelberg import HeidelbergResolver
 from universal_iiif_core.resolvers.institut import InstitutResolver
+from universal_iiif_core.resolvers.internetculturale import InternetCulturaleResolver
 from universal_iiif_core.resolvers.loc import LOCResolver
 from universal_iiif_core.resolvers.models import SearchResult
 from universal_iiif_core.resolvers.oxford import OxfordResolver
@@ -31,6 +32,7 @@ SearchStrategy = Literal[
     "harvard",
     "heidelberg",
     "institut",
+    "internetculturale",
     "loc",
     "vatican",
 ]
@@ -97,6 +99,31 @@ _GALLICA_FILTER = ProviderFilter(
 
 
 PROVIDERS: tuple[IIIFProvider, ...] = (
+    IIIFProvider(
+        key="Internet Culturale",
+        label="Internet Culturale (ICCU)",
+        aliases=(
+            "internet culturale",
+            "iccu",
+            "internetculturale",
+            "bml",
+            "laurenziana",
+            "marciana",
+            "bncf",
+            "bncr",
+            "manoscritti italiani",
+        ),
+        resolver_cls=InternetCulturaleResolver,
+        search_strategy="internetculturale",
+        search_fn="search_internetculturale",
+        search_mode="search_first",
+        not_found_hint=(
+            "Incolla un URL internetculturale.it/it/16/search/viewresource?id=oai:...&teca=... "
+            "oppure cerca per titolo, autore o segnatura."
+        ),
+        placeholder="es. Pluteus 40.26 oppure Dante Commedia",
+        sort_order=5,
+    ),
     IIIFProvider(
         key="Vaticana",
         label="Vaticana (BAV)",

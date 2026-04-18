@@ -14,6 +14,7 @@ from universal_iiif_core.http_client import HTTPClient, HTTPMetrics
 
 # --- HTTPMetrics ---
 
+
 class TestHTTPMetrics:
     def test_avg_response_time_empty(self):
         m = HTTPMetrics()
@@ -45,6 +46,7 @@ class TestHTTPMetrics:
 
 # --- _resolve_policy ---
 
+
 class TestResolvePolicy:
     def _make_client(self, **overrides) -> HTTPClient:
         policy = {
@@ -61,29 +63,24 @@ class TestResolvePolicy:
         assert policy.get("retries") == 3
 
     def test_explicit_library_name(self):
-        client = self._make_client(
-            libraries={"gallica": {"use_custom_policy": True, "timeout_s": 60, "retries": 5}}
-        )
+        client = self._make_client(libraries={"gallica": {"use_custom_policy": True, "timeout_s": 60, "retries": 5}})
         policy = client._resolve_policy("https://gallica.bnf.fr/manifest", library_name="Gallica")
         assert policy["timeout_s"] == 60
         assert policy["retries"] == 5
 
     def test_library_without_custom_policy_uses_global(self):
-        client = self._make_client(
-            libraries={"oxford": {"use_custom_policy": False, "timeout_s": 99}}
-        )
+        client = self._make_client(libraries={"oxford": {"use_custom_policy": False, "timeout_s": 99}})
         policy = client._resolve_policy("https://iiif.bodleian.ox.ac.uk/manifest", library_name="Oxford")
         assert policy["timeout_s"] == 30  # Global, not oxford's 99
 
     def test_hostname_fallback(self):
-        client = self._make_client(
-            libraries={"gallica": {"use_custom_policy": True, "timeout_s": 45}}
-        )
+        client = self._make_client(libraries={"gallica": {"use_custom_policy": True, "timeout_s": 45}})
         policy = client._resolve_policy("https://gallica.bnf.fr/iiif/manifest")
         assert policy["timeout_s"] == 45
 
 
 # --- _compute_backoff ---
+
 
 class TestComputeBackoff:
     def _make_client(self) -> HTTPClient:
@@ -137,6 +134,7 @@ class TestComputeBackoff:
 
 # --- _is_retriable_error ---
 
+
 class TestIsRetriableError:
     def _make_client(self) -> HTTPClient:
         return HTTPClient(network_policy={"global": {}, "download": {}, "libraries": {}})
@@ -172,6 +170,7 @@ class TestIsRetriableError:
 
 
 # --- _handle_json_fallback ---
+
 
 class TestHandleJsonFallback:
     def _make_client(self) -> HTTPClient:

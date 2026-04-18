@@ -12,6 +12,7 @@ from universal_iiif_core.logic.downloader_runtime import (
 
 # --- _build_canvas_plan ---
 
+
 class TestBuildCanvasPlan:
     def test_no_target_pages_returns_all(self):
         canvases = [{"id": "c0"}, {"id": "c1"}, {"id": "c2"}]
@@ -47,6 +48,7 @@ class TestBuildCanvasPlan:
 
 # --- _page_number_from_filename ---
 
+
 class TestPageNumberFromFilename:
     def test_standard_filename(self):
         assert _page_number_from_filename("pag_0000.jpg") == 1
@@ -69,6 +71,7 @@ class TestPageNumberFromFilename:
 
 
 # --- _emit_canvas_progress (needs self stub) ---
+
 
 def test_emit_canvas_progress_no_callback():
     """No callback should not crash."""
@@ -99,6 +102,7 @@ def test_emit_canvas_progress_swallows_callback_error():
 
 
 # --- _store_page_stats ---
+
 
 def test_store_page_stats_merges_with_existing(tmp_path: Path):
     """New stats should merge with existing page stats by page_index."""
@@ -133,6 +137,7 @@ def test_store_page_stats_empty_is_noop(tmp_path: Path):
 
 
 # --- _collect_finalized_scan_files ---
+
 
 def test_collect_finalized_scan_files(tmp_path: Path):
     """Should return sorted scan paths for expected pages."""
@@ -172,6 +177,7 @@ def test_collect_finalized_scan_files_missing_pages(tmp_path: Path):
 
 
 # --- _page_numbers_in_dir ---
+
 
 def test_page_numbers_in_dir(tmp_path: Path):
     """Should find 1-indexed page numbers from pag_XXXX.jpg files."""
