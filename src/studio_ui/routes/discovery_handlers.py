@@ -248,7 +248,7 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all", ic
                 pages = 0 if is_direct else _page_count_from_result(first)
                 return render_preview(_build_item_preview_data(first, provider.key, pages=pages))
 
-            has_more = _provider_supports_pagination(provider) and len(resolution.results) >= max_results
+            has_more = _compute_has_more(provider, resolution.results, 1, max_results)
             return render_search_results_list(
                 resolution.results,
                 pagination={
@@ -328,6 +328,27 @@ def _provider_supports_pagination(provider) -> bool:
     return (provider.search_strategy or "") in _PAGINATABLE_STRATEGIES
 
 
+def _compute_has_more(provider, results: list, current_page: int, max_results: int) -> bool:
+    """Return True when the provider exposes more pages beyond ``current_page``.
+
+    Prefers a server-reported ``_search_total_pages`` when the search handler
+    populated it (ICCU, and future providers that can extract an authoritative
+    count). Falls back to the heuristic ``len >= max_results`` when no upstream
+    total is available.
+    """
+    if not _provider_supports_pagination(provider) or not results:
+        return False
+    first_raw = results[0].get("raw") if isinstance(results[0], dict) else None
+    if isinstance(first_raw, dict):
+        try:
+            total_pages = int(first_raw.get("_search_total_pages") or 0)
+        except (TypeError, ValueError):
+            total_pages = 0
+        if total_pages > 0:
+            return int(current_page) < total_pages
+    return len(results) >= int(max_results)
+
+
 def load_more_results(
     library: str,
     shelfmark: str,
@@ -360,7 +381,7 @@ def load_more_results(
         if resolution.status != "results" or not resolution.results:
             return render_load_more_fragment([], has_more=False)
 
-        has_more = _provider_supports_pagination(resolution.provider) and len(resolution.results) >= max_results
+        has_more = _compute_has_more(resolution.provider, resolution.results, page, max_results)
         return render_load_more_fragment(
             resolution.results,
             has_more=has_more,
