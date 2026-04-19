@@ -15,6 +15,7 @@ from universal_iiif_core.resolvers.generic import GenericResolver
 from universal_iiif_core.resolvers.harvard import HarvardResolver
 from universal_iiif_core.resolvers.heidelberg import HeidelbergResolver
 from universal_iiif_core.resolvers.institut import InstitutResolver
+from universal_iiif_core.resolvers.internetculturale import InternetCulturaleResolver
 from universal_iiif_core.resolvers.loc import LOCResolver
 from universal_iiif_core.resolvers.models import SearchResult
 from universal_iiif_core.resolvers.oxford import OxfordResolver
@@ -31,6 +32,7 @@ SearchStrategy = Literal[
     "harvard",
     "heidelberg",
     "institut",
+    "internetculturale",
     "loc",
     "vatican",
 ]
@@ -95,8 +97,56 @@ _GALLICA_FILTER = ProviderFilter(
     ),
 )
 
+_IC_FILTER = ProviderFilter(
+    key="ic_type",
+    label="Tipo (Internet Culturale [BETA])",
+    options=(
+        ProviderFilterOption("Tutti i materiali", "all"),
+        ProviderFilterOption("Solo manoscritti", "Manoscritto"),
+        ProviderFilterOption("Solo libri a stampa", "Libro moderno"),
+        ProviderFilterOption("Solo musica", "Musica"),
+        ProviderFilterOption("Solo fotografie", "Fotografia"),
+    ),
+)
 
 PROVIDERS: tuple[IIIFProvider, ...] = (
+    IIIFProvider(
+        key="Internet Culturale",
+        label="Internet Culturale (ICCU) [BETA]",
+        aliases=(
+            "internet culturale",
+            "internet culturale (iccu)",
+            "internet culturale (iccu) [beta]",
+            "iccu",
+            "internetculturale",
+            "bml",
+            "laurenziana",
+            "marciana",
+            "bncf",
+            "bncr",
+            "manoscritti italiani",
+        ),
+        resolver_cls=InternetCulturaleResolver,
+        search_strategy="internetculturale",
+        search_fn="search_internetculturale",
+        search_mode="search_first",
+        filters=(_IC_FILTER,),
+        not_found_hint=(
+            "[BETA] Incolla un URL internetculturale.it/it/16/search/viewresource?id=oai:...&teca=... "
+            "oppure cerca per titolo, autore o segnatura. Alcuni record hanno solo parte delle pagine "
+            "digitalizzate effettivamente disponibili."
+        ),
+        placeholder="es. Pluteus 40.26 oppure Dante Commedia",
+        sort_order=98,
+        metadata={
+            "helper_text": (
+                "[BETA] Integrazione sperimentale. ICCU aggrega ~50 biblioteche italiane "
+                "(Laurenziana, Marciana, BNCF, BNCR, Estense, altre): la ricerca può dare migliaia di risultati, "
+                "ma molti record sono incompleti upstream e la qualità immagini è variabile. "
+                "Usa 'Carica altri' per scorrere le pagine."
+            ),
+        },
+    ),
     IIIFProvider(
         key="Vaticana",
         label="Vaticana (BAV)",
@@ -349,6 +399,20 @@ def _make_gallica_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandle
     return _adapter
 
 
+def _make_ic_adapter(fn: Callable[..., list[SearchResult]]) -> SearchHandlerFn:
+    """Wrap the IC search fn, forwarding ic_type_filter from payload."""
+
+    def _adapter(query: str, payload: dict[str, Any]) -> list[SearchResult]:
+        return fn(
+            query,
+            _max_results_from_payload(payload),
+            _page_from_payload(payload),
+            ic_type_filter=str(payload.get("ic_type") or "all"),
+        )
+
+    return _adapter
+
+
 _search_handlers_cache: types.MappingProxyType[str, SearchHandlerFn] | None = None
 
 
@@ -381,6 +445,8 @@ def get_search_handlers() -> types.MappingProxyType[str, SearchHandlerFn]:
             continue
         if provider.search_strategy == "gallica":
             handlers[provider.search_strategy] = _make_gallica_adapter(raw_fn)
+        elif provider.search_strategy == "internetculturale":
+            handlers[provider.search_strategy] = _make_ic_adapter(raw_fn)
         else:
             handlers[provider.search_strategy] = _make_standard_adapter(raw_fn)
 

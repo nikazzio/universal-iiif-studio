@@ -103,8 +103,11 @@ def test_tile_plan_out_dimensions():
     """Plan output dimensions should equal full dims at scale_factor=1."""
     plan = IIIFTilePlan(
         base_url="https://example.org",
-        full_width=4000, full_height=3000,
-        tile_width=512, tile_height=512, scale_factor=1,
+        full_width=4000,
+        full_height=3000,
+        tile_width=512,
+        tile_height=512,
+        scale_factor=1,
     )
     assert plan.out_width == 4000
     assert plan.out_height == 3000
@@ -114,8 +117,11 @@ def test_tile_regions_covers_full_image():
     """Tile regions should cover the entire image without gaps."""
     plan = IIIFTilePlan(
         base_url="https://example.org",
-        full_width=1024, full_height=768,
-        tile_width=512, tile_height=512, scale_factor=1,
+        full_width=1024,
+        full_height=768,
+        tile_width=512,
+        tile_height=512,
+        scale_factor=1,
     )
     regions = list(_tile_regions(plan))
     # 2x2 grid for 1024x768 with 512px tiles

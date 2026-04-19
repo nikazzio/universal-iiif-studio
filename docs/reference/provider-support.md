@@ -16,6 +16,7 @@ The shared provider registry currently exposes these providers:
 - Harvard University
 - Library of Congress
 - Internet Archive
+- Internet Culturale (ICCU) **[BETA]**
 - generic direct IIIF manifest URL
 
 These entries come from the runtime provider registry in `src/universal_iiif_core/providers.py`, which is the source used by both UI and shared resolution logic.
@@ -56,6 +57,7 @@ The provider has a stronger search-first experience and can reasonably be used f
 | Harvard | DRS-bearing item URL | `fallback` | Usually best treated as URL-driven |
 | Library of Congress | public item URL | `fallback` | Prefer `loc.gov/item/...` URLs |
 | Internet Archive | item URL or text query | `search_first` | Good discovery-first behavior for many cases |
+| Internet Culturale **[BETA]** | text query, OAI ID, or magparser/viewresource URL | `search_first` | Gateway for ~50 Italian libraries (Laurenziana, Marciana, BNCF/BNCR, Estense, Marucelliana, Ambrosiana partners, etc.). Integration is experimental: many upstream records are incomplete and image quality is variable. Use only when ICCU is the only channel available |
 | Generic / direct manifest | exact manifest URL | `direct` | Use only when you already have a valid IIIF manifest URL |
 
 ## Per-Provider Notes
@@ -100,6 +102,23 @@ Library of Congress is best approached with the public `loc.gov/item/...` page a
 
 Internet Archive supports a more discovery-first workflow than many other providers in the registry. It is usually comfortable both for direct item URLs and for broad text search.
 
+### Internet Culturale (ICCU) **[BETA]**
+
+Internet Culturale is the Italian national aggregator run by ICCU. The integration is currently **BETA**: it is good enough to reach content that is otherwise unreachable from Scriptoria, but far from the reliability of native IIIF providers. Treat it as a last-resort channel when no other provider covers the item.
+
+Unlike the other providers in the registry, ICCU does not expose a native IIIF Presentation manifest. Instead, Scriptoria fetches the upstream MAG/XML document (the `jmms/magparser` endpoint) and converts it to a IIIF v2 manifest on the fly. Canvas image URLs come from the real `src` attribute of each `<page>` element — the `/jmms/thumbnail?page=N` endpoint ignores the page parameter and must not be used.
+
+Search is HTML scraping over the advanced search page, paginated with `pag=N` (not `paginate_pageNum`, which the server silently ignores). The parser extracts the total result count and total pages so the UI can show "Mostrati X di Y risultati" and enable "Carica altri". Typical result set sizes are in the thousands.
+
+Known BETA limitations:
+
+- Many ICCU records are "teaser" entries: the MAG XML declares several pages but only the first image is actually served upstream. The downloader applies a partial-finalize mode for ICCU manifests so partial downloads still land correctly in `scans/`, but the user-visible experience is still "you asked for N pages and only got M".
+- Image quality and resolution vary widely between teche and between records in the same teca.
+- The external viewer path used by Scriptoria is the canonical `/jmms/iccuviewer/iccu.jsp?id=...&mode=all&teca=...`. The older `viewresource` URL renders as a blank page for some teche (BNCF in particular).
+- For Mirador-based local reading Scriptoria exposes an internal proxy endpoint, `/api/iccu/manifest?url=...`, that serves the converted manifest as JSON with CORS-friendly headers.
+- The ICCU Image API v2.1 does exist at `internetculturale.it/iiif/image/2.1/{id_b64}/...` but is level 0 only (no tile server, no zoom). Static fullsize is the only tier available regardless of which download path is chosen.
+- For native IIIF access to Biblioteca Estense records, prefer a dedicated Estense provider (Jarvis backend) when available, rather than going through ICCU.
+
 ### Generic Direct Manifest
 
 This path is intentionally simple. It exists for the case where the source is IIIF-compatible but not covered by one of the dedicated resolvers. Scriptoria expects a valid direct manifest URL and does not try to infer provider-specific behavior beyond that.
@@ -112,9 +131,12 @@ In both cases, the registry metadata already assumes that browser-assisted searc
 
 ## Provider Filters
 
-The current provider registry exposes one dedicated provider filter: the `Gallica` material type filter.
+The current provider registry exposes two dedicated provider filters:
 
-It lets users narrow Gallica results to all materials, manuscripts, or printed books. More provider-specific filters can be added later, but only when the upstream service and the user workflow justify them.
+- `Gallica` — material type (all, manuscripts, printed books).
+- `Internet Culturale` **[BETA]** — material type (all, `Manoscritto`, `Libro moderno`, `Musica`, `Fotografia`).
+
+Both filters map directly to server-side parameters and survive pagination, so "Carica altri" preserves the selected material type. More provider-specific filters can be added later, but only when the upstream service and the user workflow justify them.
 
 ## How To Choose The Right Input
 

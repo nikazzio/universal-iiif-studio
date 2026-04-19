@@ -52,6 +52,7 @@ def _seed_job(jm: JobManager, job_id: str, **overrides) -> dict:
 
 # --- update_job ---
 
+
 class TestUpdateJob:
     def test_update_status(self):
         jm = _fresh_job_manager()
@@ -78,6 +79,7 @@ class TestUpdateJob:
 
 # --- list_jobs ---
 
+
 class TestListJobs:
     def test_list_all(self):
         jm = _fresh_job_manager()
@@ -99,6 +101,7 @@ class TestListJobs:
 
 
 # --- is_cancel_requested / is_stop_requested ---
+
 
 class TestCancelStopFlags:
     def test_cancel_not_requested(self):
@@ -134,6 +137,7 @@ class TestCancelStopFlags:
 
 # --- request_cancel ---
 
+
 class TestRequestCancel:
     def test_cancel_direct_match(self):
         jm = _fresh_job_manager()
@@ -164,6 +168,7 @@ class TestRequestCancel:
 
 
 # --- _mark_running / _mark_success / _mark_stopped / _mark_failure ---
+
 
 class TestMarkMethods:
     def test_mark_running(self):
@@ -219,6 +224,7 @@ class TestMarkMethods:
 
 # --- _is_within ---
 
+
 class TestIsWithin:
     def test_within(self, tmp_path):
         child = tmp_path / "sub" / "file.txt"
@@ -232,6 +238,7 @@ class TestIsWithin:
 
 
 # --- prioritize_download ---
+
 
 class TestPrioritizeDownload:
     def test_prioritize_moves_to_front(self):

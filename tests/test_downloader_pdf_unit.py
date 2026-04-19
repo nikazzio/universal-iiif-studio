@@ -24,9 +24,7 @@ def _make_downloader_stub(tmp_path: Path, **overrides):
     pdf_dir.mkdir(parents=True, exist_ok=True)
     output_path = tmp_path / "output.pdf"
 
-    cm = SimpleNamespace(
-        get_setting=lambda key, default=None: overrides.get(f"setting.{key}", default)
-    )
+    cm = SimpleNamespace(get_setting=lambda key, default=None: overrides.get(f"setting.{key}", default))
 
     stub = SimpleNamespace(
         scans_dir=scans_dir,

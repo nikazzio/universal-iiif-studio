@@ -59,9 +59,21 @@ def test_heidelberg_provider_exposes_browser_handoff_metadata():
 
 
 def test_iter_providers_respects_explicit_sort_order():
-    """UI/CLI ordering should follow provider metadata rather than tuple declaration luck."""
+    """UI/CLI ordering should follow provider metadata rather than tuple declaration luck.
+
+    Vaticana is the first option (default in the Discovery select) and
+    Internet Culturale sits at the end of the non-generic list because the
+    integration is flagged as BETA.
+    """
     ordered_keys = [provider.key for provider in iter_providers()]
-    assert ordered_keys[:5] == ["Vaticana", "Gallica", "Institut de France", "Bodleian", "Heidelberg"]
+    assert ordered_keys[:5] == [
+        "Vaticana",
+        "Gallica",
+        "Institut de France",
+        "Bodleian",
+        "Heidelberg",
+    ]
+    assert ordered_keys[-2] == "Internet Culturale"
     assert ordered_keys[-1] == "Unknown"
 
 

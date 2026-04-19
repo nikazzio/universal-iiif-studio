@@ -14,6 +14,7 @@ from .gallica import search_gallica, search_gallica_by_id
 from .harvard import search_harvard
 from .heidelberg import search_heidelberg
 from .institut import search_institut
+from .internetculturale import search_internetculturale
 from .loc import search_loc
 from .vatican import search_vatican
 
@@ -28,6 +29,7 @@ __all__ = [
     "search_harvard",
     "search_heidelberg",
     "search_institut",
+    "search_internetculturale",
     "search_loc",
     "search_vatican",
 ]

@@ -17,6 +17,7 @@ from studio_ui.routes.library_handlers import _parse_ranges
 
 # --- _toast_text ---
 
+
 def test_toast_text_with_detail():
     assert _toast_text("Title", "some detail") == "Title: some detail"
 
@@ -28,6 +29,7 @@ def test_toast_text_without_detail():
 
 
 # --- _build_item_preview_data ---
+
 
 def test_build_item_preview_data_all_fields():
     item = {
@@ -56,6 +58,7 @@ def test_build_item_preview_data_defaults():
 
 
 # --- _build_manifest_preview_data ---
+
 
 def test_build_manifest_preview_data():
     info = {
@@ -89,6 +92,7 @@ def test_build_manifest_preview_data_no_label():
 
 # --- _page_count_from_result ---
 
+
 def test_page_count_explicit():
     assert _page_count_from_result({"raw": {"page_count": 42}}) == 42
 
@@ -111,6 +115,7 @@ def test_page_count_invalid_page_count_falls_through():
 
 
 # --- _has_native_pdf_rendering ---
+
 
 def test_has_pdf_by_format():
     manifest = {"rendering": [{"format": "application/pdf", "@id": "https://x.com/doc"}]}
@@ -143,6 +148,7 @@ def test_rendering_with_non_dict_entries():
 
 # --- _pause_guard_response ---
 
+
 def test_pause_guard_already_paused():
     assert _pause_guard_response("paused") is not None
 
@@ -165,6 +171,7 @@ def test_pause_guard_queued_returns_none():
 
 # --- _provider_supports_pagination ---
 
+
 def test_provider_supports_pagination_true():
     provider = SimpleNamespace(search_strategy="archive_org")
     assert _provider_supports_pagination(provider) is True
@@ -185,6 +192,7 @@ def test_provider_supports_pagination_none():
 
 
 # --- _parse_ranges ---
+
 
 def test_parse_ranges_simple():
     assert _parse_ranges("1,2,3") == {1, 2, 3}

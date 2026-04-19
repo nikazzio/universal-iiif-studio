@@ -12,6 +12,7 @@ from studio_ui.common.page_inventory import resolve_page_inventory
 from studio_ui.components.studio.tabs import render_studio_tabs
 from universal_iiif_core.config_manager import get_config_manager
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.resolvers.mag_parser import is_iccu_magparser_url
 from universal_iiif_core.services.ocr.storage import OCRStorage
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 from universal_iiif_core.utils import load_json
@@ -197,6 +198,8 @@ def _resolve_workspace_manifest_context(
         local_pages_count=int(inventory.local_pages_count),
         manifest_exists_local=manifest_exists_local,
     )
+    if is_iccu_magparser_url(manifest_url):
+        manifest_url = f"/api/iccu/manifest?url={quote(manifest_url, safe='')}"
     return {
         "manifest_url": manifest_url,
         "manifest_json": manifest_json,

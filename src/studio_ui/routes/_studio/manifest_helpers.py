@@ -9,9 +9,9 @@ from pathlib import Path
 from fasthtml.common import Div
 
 from universal_iiif_core.config_manager import get_config_manager
-from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.iiif_logic import total_canvases as manifest_total_canvases
 from universal_iiif_core.logger import get_logger
+from universal_iiif_core.resolvers.manifest_fetch import fetch_manifest_dict
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 from .ui_utils import _with_toast
@@ -96,7 +96,7 @@ def _load_studio_manifest_context(
         return manifest_json, initial_canvas, True
 
     if remote_manifest_url:
-        remote_manifest = get_http_client().get_json(remote_manifest_url, retries=2) or {}
+        remote_manifest = fetch_manifest_dict(remote_manifest_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
             return remote_manifest, _resolve_initial_canvas(remote_manifest, page), False
 
@@ -126,7 +126,7 @@ def _resolve_manifest_for_selected_source(
 ) -> tuple[dict, str | None, bool, str, str]:
     manifest_exists_local = manifest_path.exists()
     if read_source_mode == "remote" and remote_manifest_url:
-        remote_manifest = get_http_client().get_json(remote_manifest_url, retries=2) or {}
+        remote_manifest = fetch_manifest_dict(remote_manifest_url, retries=2) or {}
         if isinstance(remote_manifest, dict) and remote_manifest:
             return (
                 remote_manifest,

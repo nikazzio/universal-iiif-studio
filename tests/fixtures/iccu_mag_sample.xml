@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadigit xmlns="urn:meta:internetculturale">
+  <bibinfo>
+    <tecaid>oai:teca.bmlonline.it:21:XXXX:Plutei:IT%3AFI0100_Plutei_40.26_0003</tecaid>
+    <providerid>Laurenziana - FI</providerid>
+    <infos>
+      <info key="Titolo">
+        <value>III. Capitolo di Jacopo Alighieri</value>
+      </info>
+      <info key="Autore">
+        <value>Alighieri, Jacopo</value>
+      </info>
+      <info key="Data di pubblicazione">
+        <value>1350 ca.</value>
+      </info>
+      <info key="Localizzazione">
+        <value>Biblioteca Medicea Laurenziana - Firenze - IT-FI0100</value>
+      </info>
+      <info key="Identificativo">
+        <value>IT:FI0100_Plutei_40.26_0003</value>
+      </info>
+    </infos>
+  </bibinfo>
+  <medias>
+    <media>
+      <pages>
+        <page idx="0" name="Carta 1r" w="1600" h="2100" src="cacheman/normal/Laurenziana_-_FI/IT.FI0100_Plutei_40.26/1.jpg"/>
+        <page idx="1" name="Carta 1v" w="1600" h="2100" src="cacheman/normal/Laurenziana_-_FI/IT.FI0100_Plutei_40.26/2.jpg"/>
+        <page idx="2" name="Carta 2r" w="1600" h="2100" src="cacheman/normal/Laurenziana_-_FI/IT.FI0100_Plutei_40.26/3.jpg"/>
+      </pages>
+    </media>
+  </medias>
+</metadigit>

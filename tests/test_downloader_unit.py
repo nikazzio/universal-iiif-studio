@@ -12,6 +12,7 @@ from universal_iiif_core.logic.downloader import CanvasServiceLocator, PageDownl
 
 # --- CanvasServiceLocator ---
 
+
 class TestCanvasServiceLocator:
     def test_locate_direct_service_id(self):
         canvas = {"service": {"@id": "https://img.example.com/svc"}}
@@ -59,6 +60,7 @@ class TestCanvasServiceLocator:
 
 # --- PageDownloader._format_dimension ---
 
+
 class TestFormatDimension:
     def test_empty_returns_max(self):
         assert PageDownloader._format_dimension("") == "max"
@@ -81,6 +83,7 @@ class TestFormatDimension:
 
 # --- IIIFDownloader.get_pdf_url (needs manifest stub) ---
 
+
 def _make_downloader_stub(manifest: dict):
     """Minimal object with .manifest for get_pdf_url / get_canvases / _get_thumbnail_url."""
     from universal_iiif_core.logic.downloader import IIIFDownloader
@@ -93,15 +96,11 @@ def _make_downloader_stub(manifest: dict):
 
 class TestGetPdfUrl:
     def test_finds_pdf_by_format(self):
-        dl = _make_downloader_stub({
-            "rendering": [{"format": "application/pdf", "@id": "https://x.com/doc.pdf"}]
-        })
+        dl = _make_downloader_stub({"rendering": [{"format": "application/pdf", "@id": "https://x.com/doc.pdf"}]})
         assert dl.get_pdf_url() == "https://x.com/doc.pdf"
 
     def test_finds_pdf_by_url_extension(self):
-        dl = _make_downloader_stub({
-            "rendering": [{"id": "https://x.com/output.pdf"}]
-        })
+        dl = _make_downloader_stub({"rendering": [{"id": "https://x.com/output.pdf"}]})
         assert dl.get_pdf_url() == "https://x.com/output.pdf"
 
     def test_no_rendering_returns_none(self):
@@ -113,29 +112,21 @@ class TestGetPdfUrl:
         assert dl.get_pdf_url() is None
 
     def test_rendering_as_dict(self):
-        dl = _make_downloader_stub({
-            "rendering": {"format": "application/pdf", "@id": "https://x.com/p.pdf"}
-        })
+        dl = _make_downloader_stub({"rendering": {"format": "application/pdf", "@id": "https://x.com/p.pdf"}})
         assert dl.get_pdf_url() == "https://x.com/p.pdf"
 
     def test_non_pdf_rendering_skipped(self):
-        dl = _make_downloader_stub({
-            "rendering": [{"format": "text/plain", "@id": "https://x.com/t.txt"}]
-        })
+        dl = _make_downloader_stub({"rendering": [{"format": "text/plain", "@id": "https://x.com/t.txt"}]})
         assert dl.get_pdf_url() is None
 
 
 class TestGetCanvases:
     def test_v2_sequences(self):
-        dl = _make_downloader_stub({
-            "sequences": [{"canvases": [{"id": "c1"}, {"id": "c2"}]}]
-        })
+        dl = _make_downloader_stub({"sequences": [{"canvases": [{"id": "c1"}, {"id": "c2"}]}]})
         assert dl.get_canvases() == [{"id": "c1"}, {"id": "c2"}]
 
     def test_v3_items(self):
-        dl = _make_downloader_stub({
-            "items": [{"id": "c1"}, {"id": "c2"}]
-        })
+        dl = _make_downloader_stub({"items": [{"id": "c1"}, {"id": "c2"}]})
         assert dl.get_canvases() == [{"id": "c1"}, {"id": "c2"}]
 
     def test_no_canvases(self):
@@ -143,10 +134,7 @@ class TestGetCanvases:
         assert dl.get_canvases() == []
 
     def test_v2_takes_priority_over_v3(self):
-        dl = _make_downloader_stub({
-            "sequences": [{"canvases": [{"id": "v2"}]}],
-            "items": [{"id": "v3"}]
-        })
+        dl = _make_downloader_stub({"sequences": [{"canvases": [{"id": "v2"}]}], "items": [{"id": "v3"}]})
         assert dl.get_canvases() == [{"id": "v2"}]
 
 

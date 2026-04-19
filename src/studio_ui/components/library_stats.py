@@ -236,11 +236,15 @@ def render_stats_page_content(manuscripts: list[dict]) -> Div:
     )
 
     recent = manuscripts[:6]
-    recent_panel = Div(
-        P("Ultimi aggiornati", cls="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2"),
-        Ul(*[_recent_activity_row(m) for m in recent], cls="divide-y divide-slate-100 dark:divide-slate-800"),
-        cls=_CARD_CLS + " mb-6",
-    ) if recent else Div()
+    recent_panel = (
+        Div(
+            P("Ultimi aggiornati", cls="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2"),
+            Ul(*[_recent_activity_row(m) for m in recent], cls="divide-y divide-slate-100 dark:divide-slate-800"),
+            cls=_CARD_CLS + " mb-6",
+        )
+        if recent
+        else Div()
+    )
 
     detail_placeholder = Div(
         id="stats-detail-panel",
