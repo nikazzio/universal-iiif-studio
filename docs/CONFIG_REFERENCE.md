@@ -133,7 +133,7 @@ Default download policies used when library-specific override is not enabled.
 
 ## `settings.network.libraries.<library>`
 
-Libraries supported: `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `unknown`.
+Libraries supported: `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `internet_culturale`, `unknown`.
 
 **HTTPClient Integration**: These settings are used by the centralized `HTTPClient` class for per-library network policies (rate limiting, retry, backoff, concurrency).
 
@@ -145,7 +145,7 @@ Global-only fields (never overridden by library):
 
 Library override fields (used only when `use_custom_policy=true`):
 - `enabled` (`bool`, default: `true`)
-- `use_custom_policy` (`bool`, default: `true` for `gallica`, otherwise `false`)
+- `use_custom_policy` (`bool`, default: `true` for `gallica` and `internet_culturale`, otherwise `false`)
   - When `true`, library-specific settings override global defaults
   - When `false`, global defaults from `settings.network.download.*` are used
 - `workers_per_job` (`int`, `1..8`)
@@ -432,8 +432,9 @@ Discovery search configuration. Editable from Settings > Discovery tab in the we
 - `max_results_per_provider` (`int`, default: `20`)
   - Maximum number of results returned by each search provider per query.
   - Clamped to [1, 50] at runtime and on save.
-  - For paginatable providers (Archive.org, Harvard, LOC, Gallica), additional results can be loaded via the "Carica altri risultati" button.
+  - For paginatable providers (Archive.org, Harvard, LOC, Gallica, Internet Culturale), additional results can be loaded via the "Carica altri risultati" button.
   - Non-paginatable providers (Vatican, Bodleian, Cambridge, Heidelberg, Institut, e-codices) return at most this many results from a single API call.
+  - For Internet Culturale the upstream page size is fixed at 20 regardless of `max_results_per_provider`; the value still caps the trimmed client-side window per page.
 
 ## Migration Notes
 

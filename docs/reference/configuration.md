@@ -78,6 +78,10 @@ It is split into three layers:
 - `settings.network.download.*` for default document download behavior;
 - `settings.network.libraries.<provider>.*` for provider-specific overrides.
 
+The supported provider keys under `settings.network.libraries.*` are `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `internet_culturale`, and `unknown`. Setting `use_custom_policy: false` on a library makes it inherit the `settings.network.download.*` defaults; `true` activates the per-library override fields.
+
+`internet_culturale` ships with a conservative default policy (2 workers per job, 1.0–3.0s delay, 300s cooldown on 403/429, 40 requests per 60s burst window) because the ICCU aggregator is a shared infrastructure and is noticeably less tolerant than large IIIF-native providers.
+
 You touch this family when:
 
 - a provider rate-limits too aggressively;
@@ -85,7 +89,7 @@ You touch this family when:
 - one library needs stricter policy than the global default;
 - you want reproducible network behavior across machines.
 
-This family is directly reflected in the Settings `Network` pane.
+This family is directly reflected in the Settings `Network & Libraries` pane, which exposes per-library override cards for each supported provider key.
 
 ### `settings.images.*`
 

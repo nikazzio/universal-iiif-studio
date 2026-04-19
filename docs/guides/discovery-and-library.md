@@ -57,6 +57,8 @@ Discovery also reflects provider-specific result behavior. Some providers can ex
 
 The practical posture is to treat Discovery as a normalized gateway, not as proof that every library offers the same search ergonomics.
 
+Internet Culturale is a special case worth calling out explicitly. It is an aggregator that fronts around fifty Italian libraries (Laurenziana, Marciana, BNCF, BNCR, Estense, and many smaller partners) and it routinely returns thousands of results for a single keyword. Scriptoria shows the upstream total as "Mostrati X di Y risultati" so the size of the result set is visible, and "Carica altri risultati" walks through the remaining pages twenty at a time. Because the upstream does not expose a IIIF manifest directly, the manifest used internally is converted on-the-fly from ICCU's MAG/XML document; partial records (those declaring more pages than the server actually serves) are still saved as partial scans rather than failing outright.
+
 ## What Library Does
 
 Library is the local catalog of manuscript records and their current working state.
