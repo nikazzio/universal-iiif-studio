@@ -504,6 +504,20 @@ def _build_network_pane(cm, s):
         **{"data-network-tab-pane": "internet_culturale"},
     )
 
+    estense_section = Div(
+        _build_network_library_card(
+            title="Biblioteca Estense (Modena)",
+            policy_key="estense",
+            policy_cfg=libraries_cfg.get(
+                "estense",
+                defaults["libraries"]["estense"],
+            ),
+            global_cfg=global_cfg,
+        ),
+        cls="hidden",
+        **{"data-network-tab-pane": "estense"},
+    )
+
     return Div(
         Div(H3("Network & Libraries", cls="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3")),
         P(
@@ -542,6 +556,12 @@ def _build_network_pane(cm, s):
                 **{"data-network-tab-btn": "institut_de_france"},
             ),
             Button(
+                "Estense",
+                type="button",
+                cls="app-btn app-btn-neutral",
+                **{"data-network-tab-btn": "estense"},
+            ),
+            Button(
                 "Internet Culturale [BETA]",
                 type="button",
                 cls="app-btn app-btn-neutral",
@@ -554,6 +574,7 @@ def _build_network_pane(cm, s):
         vaticana_section,
         bodleian_section,
         institut_section,
+        estense_section,
         internet_culturale_section,
         _network_subtabs_script(),
         cls="p-4",

@@ -321,7 +321,7 @@ def probe_manifest(manifest_url: str, result_id: str = ""):
 
 
 # Providers whose external API supports page/offset pagination.
-_PAGINATABLE_STRATEGIES = frozenset({"archive_org", "loc", "harvard", "gallica", "internetculturale"})
+_PAGINATABLE_STRATEGIES = frozenset({"archive_org", "loc", "harvard", "gallica", "internetculturale", "estense"})
 
 
 def _provider_supports_pagination(provider) -> bool:

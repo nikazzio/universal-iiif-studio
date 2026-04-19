@@ -10,6 +10,7 @@ from universal_iiif_core.resolvers.archive_org import ArchiveOrgResolver
 from universal_iiif_core.resolvers.base import BaseResolver
 from universal_iiif_core.resolvers.cambridge import CambridgeResolver
 from universal_iiif_core.resolvers.ecodices import EcodicesResolver
+from universal_iiif_core.resolvers.estense import EstenseResolver
 from universal_iiif_core.resolvers.gallica import GallicaResolver
 from universal_iiif_core.resolvers.generic import GenericResolver
 from universal_iiif_core.resolvers.harvard import HarvardResolver
@@ -28,6 +29,7 @@ SearchStrategy = Literal[
     "bodleian",
     "cambridge",
     "ecodices",
+    "estense",
     "gallica",
     "harvard",
     "heidelberg",
@@ -249,6 +251,35 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         not_found_hint="Incolla un URL e-codices o un ID composto tipo 'csg-0001'.",
         placeholder="es. csg-0001",
         sort_order=70,
+    ),
+    IIIFProvider(
+        key="Estense",
+        label="Biblioteca Estense (Modena)",
+        aliases=(
+            "estense",
+            "biblioteca estense",
+            "biblioteca estense (modena)",
+            "biblioteca estense universitaria",
+            "edl",
+            "estense digital library",
+            "modena",
+        ),
+        resolver_cls=EstenseResolver,
+        search_strategy="estense",
+        search_fn="search_estense",
+        search_mode="search_first",
+        not_found_hint=(
+            "Incolla un URL manifest jarvis.edl.beniculturali.it/meta/iiif/{uuid}/manifest, "
+            "il UUID dell'item, oppure cerca per titolo, autore o segnatura."
+        ),
+        placeholder="es. Muratori oppure A.M.02.12.A",
+        sort_order=75,
+        metadata={
+            "helper_text": (
+                "Biblioteca Estense Universitaria (Modena) — IIIF nativo v2/v3 con Image API level 2 "
+                "(zoom e tile). ~126.000 item; ricerca su titolo breve, autore e segnatura."
+            ),
+        },
     ),
     IIIFProvider(
         key="Harvard",
