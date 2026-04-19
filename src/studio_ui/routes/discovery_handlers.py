@@ -263,9 +263,9 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all", ic
 
         if resolution.status != "manifest" or not resolution.manifest_url:
             return _with_feedback_toast(
-                "Manoscritto non trovato",
-                f"Impossibile risolvere '{shelfmark}' per {provider.key}. {resolution.not_found_hint}",
-                tone="danger",
+                "Documento non trovato",
+                f"Nessun risultato utile per '{shelfmark}' in {provider.key}. {resolution.not_found_hint}",
+                tone="info",
             )
 
         manifest_info, manifest_error = _analyze_manifest_safe(resolution.manifest_url)

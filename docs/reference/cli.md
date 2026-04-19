@@ -2,7 +2,7 @@
 
 The CLI lives in `src/universal_iiif_cli/cli.py` and is exposed by the `scriptoria-cli` entry point. It shares the same provider registry, resolver layer, and local vault used by the web application, so anything resolved or stored from the CLI shows up in the same Library that Studio reads.
 
-The CLI exists for two situations: direct acquisition when you already know the manuscript you want, and quick inspection or repair of local state without opening the web app.
+The CLI exists for two situations: direct acquisition when you already know the document you want, and quick inspection or repair of local state without opening the web app.
 
 ## Basic Usage
 
@@ -16,7 +16,7 @@ If you call `scriptoria-cli` with no positional argument, it enters an interacti
 
 ## Wizard Mode
 
-Wizard mode is intentionally minimal. It asks for a manuscript or viewer URL, an optional output filename, and an optional OCR model name. It is meant for one-off downloads where you do not want to remember flag names. Anything more advanced should use explicit flags.
+Wizard mode is intentionally minimal. It asks for a document or viewer URL, an optional output filename, and an optional OCR model name. It is meant for one-off downloads where you do not want to remember flag names. Anything more advanced should use explicit flags.
 
 ```text
 🌍  UNIVERSAL IIIF DOWNLOADER  🌍
@@ -31,7 +31,7 @@ OCR Model (optional, e.g. 'kraken', press Enter to skip): ...
 These flags control the acquisition run started by a positional URL or by the wizard.
 
 - `-o, --output`
-  - Output PDF filename. Without this flag, Scriptoria picks a name from the manuscript identifier.
+  - Output PDF filename. Without this flag, Scriptoria picks a name from the item identifier.
 - `-w, --workers`
   - Concurrent downloads for the current run. Default `4`. Increase only if both your network and the upstream provider can absorb it without rate-limiting penalties.
 - `--clean-cache`
@@ -48,15 +48,15 @@ These flags control the acquisition run started by a positional URL or by the wi
 These flags do not start a download. They read or modify the local vault directly through `VaultManager`.
 
 - `--list`
-  - List local manuscripts in the database. The output shows manuscript id, status, page progress, and provider library, with a status icon: ✅ complete, ⏳ downloading, ❌ error, ⚪ other.
+  - List local items in the database. The output shows item id, status, page progress, and provider library, with a status icon: ✅ complete, ⏳ downloading, ❌ error, ⚪ other.
 - `--info ID`
-  - Show stored fields for one manuscript (provider identity, status, paths, progress, manifest URL, and related metadata).
+  - Show stored fields for one item (provider identity, status, paths, progress, manifest URL, and related metadata).
 - `--delete ID`
-  - Delete a manuscript record from the vault. This removes the local catalog entry; runtime files on disk are handled by separate cleanup flows.
+  - Delete an item record from the vault. This removes the local catalog entry; runtime files on disk are handled by separate cleanup flows.
 - `--delete-job JOB_ID`
   - Remove a single download job row from the internal `download_jobs` table. Mostly useful during development or when stray records survive a crash.
 - `--set-status ID STATUS`
-  - Force the stored status for a manuscript. Standard values are `pending`, `downloading`, `complete`, and `error`. Other strings are accepted with a warning, but the rest of the system reasons in terms of the standard set.
+  - Force the stored status for an item. Standard values are `pending`, `downloading`, `complete`, and `error`. Other strings are accepted with a warning, but the rest of the system reasons in terms of the standard set.
 
 ## Other Options
 
@@ -76,13 +76,13 @@ If you need to change those locations, edit `config.json` rather than passing pa
 ## Operational Notes
 
 - Resolution and provider classification use the same registry as the web UI. If a URL resolves in the CLI, it will resolve the same way in Discovery.
-- Local state is shared with Studio. A manuscript downloaded from the CLI is immediately visible in Library and openable in Studio without further import.
+- Local state is shared with Studio. An item downloaded from the CLI is immediately visible in Library and openable in Studio without further import.
 - The CLI is the right surface for shell pipelines, scripted batch acquisition, headless environments, and local-state inspection.
 - The legacy entry points `iiif-cli` and `iiif-studio` are still installed as aliases for `scriptoria-cli` and `scriptoria` to avoid breaking older scripts. New work should use the `scriptoria` names.
 
 ## Examples
 
-Download a manuscript by direct manifest URL:
+Download an item by direct manifest URL:
 
 ```bash
 scriptoria-cli "https://digi.vatlib.it/iiif/MSS_Urb.lat.1779/manifest.json"

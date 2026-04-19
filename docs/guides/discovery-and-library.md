@@ -6,15 +6,15 @@ Discovery is the boundary layer between Scriptoria and heterogeneous external pr
 
 ## What Discovery Does
 
-Discovery resolves external input into a candidate manuscript record. That input can be a direct IIIF manifest URL, a provider item URL, a shelfmark or provider-specific identifier, or a free-text query when the provider has a usable search adapter.
+Discovery resolves external input into a candidate item record. That input can be a direct IIIF manifest URL, a provider item URL, a shelfmark or provider-specific identifier, or a free-text query when the provider has a usable search adapter.
 
-The output of Discovery is not yet a full local manuscript workspace. It is a normalized candidate with enough metadata for preview, local registration, and later download.
+The output of Discovery is not yet a full local workspace. It is a normalized candidate with enough metadata for preview, local registration, and later download.
 
 ## Resolve Versus Search
 
 Internally, Discovery supports both direct resolution and provider-specific search. Those are not the same operation.
 
-- direct resolution means Scriptoria can normalize a known URL or identifier directly into a manifest and manuscript identity;
+- direct resolution means Scriptoria can normalize a known URL or identifier directly into a manifest and stable item identity;
 - search means Scriptoria asks a provider-specific search surface for possible results and then maps those results back into the product model.
 
 Some providers are strong at both. Others are mostly direct-resolution providers with limited search value. This is why the type of input you paste matters.
@@ -34,7 +34,7 @@ That is not just user advice. It reflects the shape of the provider registry and
 
 ## What Happens When You Add An Item
 
-`Add item` does not force a full download. It persists a local manuscript record and related normalized metadata so the item becomes part of the local catalog.
+`Add item` does not force a full download. It persists a local item record and related normalized metadata so the item becomes part of the local catalog.
 
 This is one of the most important product rules:
 
@@ -57,11 +57,13 @@ Discovery also reflects provider-specific result behavior. Some providers can ex
 
 The practical posture is to treat Discovery as a normalized gateway, not as proof that every library offers the same search ergonomics.
 
+Biblioteca Estense (Modena) is a dedicated provider for the Jarvis backend (`jarvis.edl.beniculturali.it`). Unlike ICCU, it exposes native IIIF v2/v3 manifests with a level-2 Image API, so items read comfortably inside Mirador with real zoom. Search uses the Spring Data REST endpoint and covers short title, author, and pressmark in a single call; pagination works the same way as for other discovery-first providers.
+
 Internet Culturale **(BETA)** is a special case worth calling out explicitly. It sits at the bottom of the provider select because the integration is experimental: useful when ICCU is the only channel to reach an Italian record, but less reliable than any native IIIF provider. It is an aggregator that fronts around fifty Italian libraries (Laurenziana, Marciana, BNCF, BNCR, Estense, and many smaller partners) and it routinely returns thousands of results for a single keyword. Scriptoria shows the upstream total as "Mostrati X di Y risultati" so the size of the result set is visible, and "Carica altri risultati" walks through the remaining pages twenty at a time. Because the upstream does not expose a IIIF manifest directly, the manifest used internally is converted on-the-fly from ICCU's MAG/XML document; partial records (those declaring more pages than the server actually serves) are still saved as partial scans rather than failing outright, but expect occasional teaser records where only the frontispiece is really available.
 
 ## What Library Does
 
-Library is the local catalog of manuscript records and their current working state.
+Library is the local catalog of item records and their current working state.
 
 In practical terms, Library is where you:
 
@@ -77,9 +79,9 @@ Library is not a passive bookmark list. It is the operational registry for the l
 
 ## What A Library Entry Represents
 
-A Library card is the visible UI form of a local manuscript record. That record can include provider identity, manuscript id and manifest URL, normalized title and metadata preview, path information, local manifest state, local scan state, local PDF state, missing-page information, and the asset-state hints later used by Studio and Output.
+A Library card is the visible UI form of a local item record. That record can include provider identity, item id and manifest URL, normalized title and metadata preview, path information, local manifest state, local scan state, local PDF state, missing-page information, and the asset-state hints later used by Studio and Output.
 
-This is why Library matters even before a full download exists. It is already the stable identity layer for the manuscript inside Scriptoria.
+This is why Library matters even before a full download exists. It is already the stable identity layer for the item inside Scriptoria.
 
 ## Saved, Partial, Complete
 
@@ -115,7 +117,7 @@ Each of these is dispatched as a tracked download job with the standard pause, r
 
 The other surface in Library is catalog-side: actions that change how an item is described or classified locally without re-downloading anything.
 
-- `Set type` records the manuscript type inside your own catalog.
+- `Set type` records the item type inside your own catalog.
 - `Update notes` stores free-form annotations on the entry.
 - `Refresh metadata` re-fetches normalized metadata from the upstream provider when the source record has changed.
 - `Reclassify` re-runs provider classification for one item; `Reclassify all` and `Normalize states` are bulk passes used after registry or schema upgrades.
@@ -124,13 +126,13 @@ These actions are cheap, local-state operations. Use them to keep your catalog c
 
 ## Why Discovery And Library Must Stay Separate
 
-The separation is deliberate for three reasons. Providers are inconsistent, and the local catalog should not inherit the instability of upstream discovery surfaces. Local state also has to remain legible: a manuscript may be known locally long before it becomes a complete local asset set. Finally, the workflow is incremental by design. Scriptoria is built for shortlisting, staged download, partial repair, and later export, not only for all-or-nothing acquisition.
+The separation is deliberate for three reasons. Providers are inconsistent, and the local catalog should not inherit the instability of upstream discovery surfaces. Local state also has to remain legible: an item may be known locally long before it becomes a complete local asset set. Finally, the workflow is incremental by design. Scriptoria is built for shortlisting, staged download, partial repair, and later export, not only for all-or-nothing acquisition.
 
 ## Practical Rule Of Thumb
 
-If you are still deciding what the manuscript is, you are in `Discovery`.
+If you are still deciding what the document is, you are in `Discovery`.
 
-If Scriptoria already knows the manuscript and you are deciding what to do with its local state, you are in `Library`.
+If Scriptoria already knows the document and you are deciding what to do with its local state, you are in `Library`.
 
 ## Related Docs
 

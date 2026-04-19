@@ -368,7 +368,7 @@ def render_preview(data: dict) -> Div:
     warning = None
     if pages > 500:
         warning = Div(
-            f"⚠️ Questo manoscritto contiene molte pagine ({pages}). Il download richiederà tempo.",
+            f"⚠️ Questo documento contiene molte pagine ({pages}). Il download richiederà tempo.",
             cls=(
                 "text-xs text-amber-800 dark:text-amber-200 mb-4 bg-amber-50 "
                 "dark:bg-amber-900/30 p-3 rounded border border-amber-200 dark:border-amber-700"
