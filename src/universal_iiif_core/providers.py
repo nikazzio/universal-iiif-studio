@@ -99,7 +99,7 @@ _GALLICA_FILTER = ProviderFilter(
 
 _IC_FILTER = ProviderFilter(
     key="ic_type",
-    label="Tipo (Internet Culturale)",
+    label="Tipo (Internet Culturale [BETA])",
     options=(
         ProviderFilterOption("Tutti i materiali", "all"),
         ProviderFilterOption("Solo manoscritti", "Manoscritto"),
@@ -112,9 +112,11 @@ _IC_FILTER = ProviderFilter(
 PROVIDERS: tuple[IIIFProvider, ...] = (
     IIIFProvider(
         key="Internet Culturale",
-        label="Internet Culturale (ICCU)",
+        label="Internet Culturale (ICCU) [BETA]",
         aliases=(
             "internet culturale",
+            "internet culturale (iccu)",
+            "internet culturale (iccu) [beta]",
             "iccu",
             "internetculturale",
             "bml",
@@ -130,16 +132,18 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         search_mode="search_first",
         filters=(_IC_FILTER,),
         not_found_hint=(
-            "Incolla un URL internetculturale.it/it/16/search/viewresource?id=oai:...&teca=... "
-            "oppure cerca per titolo, autore o segnatura."
+            "[BETA] Incolla un URL internetculturale.it/it/16/search/viewresource?id=oai:...&teca=... "
+            "oppure cerca per titolo, autore o segnatura. Alcuni record hanno solo parte delle pagine "
+            "digitalizzate effettivamente disponibili."
         ),
         placeholder="es. Pluteus 40.26 oppure Dante Commedia",
-        sort_order=5,
+        sort_order=98,
         metadata={
             "helper_text": (
-                "ICCU aggrega ~50 biblioteche italiane: Laurenziana (Firenze), Marciana (Venezia), "
-                "BNCF, BNCR, Estense, e molte altre. La ricerca può restituire migliaia di risultati: "
-                "usa 'Carica altri' per scorrerli."
+                "[BETA] Integrazione sperimentale. ICCU aggrega ~50 biblioteche italiane "
+                "(Laurenziana, Marciana, BNCF, BNCR, Estense, altre): la ricerca può dare migliaia di risultati, "
+                "ma molti record sono incompleti upstream e la qualità immagini è variabile. "
+                "Usa 'Carica altri' per scorrere le pagine."
             ),
         },
     ),

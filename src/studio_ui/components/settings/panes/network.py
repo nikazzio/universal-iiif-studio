@@ -492,7 +492,7 @@ def _build_network_pane(cm, s):
 
     internet_culturale_section = Div(
         _build_network_library_card(
-            title="Internet Culturale (ICCU)",
+            title="Internet Culturale (ICCU) [BETA]",
             policy_key="internet_culturale",
             policy_cfg=libraries_cfg.get(
                 "internet_culturale",
@@ -542,7 +542,7 @@ def _build_network_pane(cm, s):
                 **{"data-network-tab-btn": "institut_de_france"},
             ),
             Button(
-                "Internet Culturale",
+                "Internet Culturale [BETA]",
                 type="button",
                 cls="app-btn app-btn-neutral",
                 **{"data-network-tab-btn": "internet_culturale"},
