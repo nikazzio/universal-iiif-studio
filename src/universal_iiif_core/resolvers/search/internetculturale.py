@@ -18,7 +18,7 @@ from urllib.parse import quote_plus, urlencode
 import requests
 
 from universal_iiif_core.logger import get_logger
-from universal_iiif_core.resolvers.mag_parser import build_magparser_url
+from universal_iiif_core.resolvers.mag_parser import build_magparser_url, build_viewer_url
 from universal_iiif_core.resolvers.models import SearchResult
 
 from ._common import DISCOVERY_TIMEOUT, REAL_BROWSER_HEADERS, get_search_http_client
@@ -124,9 +124,7 @@ def _parse_result_block(block: str) -> SearchResult | None:
         )
 
     manifest_url = build_magparser_url(oai_id, teca)
-    viewer_url = (
-        f"https://www.internetculturale.it/it/16/search/viewresource?id={quote_plus(oai_id)}&teca={quote_plus(teca)}"
-    )
+    viewer_url = build_viewer_url(oai_id, teca)
 
     description = f"{mat_type} – {library}" if mat_type else library
 
@@ -144,6 +142,25 @@ def _parse_result_block(block: str) -> SearchResult | None:
         viewer_url=viewer_url,
         raw={"oai_id": oai_id, "teca": teca, "type": mat_type},
     )
+
+
+_TOTAL_RESULTS_RE = re.compile(r"Pagina\s+\d+\s+di\s+(\d+)\s*\(\s*([\d.,]+)\s+risultati", re.IGNORECASE)
+
+
+def _parse_total_results(html: str) -> tuple[int, int]:
+    """Return (total_pages, total_results) parsed from the IC search header, or (0, 0)."""
+    m = _TOTAL_RESULTS_RE.search(html)
+    if not m:
+        return 0, 0
+    try:
+        total_pages = int(m.group(1))
+    except ValueError:
+        total_pages = 0
+    try:
+        total_results = int(m.group(2).replace(".", "").replace(",", ""))
+    except ValueError:
+        total_results = 0
+    return total_pages, total_results
 
 
 def _parse_search_html(html: str) -> list[SearchResult]:
@@ -187,7 +204,7 @@ def search_internetculturale(
         params["channel__typeTipo"] = ic_type_filter
 
     if page > 1:
-        params["paginate_pageNum"] = str(page)
+        params["pag"] = str(page)
 
     url = f"{_IC_SEARCH_URL}?{urlencode(params)}"
 
@@ -204,6 +221,23 @@ def search_internetculturale(
         return []
 
     results = _parse_search_html(resp.text)
-    logger.debug("IC search %r → %d raw results (page %d)", query, len(results), page)
+    total_pages, total_results = _parse_total_results(resp.text)
+    logger.debug(
+        "IC search %r → %d raw results (page %d of %d; total=%d)",
+        query,
+        len(results),
+        page,
+        total_pages,
+        total_results,
+    )
+
+    # Inject total counts into the first result's raw payload so the UI can
+    # display "X di Y risultati" without changing the shared search signature.
+    if results and total_results:
+        raw = dict(results[0].get("raw") or {})
+        raw["_search_total_results"] = total_results
+        raw["_search_total_pages"] = total_pages
+        raw["_search_page"] = page
+        results[0]["raw"] = raw
 
     return results[:max_results]

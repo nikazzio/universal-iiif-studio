@@ -331,9 +331,16 @@ def _finalize_downloads(self, valid):
     known_pages = _page_numbers_in_dir(self.scans_dir) | validated_pages
     expected_pages = set(range(1, total_expected + 1)) if total_expected > 0 else set()
     allow_partial_overwrite = bool(getattr(self, "overwrite_existing_scans", False) and validated_pages)
+    allow_partial_finalize = bool(getattr(self, "allow_partial_finalize", False) and validated_pages)
 
-    # Keep staged files in temp until the full manuscript is available.
-    if total_expected > 0 and not expected_pages.issubset(known_pages) and not allow_partial_overwrite:
+    # Keep staged files in temp until the full manuscript is available,
+    # unless the provider is known to declare more pages than are served.
+    if (
+        total_expected > 0
+        and not expected_pages.issubset(known_pages)
+        and not allow_partial_overwrite
+        and not allow_partial_finalize
+    ):
         return []
 
     for staged_file in sorted(set(validated_staged)):

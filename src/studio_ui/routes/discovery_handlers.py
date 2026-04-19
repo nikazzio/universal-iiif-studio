@@ -29,12 +29,12 @@ from studio_ui.routes.discovery_persistence import (
     upsert_saved_entry,
 )
 from universal_iiif_core.config_manager import get_config_manager
-from universal_iiif_core.http_client import get_http_client
 from universal_iiif_core.iiif_logic import total_canvases
 from universal_iiif_core.jobs import job_manager
 from universal_iiif_core.logger import get_logger
 from universal_iiif_core.providers import is_known_provider
 from universal_iiif_core.resolvers.discovery import resolve_provider_input
+from universal_iiif_core.resolvers.manifest_fetch import fetch_manifest_dict
 from universal_iiif_core.services.storage.vault_manager import VaultManager
 
 logger = get_logger(__name__)
@@ -135,6 +135,8 @@ def _build_item_preview_data(item: dict, library: str, pages: int = 0) -> dict:
         "pages": pages,
         "thumbnail": item.get("thumbnail"),
         "has_native_pdf": item.get("has_native_pdf"),
+        "viewer_url": item.get("viewer_url", ""),
+        "raw": item.get("raw"),
     }
 
 
@@ -151,6 +153,7 @@ def _build_manifest_preview_data(manifest_info: dict, manifest_url: str, doc_id:
         "pages": manifest_info.get("pages", 0),
         "thumbnail": manifest_info.get("thumbnail"),
         "has_native_pdf": manifest_info.get("has_native_pdf"),
+        "source_detail_url": manifest_info.get("source_detail_url", ""),
     }
 
 
@@ -211,13 +214,13 @@ def _quick_manifest_has_native_pdf(manifest_url: str) -> bool:
     if cached and cached[0] > now:
         return bool(cached[1])
 
-    manifest = get_http_client().get_json(clean_url, retries=1)
+    manifest = fetch_manifest_dict(clean_url, retries=1)
     has_pdf = bool(isinstance(manifest, dict) and _has_native_pdf_rendering(manifest))
     _pdf_capability_cache[clean_url] = (now + _PDF_CAPABILITY_TTL_SECONDS, has_pdf)
     return has_pdf
 
 
-def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
+def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all", ic_type: str = "all"):
     """Resolve a shelfmark or URL and return a preview fragment."""
     try:
         if not shelfmark or not shelfmark.strip():
@@ -231,7 +234,9 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
         max_results = cm.data.get("settings", {}).get("discovery", {}).get("max_results_per_provider", 20)
 
         resolution = resolve_provider_input(
-            library, shelfmark, filters={"gallica_type": gallica_type, "max_results": max_results}
+            library,
+            shelfmark,
+            filters={"gallica_type": gallica_type, "ic_type": ic_type, "max_results": max_results},
         )
         provider = resolution.provider
 
@@ -250,6 +255,7 @@ def resolve_manifest(library: str, shelfmark: str, gallica_type: str = "all"):
                     "library": library,
                     "shelfmark": shelfmark,
                     "gallica_type": gallica_type,
+                    "ic_type": ic_type,
                     "page": 1,
                     "has_more": has_more,
                 },
@@ -290,6 +296,7 @@ def probe_manifest(manifest_url: str, result_id: str = ""):
     from fasthtml.common import Div, Span
 
     from universal_iiif_core.resolvers.discovery import archive_manifest_is_usable
+    from universal_iiif_core.resolvers.mag_parser import is_iccu_magparser_url, probe_magparser_url
 
     manifest_url = (manifest_url or "").strip()
     if not manifest_url:
@@ -298,7 +305,10 @@ def probe_manifest(manifest_url: str, result_id: str = ""):
             id=f"probe-{result_id}",
         )
 
-    ok = archive_manifest_is_usable(manifest_url)
+    if is_iccu_magparser_url(manifest_url):
+        ok = probe_magparser_url(manifest_url)
+    else:
+        ok = archive_manifest_is_usable(manifest_url)
     if ok:
         return Div(
             Span("✓ Manifesto disponibile", cls="text-xs text-emerald-600 dark:text-emerald-400 font-medium"),
@@ -311,14 +321,20 @@ def probe_manifest(manifest_url: str, result_id: str = ""):
 
 
 # Providers whose external API supports page/offset pagination.
-_PAGINATABLE_STRATEGIES = frozenset({"archive_org", "loc", "harvard", "gallica"})
+_PAGINATABLE_STRATEGIES = frozenset({"archive_org", "loc", "harvard", "gallica", "internetculturale"})
 
 
 def _provider_supports_pagination(provider) -> bool:
     return (provider.search_strategy or "") in _PAGINATABLE_STRATEGIES
 
 
-def load_more_results(library: str, shelfmark: str, page: int = 2, gallica_type: str = "all"):
+def load_more_results(
+    library: str,
+    shelfmark: str,
+    page: int = 2,
+    gallica_type: str = "all",
+    ic_type: str = "all",
+):
     """Return the next page of search results as an HTMX fragment."""
     from studio_ui.components.discovery import render_load_more_fragment
 
@@ -333,7 +349,12 @@ def load_more_results(library: str, shelfmark: str, page: int = 2, gallica_type:
         resolution = resolve_provider_input(
             library,
             shelfmark,
-            filters={"gallica_type": gallica_type, "max_results": max_results, "page": page},
+            filters={
+                "gallica_type": gallica_type,
+                "ic_type": ic_type,
+                "max_results": max_results,
+                "page": page,
+            },
         )
 
         if resolution.status != "results" or not resolution.results:
@@ -347,6 +368,7 @@ def load_more_results(library: str, shelfmark: str, page: int = 2, gallica_type:
                 "library": library,
                 "shelfmark": shelfmark,
                 "gallica_type": gallica_type,
+                "ic_type": ic_type,
                 "page": page,
             },
         )
@@ -379,7 +401,7 @@ def add_to_library(manifest_url: str, doc_id: str, library: str, result_title: s
             description=str(info.get("description") or ""),
             pages=int(info.get("pages", 0) or 0),
             thumbnail_url=str(info.get("thumbnail") or ""),
-            get_json_fn=get_http_client().get_json,
+            get_json_fn=fetch_manifest_dict,
         )
         upsert_saved_entry(
             manifest_url,
@@ -451,7 +473,7 @@ def add_and_download(manifest_url: str, doc_id: str, library: str, result_title:
             description=str(info.get("description") or ""),
             pages=int(info.get("pages", 0) or 0),
             thumbnail_url=str(info.get("thumbnail") or ""),
-            get_json_fn=get_http_client().get_json,
+            get_json_fn=fetch_manifest_dict,
         )
         upsert_saved_entry(
             manifest_url,
@@ -707,3 +729,27 @@ def pdf_capability(manifest_url: str):
         return render_pdf_capability_badge(has_pdf)
     except Exception:
         return render_pdf_capability_badge(False)
+
+
+def serve_iccu_manifest(url: str):
+    """Serve the ICCU MAG document as a IIIF v2 JSON manifest (Mirador-friendly)."""
+    import json as _json
+
+    from fasthtml.common import Response
+
+    from universal_iiif_core.resolvers.mag_parser import fetch_and_convert, is_iccu_magparser_url
+
+    clean = unquote(url or "").strip()
+    if not clean or not is_iccu_magparser_url(clean):
+        return Response("{}", status_code=400, media_type="application/json")
+    try:
+        manifest = fetch_and_convert(clean)
+    except Exception:
+        logger.exception("ICCU manifest proxy failed for %s", clean)
+        return Response("{}", status_code=502, media_type="application/json")
+    body = _json.dumps(manifest, ensure_ascii=False)
+    return Response(
+        body,
+        media_type="application/json",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300"},
+    )

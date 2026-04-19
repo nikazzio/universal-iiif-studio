@@ -24,6 +24,7 @@ def setup_discovery_routes(app):
     app.post("/api/discovery/load_more")(discovery_handlers.load_more_results)
     app.post("/api/library/add_prefetch_light")(discovery_handlers.add_to_library)
     app.get("/api/discovery/pdf_capability")(discovery_handlers.pdf_capability)
+    app.get("/api/iccu/manifest")(discovery_handlers.serve_iccu_manifest)
     app.post("/api/start_download")(discovery_handlers.start_download)
     app.get("/api/download_status/{download_id}")(discovery_handlers.get_download_status)
     app.post("/api/cancel_download/{download_id}")(discovery_handlers.cancel_download)

@@ -135,6 +135,13 @@ PROVIDERS: tuple[IIIFProvider, ...] = (
         ),
         placeholder="es. Pluteus 40.26 oppure Dante Commedia",
         sort_order=5,
+        metadata={
+            "helper_text": (
+                "ICCU aggrega ~50 biblioteche italiane: Laurenziana (Firenze), Marciana (Venezia), "
+                "BNCF, BNCR, Estense, e molte altre. La ricerca può restituire migliaia di risultati: "
+                "usa 'Carica altri' per scorrerli."
+            ),
+        },
     ),
     IIIFProvider(
         key="Vaticana",

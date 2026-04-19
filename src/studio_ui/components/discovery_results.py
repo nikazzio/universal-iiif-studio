@@ -8,7 +8,7 @@ from urllib.parse import quote
 from fasthtml.common import H3, A, Button, Div, Img, P, Span
 
 
-def _provider_viewer_fallback(library: str, doc_id: str, ark: str = "") -> str:
+def _provider_viewer_fallback(library: str, doc_id: str, ark: str = "", manifest_url: str = "") -> str:
     if library == "Gallica" and ark:
         return f"https://gallica.bnf.fr/{ark}"
     if library == "Gallica" and doc_id:
@@ -21,6 +21,12 @@ def _provider_viewer_fallback(library: str, doc_id: str, ark: str = "") -> str:
         return f"https://digital.bodleian.ox.ac.uk/objects/{doc_id}"
     if library == "Archive.org" and doc_id:
         return f"https://archive.org/details/{doc_id}"
+    if library == "Internet Culturale" and manifest_url:
+        from universal_iiif_core.resolvers.mag_parser import build_viewer_url, extract_oai_and_teca_from_url
+
+        oai, teca = extract_oai_and_teca_from_url(manifest_url)
+        if oai and teca:
+            return build_viewer_url(oai, teca)
     return ""
 
 
@@ -30,12 +36,15 @@ def _resolve_viewer_url(data: dict) -> str:
     raw = data.get("raw")
     if not viewer_url and isinstance(raw, dict):
         viewer_url = str(raw.get("viewer_url") or "").strip()
+    if not viewer_url:
+        viewer_url = str(data.get("source_detail_url") or "").strip()
     if viewer_url:
         return viewer_url
     return _provider_viewer_fallback(
         str(data.get("library") or ""),
         str(data.get("id") or ""),
         str(data.get("ark") or ""),
+        str(data.get("url") or data.get("manifest") or ""),
     )
 
 
@@ -72,6 +81,7 @@ def _render_load_more_section(pagination: dict | None) -> Div | str:
             "library": pagination["library"],
             "shelfmark": pagination["shelfmark"],
             "gallica_type": pagination.get("gallica_type", "all"),
+            "ic_type": pagination.get("ic_type", "all"),
             "page": page + 1,
         }
     )
@@ -249,14 +259,34 @@ def _build_result_cards(results: list) -> list:
     return cards
 
 
+def _results_header_text(results: list, pagination: dict | None) -> str:
+    """Build the 'Trovati N risultati' header, using total search size when known."""
+    shown = len(results)
+    total = 0
+    if results:
+        raw = results[0].get("raw") if isinstance(results[0], dict) else None
+        if isinstance(raw, dict):
+            try:
+                total = int(raw.get("_search_total_results") or 0)
+            except (TypeError, ValueError):
+                total = 0
+    page = int((pagination or {}).get("page") or 1)
+    per_page = shown if shown else 0
+    if total and per_page:
+        seen = min(page * per_page, total)
+        return f"Mostrati {seen} di {total} risultati"
+    return f"Trovati {shown} risultati"
+
+
 def render_search_results_list(results: list, *, pagination: dict | None = None) -> Div:
     """Render list of search results aligned with global app theme."""
     cards = _build_result_cards(results)
     load_more = _render_load_more_section(pagination)
+    header_text = _results_header_text(results, pagination)
 
     return Div(
         Div(
-            H3(f"Trovati {len(results)} risultati", cls="text-lg font-semibold text-slate-900 dark:text-slate-100"),
+            H3(header_text, cls="text-lg font-semibold text-slate-900 dark:text-slate-100"),
             Span(
                 "Seleziona un risultato per aggiungerlo in Libreria o avviare il download.",
                 cls="text-xs text-slate-500",

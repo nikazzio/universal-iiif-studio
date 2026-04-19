@@ -103,22 +103,44 @@ class PageDownloader:
         self.final_filename = Path(scans_dir) / f"pag_{index:04d}.jpg"
         self.cm = downloader.cm
         self.base_url = CanvasServiceLocator.locate(canvas)
+        self.direct_image_url = None if self.base_url else self._locate_direct_image_url(canvas)
+
+    @staticmethod
+    def _locate_direct_image_url(canvas: Any) -> str | None:
+        """Return a direct image URL from canvas.images[*].resource.@id (non-IIIF)."""
+        if not isinstance(canvas, dict):
+            return None
+        for image in canvas.get("images") or []:
+            resource = image.get("resource") if isinstance(image, dict) else None
+            if not isinstance(resource, dict):
+                continue
+            url = resource.get("@id") or resource.get("id")
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                return url
+        return None
 
     def fetch(self, should_cancel: Callable[[], bool] | None = None) -> tuple[str, dict[str, Any]] | None:
         """Download (or resume) the requested canvas."""
         if should_cancel and should_cancel():
             return None
+        if not self.base_url and self.direct_image_url:
+            return self._fetch_direct(should_cancel=should_cancel)
         if not self.base_url:
             return None
-        base_url = self.base_url
 
         if should_cancel and should_cancel():
             return None
         if resumed := self.resume_cached():
             return resumed
 
+        return self._fetch_iiif(should_cancel=should_cancel)
+
+    def _fetch_iiif(self, should_cancel: Callable[[], bool] | None = None) -> tuple[str, dict[str, Any]] | None:
+        """Download a canvas backed by a IIIF image service."""
         if should_cancel and should_cancel():
             return None
+        base_url = self.base_url
+        assert base_url is not None
         iiif_q = str(self.cm.get_setting("images.iiif_quality", "default") or "default")
         stitch_mode = self._get_stitch_mode()
         if stitch_mode != "stitch_only":
@@ -142,6 +164,26 @@ class PageDownloader:
             return None
         return self.downloader._stitch_tiles_from_service(
             self.cm, self.filename, base_url, self.canvas, self.index, iiif_q, should_cancel=should_cancel
+        )
+
+    def _fetch_direct(self, should_cancel: Callable[[], bool] | None = None) -> tuple[str, dict[str, Any]] | None:
+        """Download a canvas whose image resource is a direct URL (no IIIF service)."""
+        direct_url = self.direct_image_url
+        if not direct_url:
+            return None
+        if should_cancel and should_cancel():
+            return None
+        if not bool(getattr(self.downloader, "force_redownload", False)):
+            resumed = self._resume_existing_scan(direct_url)
+            if resumed:
+                return resumed
+        return self.downloader._download_with_retries(
+            [direct_url],
+            self.filename,
+            self.canvas,
+            self.index,
+            direct_url,
+            should_cancel=should_cancel,
         )
 
     def _get_stitch_mode(self) -> str:
@@ -211,9 +253,10 @@ class PageDownloader:
         """Expose resume logic so callers can avoid a full download."""
         if bool(getattr(self.downloader, "force_redownload", False)):
             return None
-        if not self.base_url:
+        source = self.base_url or self.direct_image_url
+        if not source:
             return None
-        return self._resume_existing_scan(self.base_url)
+        return self._resume_existing_scan(source)
 
 
 class IIIFDownloader:
@@ -261,6 +304,9 @@ class IIIFDownloader:
             self.manifest = fetch_and_convert(manifest_url)
         else:
             self.manifest = get_http_client().get_json(manifest_url) or {}
+        # ICCU records often declare more pages than are actually served —
+        # finalize whatever pages responded instead of discarding them.
+        self.allow_partial_finalize = bool(self.manifest.get("_iccu"))
         self.label = self.manifest.get("label", "unknown_manuscript")
         if isinstance(self.label, list):
             self.label = self.label[0] if self.label else "unknown_manuscript"

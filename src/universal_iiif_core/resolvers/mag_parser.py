@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 _IC_BASE = "https://www.internetculturale.it"
 _MAGPARSER_PATH = "/jmms/magparser"
 _THUMBNAIL_PATH = "/jmms/thumbnail"
+_VIEWER_PATH = "/jmms/iccuviewer/iccu.jsp"
 
 # Max pages to request in a single call — covers virtually all manuscripts.
 _MAX_PAGES_PER_CALL = 2000
@@ -90,6 +91,12 @@ def build_magparser_url(oai_id: str, teca: str, max_pages: int = _MAX_PAGES_PER_
     return f"{_IC_BASE}{_MAGPARSER_PATH}?{params}"
 
 
+def build_viewer_url(oai_id: str, teca: str) -> str:
+    """Build the public Internet Culturale JSP viewer URL for a document."""
+    params = urlencode({"id": oai_id, "mode": "all", "teca": teca})
+    return f"{_IC_BASE}{_VIEWER_PATH}?{params}"
+
+
 def build_thumbnail_url(oai_id: str, teca: str, page_1based: int, quality: str = "normal") -> str:
     """Build the image URL for a specific page via the IC thumbnail endpoint.
 
@@ -118,9 +125,12 @@ def extract_oai_and_teca_from_url(url: str) -> tuple[str | None, str | None]:
       - IC viewer URLs: /it/16/search/viewresource?id={oai}&teca={teca}
       - Raw OAI IDs passed directly
     """
+    if url.lower().startswith("oai:") and "?" not in url:
+        return url, None
+
     parsed = urlparse(url)
     if not parsed.scheme and "?" not in url:
-        # Raw OAI ID — no teca extractable
+        # Raw non-OAI identifier — no teca extractable
         return url, None
 
     qs = parse_qs(parsed.query)
@@ -260,7 +270,11 @@ def _build_iiif_v2_manifest(meta: IccuMetadata, pages: list[dict[str, Any]]) -> 
         label = page.get("name") or f"Pagina {idx + 1}"
         w = page.get("w", 1000)
         h = page.get("h", 1000)
-        image_url = build_thumbnail_url(meta.oai_id, meta.teca, idx + 1)
+        src = str(page.get("src") or "").strip()
+        if src:
+            image_url = f"{_IC_BASE}/jmms/{src.lstrip('/')}"
+        else:
+            image_url = build_thumbnail_url(meta.oai_id, meta.teca, idx + 1)
         canvas_id = f"{manifest_id}/canvas/{idx}"
 
         canvases.append(
@@ -287,6 +301,7 @@ def _build_iiif_v2_manifest(meta: IccuMetadata, pages: list[dict[str, Any]]) -> 
             }
         )
 
+    viewer_url = build_viewer_url(meta.oai_id, meta.teca)
     return {
         "@context": "http://iiif.io/api/presentation/2/context.json",
         "@type": "sc:Manifest",
@@ -294,6 +309,11 @@ def _build_iiif_v2_manifest(meta: IccuMetadata, pages: list[dict[str, Any]]) -> 
         "label": meta.title or meta.full_reference or "Documento ICCU",
         "attribution": f"Internet Culturale / ICCU — {meta.library_label}",
         "metadata": [m for m in iiif_metadata if m["value"]],
+        "related": {
+            "@id": viewer_url,
+            "format": "text/html",
+            "label": "Apri su Internet Culturale",
+        },
         "_iccu": {
             "oai_id": meta.oai_id,
             "teca": meta.teca,
@@ -301,6 +321,7 @@ def _build_iiif_v2_manifest(meta: IccuMetadata, pages: list[dict[str, Any]]) -> 
             "city": meta.city,
             "sbn_code": meta.sbn_code,
             "shelfmark": meta.shelfmark,
+            "viewer_url": viewer_url,
         },
         "sequences": [
             {
@@ -343,6 +364,7 @@ def parse_mag_xml(xml_bytes: bytes) -> dict[str, Any]:
                         "name": page.get("name", ""),
                         "w": int(page.get("w", 0)) or 1000,
                         "h": int(page.get("h", 0)) or 1000,
+                        "src": page.get("src", ""),
                     }
                 )
             except (ValueError, TypeError):
@@ -392,12 +414,53 @@ def is_iccu_magparser_url(url: str) -> bool:
     return "internetculturale.it" in url and "magparser" in url
 
 
+def probe_magparser_url(url: str, session: requests.Session | None = None) -> bool:
+    """Return True when the magparser URL returns a valid MAG XML document.
+
+    Performs a lightweight GET (pag=1) and checks for a <bibinfo> element. Used
+    by the Discovery probe flow, which otherwise assumes JSON manifests.
+    """
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    oai_id = (qs.get("id") or [None])[0]
+    teca = (qs.get("teca") or [None])[0]
+    if not oai_id or not teca:
+        return False
+
+    probe_url = build_magparser_url(oai_id, teca, max_pages=1)
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/xml,application/xml,*/*",
+        "Referer": _IC_BASE,
+    }
+    requester = session or requests
+    try:
+        resp = requester.get(probe_url, headers=headers, timeout=(5, 8))
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        logger.debug("ICCU magparser probe failed for %s: %s", url, exc)
+        return False
+
+    try:
+        root = SafeET.fromstring(resp.content)
+    except ET.ParseError:
+        return False
+
+    for el in root.iter():
+        tag = el.tag.split("}", 1)[-1] if "}" in el.tag else el.tag
+        if tag == "bibinfo":
+            return True
+    return False
+
+
 __all__ = [
     "IccuMetadata",
     "build_magparser_url",
     "build_thumbnail_url",
+    "build_viewer_url",
     "extract_oai_and_teca_from_url",
     "fetch_and_convert",
     "is_iccu_magparser_url",
     "parse_mag_xml",
+    "probe_magparser_url",
 ]

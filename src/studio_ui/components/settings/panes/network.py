@@ -490,6 +490,20 @@ def _build_network_pane(cm, s):
         **{"data-network-tab-pane": "institut_de_france"},
     )
 
+    internet_culturale_section = Div(
+        _build_network_library_card(
+            title="Internet Culturale (ICCU)",
+            policy_key="internet_culturale",
+            policy_cfg=libraries_cfg.get(
+                "internet_culturale",
+                defaults["libraries"]["internet_culturale"],
+            ),
+            global_cfg=global_cfg,
+        ),
+        cls="hidden",
+        **{"data-network-tab-pane": "internet_culturale"},
+    )
+
     return Div(
         Div(H3("Network & Libraries", cls="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3")),
         P(
@@ -527,6 +541,12 @@ def _build_network_pane(cm, s):
                 cls="app-btn app-btn-neutral",
                 **{"data-network-tab-btn": "institut_de_france"},
             ),
+            Button(
+                "Internet Culturale",
+                type="button",
+                cls="app-btn app-btn-neutral",
+                **{"data-network-tab-btn": "internet_culturale"},
+            ),
             cls="flex items-center flex-wrap gap-2 mb-4",
         ),
         global_section,
@@ -534,6 +554,7 @@ def _build_network_pane(cm, s):
         vaticana_section,
         bodleian_section,
         institut_section,
+        internet_culturale_section,
         _network_subtabs_script(),
         cls="p-4",
         data_pane="network",
