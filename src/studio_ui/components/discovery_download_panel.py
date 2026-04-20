@@ -101,7 +101,7 @@ def render_download_status(download_id: str, doc_id: str, library: str, status_d
                 Span("✅", cls="text-4xl mb-4 block"),
                 H3("Download Completato!", cls="text-xl font-bold text-green-400 mb-2"),
                 P(
-                    f"Il manoscritto '{doc_id}' è stato salvato correttamente.",
+                    f"Il documento '{doc_id}' è stato salvato correttamente.",
                     cls="text-slate-400 mb-6",
                 ),
                 A(

@@ -8,7 +8,7 @@ version = "0.27.2"
 description = "Scriptoria — a research workbench for IIIF manuscripts."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 dependencies = [
   "python-fasthtml",
   "uvicorn",

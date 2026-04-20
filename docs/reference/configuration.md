@@ -43,7 +43,7 @@ The `paths.*` keys define the local runtime directories used by Scriptoria.
 
 These paths cover:
 
-- downloads and local manuscript workspaces;
+- downloads and local document workspaces;
 - export output;
 - temporary image staging;
 - model caches;
@@ -78,7 +78,7 @@ It is split into three layers:
 - `settings.network.download.*` for default document download behavior;
 - `settings.network.libraries.<provider>.*` for provider-specific overrides.
 
-The supported provider keys under `settings.network.libraries.*` are `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `internet_culturale` **(BETA)**, and `unknown`. Setting `use_custom_policy: false` on a library makes it inherit the `settings.network.download.*` defaults; `true` activates the per-library override fields.
+The supported provider keys under `settings.network.libraries.*` are `gallica`, `vaticana`, `bodleian`, `institut_de_france`, `estense`, `internet_culturale` **(BETA)**, and `unknown`. Setting `use_custom_policy: false` on a library makes it inherit the `settings.network.download.*` defaults; `true` activates the per-library override fields.
 
 `internet_culturale` (BETA) ships with a conservative default policy (2 workers per job, 1.0–3.0s delay, 300s cooldown on 403/429, 40 requests per 60s burst window) because the ICCU aggregator is a shared infrastructure and is noticeably less tolerant than large IIIF-native providers.
 

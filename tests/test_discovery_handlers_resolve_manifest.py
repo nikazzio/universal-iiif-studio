@@ -127,7 +127,8 @@ def test_resolve_manifest_returns_not_found_with_vatican_hint(monkeypatch):
 
     result = discovery_handlers.resolve_manifest("Vaticana", "invalid")
     result_str = str(result)
-    assert "Manoscritto non trovato" in result_str
+    assert "Documento non trovato" in result_str
+    assert "Nessun risultato utile" in result_str
     assert "Urb.lat.1779" in result_str
 
 

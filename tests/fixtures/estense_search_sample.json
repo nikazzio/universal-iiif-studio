@@ -1,0 +1,210 @@
+{
+  "_embedded": {
+    "culturalItems": [
+      {
+        "id": "5d276e05eca03b000666b4f8",
+        "uuid": "d0a7b072-0e45-4363-b2fb-a0be17c155db",
+        "tenant": "estense",
+        "auth": {
+          "accessLevelConstraints": [
+            {
+              "role": "ROLE_ANONYMOUS",
+              "accessLevel": 30
+            },
+            {
+              "role": "ROLE_ADMIN",
+              "accessLevel": 30
+            }
+          ],
+          "accessLevel": 30,
+          "canEdit": false
+        },
+        "sgtt": "Vita nuova. Autografo di Muratori dall'ed. Firenze 1576",
+        "autn": "Alighieri, Dante",
+        "customMetadataList": [
+          {
+            "name": "pressmark",
+            "value": "A.M.02.12.A"
+          },
+          {
+            "name": "sgtt",
+            "value": "Vita nuova. Autografo di Muratori dall'ed. Firenze 1576"
+          },
+          {
+            "name": "autn",
+            "value": "Alighieri, Dante"
+          }
+        ],
+        "state": "Created",
+        "resourceType": "ITEM",
+        "createdDate": "2019-07-11T19:12:37.000Z",
+        "lastModifiedDate": "2021-03-29T17:51:23.032Z",
+        "pressmark": "A.M.02.12.A",
+        "parentCollectionsUuids": [
+          "85fd2ae0-78a2-4c35-94f2-41b6f6a71473"
+        ],
+        "mediaTypeInfo": {
+          "hasImage": true,
+          "has3D": false,
+          "hasAudio": false,
+          "hasVideo": false,
+          "has360": false,
+          "imagesCount": 49,
+          "model3DsCount": 0,
+          "audiosCount": 0,
+          "videosCount": 0,
+          "mediaTypeList": [
+            "IMAGE"
+          ]
+        },
+        "_links": {
+          "self": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e05eca03b000666b4f8"
+          },
+          "culturalItem": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e05eca03b000666b4f8"
+          },
+          "thumbnail": {
+            "href": "https://jarvis.edl.beniculturali.it/images/db/74f56477-46aa-4042-a5bf-5370a1ea381e/thumb.jpg"
+          },
+          "manifest": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/iiif/d0a7b072-0e45-4363-b2fb-a0be17c155db/manifest"
+          },
+          "manifest_v3": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/iiif/v3/d0a7b072-0e45-4363-b2fb-a0be17c155db/manifest"
+          },
+          "viewer_iiif": {
+            "href": "https://jarvis.edl.beniculturali.it/images/viewers/mirador/?manifest=https://jarvis.edl.beniculturali.it/meta/iiif/v3/d0a7b072-0e45-4363-b2fb-a0be17c155db/manifest"
+          },
+          "viewer_dzi": {
+            "href": "https://jarvis.edl.beniculturali.it/images/viewers/dzi/?culturalItemUuid=d0a7b072-0e45-4363-b2fb-a0be17c155db"
+          },
+          "default_list_of_images": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/imageLists/5d276e05eca03b000666b4f7/images"
+          },
+          "mets": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/mets/d0a7b072-0e45-4363-b2fb-a0be17c155db"
+          },
+          "parentCollections": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e05eca03b000666b4f8/parentCollections"
+          },
+          "imageLists": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e05eca03b000666b4f8/imageLists"
+          }
+        }
+      },
+      {
+        "id": "5d276e09eca03b000666b4fd",
+        "uuid": "5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777",
+        "tenant": "estense",
+        "auth": {
+          "accessLevelConstraints": [
+            {
+              "role": "ROLE_ANONYMOUS",
+              "accessLevel": 30
+            },
+            {
+              "role": "ROLE_ADMIN",
+              "accessLevel": 30
+            }
+          ],
+          "accessLevel": 30,
+          "canEdit": false
+        },
+        "sgtt": "Vita nuova. Autografo di Muratori dall'ed. Firenze 1576",
+        "autn": "Alighieri, Dante",
+        "customMetadataList": [
+          {
+            "name": "pressmark",
+            "value": "A.M.02.12.B"
+          },
+          {
+            "name": "sgtt",
+            "value": "Vita nuova. Autografo di Muratori dall'ed. Firenze 1576"
+          },
+          {
+            "name": "autn",
+            "value": "Alighieri, Dante"
+          }
+        ],
+        "state": "Created",
+        "resourceType": "ITEM",
+        "createdDate": "2019-07-11T19:12:41.000Z",
+        "lastModifiedDate": "2021-03-29T17:51:23.039Z",
+        "pressmark": "A.M.02.12.B",
+        "parentCollectionsUuids": [
+          "85fd2ae0-78a2-4c35-94f2-41b6f6a71473"
+        ],
+        "mediaTypeInfo": {
+          "hasImage": true,
+          "has3D": false,
+          "hasAudio": false,
+          "hasVideo": false,
+          "has360": false,
+          "imagesCount": 5,
+          "model3DsCount": 0,
+          "audiosCount": 0,
+          "videosCount": 0,
+          "mediaTypeList": [
+            "IMAGE"
+          ]
+        },
+        "_links": {
+          "self": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e09eca03b000666b4fd"
+          },
+          "culturalItem": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e09eca03b000666b4fd"
+          },
+          "thumbnail": {
+            "href": "https://jarvis.edl.beniculturali.it/images/db/09508c00-883d-4e28-8a33-a821101dbd6c/thumb.jpg"
+          },
+          "manifest": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/iiif/5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777/manifest"
+          },
+          "manifest_v3": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/iiif/v3/5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777/manifest"
+          },
+          "viewer_iiif": {
+            "href": "https://jarvis.edl.beniculturali.it/images/viewers/mirador/?manifest=https://jarvis.edl.beniculturali.it/meta/iiif/v3/5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777/manifest"
+          },
+          "viewer_dzi": {
+            "href": "https://jarvis.edl.beniculturali.it/images/viewers/dzi/?culturalItemUuid=5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777"
+          },
+          "default_list_of_images": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/imageLists/5d276e09eca03b000666b4fc/images"
+          },
+          "mets": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/mets/5a5bd28d-c5fe-4a45-8bf7-58ccaaa6b777"
+          },
+          "parentCollections": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e09eca03b000666b4fd/parentCollections"
+          },
+          "imageLists": {
+            "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/5d276e09eca03b000666b4fd/imageLists"
+          }
+        }
+      }
+    ]
+  },
+  "_links": {
+    "first": {
+      "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/search/findBySgttOrAutnOrPressmark?text=dante&page=0&size=2"
+    },
+    "self": {
+      "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/search/findBySgttOrAutnOrPressmark?text=dante&page=0&size=2"
+    },
+    "next": {
+      "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/search/findBySgttOrAutnOrPressmark?text=dante&page=1&size=2"
+    },
+    "last": {
+      "href": "https://jarvis.edl.beniculturali.it/meta/culturalItems/search/findBySgttOrAutnOrPressmark?text=dante&page=39&size=2"
+    }
+  },
+  "page": {
+    "size": 2,
+    "totalElements": 79,
+    "totalPages": 40,
+    "number": 0
+  }
+}

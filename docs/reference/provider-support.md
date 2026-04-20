@@ -13,6 +13,7 @@ The shared provider registry currently exposes these providers:
 - Universitaetsbibliothek Heidelberg
 - Cambridge University Digital Library
 - e-codices
+- Biblioteca Estense (Modena)
 - Harvard University
 - Library of Congress
 - Internet Archive
@@ -54,6 +55,7 @@ The provider has a stronger search-first experience and can reasonably be used f
 | Heidelberg | record ID or URL | `fallback` | Free-text search is variable; explicit record references are safer |
 | Cambridge | shelfmark or CUDL URL | `fallback` | Similar to Heidelberg; better with shelfmark/URL than with exploratory search |
 | e-codices | compound identifier or URL | `direct` with search handler | Best with IDs such as `csg-0001` or a direct e-codices URL |
+| Biblioteca Estense (Modena) | text query, pressmark, Jarvis manifest URL or UUID | `search_first` | Native IIIF v2/v3 with level-2 Image API. Search covers short title, author and pressmark together |
 | Harvard | DRS-bearing item URL | `fallback` | Usually best treated as URL-driven |
 | Library of Congress | public item URL | `fallback` | Prefer `loc.gov/item/...` URLs |
 | Internet Archive | item URL or text query | `search_first` | Good discovery-first behavior for many cases |
@@ -64,7 +66,7 @@ The provider has a stronger search-first experience and can reasonably be used f
 
 ### Vaticana
 
-Vaticana works best when you already know the shelfmark or have an item-level reference. Scriptoria can search, but the real strength of this provider is explicit manuscript-oriented input. If the search surface feels ambiguous, switch immediately to a shelfmark or direct manifest path.
+Vaticana works best when you already know the shelfmark or have an item-level reference. Scriptoria can search, but the real strength of this provider is explicit catalog-oriented input. If the search surface feels ambiguous, switch immediately to a shelfmark or direct manifest path.
 
 ### Gallica
 
@@ -88,7 +90,22 @@ Cambridge behaves similarly to Heidelberg. Product-side support exists, but shel
 
 ### e-codices
 
-e-codices behaves well with explicit compound identifiers and direct record URLs. If you know the manuscript id, Scriptoria can usually normalize it cleanly.
+e-codices behaves well with explicit compound identifiers and direct record URLs. If you know the item id, Scriptoria can usually normalize it cleanly.
+
+### Biblioteca Estense (Modena)
+
+The Biblioteca Estense Universitaria in Modena (Biblioteca Estense Digitale / Estense Digital Library) is served by the Jarvis backend at `jarvis.edl.beniculturali.it`. It exposes full native IIIF with **both** Presentation v2 and v3 manifests and a **level-2 Image API** (tile service, zoom, rescaling) — there is no on-the-fly conversion, the manifest is first-class.
+
+Search uses the Spring Data REST endpoint `findBySgttOrAutnOrPressmark`, which covers short title, author, and pressmark in a single call and returns paged results with `totalElements` / `totalPages`. Scriptoria shows this as "Mostrati X di Y risultati" and enables "Carica altri" just like for Internet Archive or Gallica.
+
+Accepted inputs for direct resolution:
+
+- Manifest URL v2: `https://jarvis.edl.beniculturali.it/meta/iiif/{uuid}/manifest`
+- Manifest URL v3: `https://jarvis.edl.beniculturali.it/meta/iiif/v3/{uuid}/manifest`
+- Mirador viewer wrapper URL on the same host
+- A bare item UUID (8-4-4-4-12 hex)
+
+The public `https://edl.beniculturali.it/beu/{id}` URLs are single-page-app links and are not resolved statically: reach the record via search and use the returned manifest/viewer URL.
 
 ### Harvard
 
@@ -140,7 +157,7 @@ Both filters map directly to server-side parameters and survive pagination, so "
 
 ## How To Choose The Right Input
 
-As a rule, use a direct IIIF manifest URL when you already have one, use provider record URLs when the provider is URL-driven, use shelfmarks or compound manuscript identifiers when the corpus is manuscript-centric, and reserve free-text search for providers that behave well in discovery-first mode. When a provider is known to be inconsistent from the product UI, switch to browser-assisted search early instead of forcing a weak path.
+As a rule, use a direct IIIF manifest URL when you already have one, use provider record URLs when the provider is URL-driven, use shelfmarks or compound identifiers when the corpus is catalog-centric, and reserve free-text search for providers that behave well in discovery-first mode. When a provider is known to be inconsistent from the product UI, switch to browser-assisted search early instead of forcing a weak path.
 
 That is the practical way to avoid frustration across heterogeneous libraries.
 
