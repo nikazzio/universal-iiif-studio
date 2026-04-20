@@ -100,4 +100,4 @@ Open a [GitHub issue](https://github.com/nikazzio/scriptoria/issues/new) with:
 
 ## License
 
-By submitting a pull request, you agree that your contribution is licensed under the [MIT License](LICENSE) that covers this project.
+By submitting a pull request, you agree that your contribution is licensed under the [GNU GPL v3 or later](LICENSE) that covers this project.

@@ -1,6 +1,7 @@
 {
   "name": "scriptoria-docs",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "0.1.0",
   "engines": {
     "node": ">=22.0.0"

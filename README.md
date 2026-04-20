@@ -8,7 +8,7 @@
   <a href="https://codecov.io/gh/nikazzio/scriptoria"><img alt="Coverage" src="https://img.shields.io/codecov/c/github/nikazzio/scriptoria?style=flat-square&logo=pytest&label=coverage"></a>
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square&logo=python&logoColor=white"></a>
   <a href="https://github.com/nikazzio/scriptoria/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nikazzio/scriptoria?display_name=tag&style=flat-square&color=0b7285"></a>
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square"></a>
+  <a href="LICENSE"><img alt="GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-22d3ee?style=flat-square"></a>
 </p>
 
 <p align="center">
@@ -125,5 +125,5 @@ Expected. Open an item from Library, or use the recent-work hub at `/studio`.
 ---
 
 <p align="center">
-  <sub>Built for manuscript-heavy research workflows · <a href="LICENSE">MIT</a></sub>
+  <sub>Built for manuscript-heavy research workflows · <a href="LICENSE">GPL-3.0-or-later</a></sub>
 </p>
