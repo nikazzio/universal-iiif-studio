@@ -1,7 +1,6 @@
 import argparse
 import threading
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fasthtml.common import RedirectResponse, fast_app, serve
@@ -46,7 +45,6 @@ except Exception:
     logger.debug("Failed to reset stale jobs on startup", exc_info=True)
 
 
-@asynccontextmanager
 async def lifespan(app):
     """Gestione del ciclo di vita dell'app FastHTML."""
     # Startup: reset any stale DB jobs and kick off housekeeping in background

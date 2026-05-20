@@ -112,7 +112,9 @@ def studio_page(
             active_tab=active_tab,
         )
         if resolved is None:
-            return _manifest_missing_response(is_hx)
+            if is_hx:
+                return _manifest_missing_response(is_hx=True)
+            return _render_studio_recent_hub(request=request, vault=vault)
 
         content = studio_layout(
             workspace["title"],

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }
 dependencies = [
-  "python-fasthtml",
+  "python-fasthtml>=0.14.1",
   "uvicorn",
   "python-multipart",
   "python-dotenv",
